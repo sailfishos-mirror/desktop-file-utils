@@ -460,12 +460,7 @@ egg_desktop_entries_new_from_file (const gchar             *file,
   entries = egg_desktop_entries_new_from_fd (fd, legal_start_groups, flags, &entries_error);
 
   if (entries_error) 
-    {
-      g_propagate_error (error, entries_error);
-      egg_desktop_entries_free (entries);
-
-      return NULL;
-    }
+    g_propagate_error (error, entries_error);
 
   return entries;
 }
@@ -599,7 +594,6 @@ egg_desktop_entries_new_from_data_dirs (const gchar             *file,
       if (entries_error) 
 	{
 	  g_error_free (entries_error);
-	  entries = NULL;
           g_free (output_path);
 	}
     }
@@ -622,6 +616,9 @@ egg_desktop_entries_free (EggDesktopEntries *entries)
 
   if (entries->parse_buffer)
     g_string_free (entries->parse_buffer, TRUE);
+
+  g_strfreev (entries->legal_start_groups);
+  g_free (entries->start_group_name);
 
   tmp = entries->groups;
   while (tmp != NULL)
@@ -814,10 +811,7 @@ egg_desktop_entries_parse_comment (EggDesktopEntries  *entries,
   entry = g_new0 (EggDesktopEntry, 1);
 
   entry->key = NULL;
-
-  entry->value = g_new (char, length + 1);
-  strncpy (entry->value, line, length);
-  entry->value[length] = '\0';
+  entry->value = g_strndup (line, length);
     
   entries->current_group->entries = g_list_prepend (entries->current_group->entries, entry);
 }
@@ -959,6 +953,7 @@ egg_desktop_entries_parse_entry (EggDesktopEntries  *entries,
   /* Is this key a translation? If so, is it one that we care about?
    */
   locale = key_get_locale (key);
+
   if (locale == NULL || g_deskop_entries_locale_is_interesting (entries, locale))
     egg_desktop_entries_add_key (entries, entries->current_group->name, key, value);
 
@@ -979,7 +974,7 @@ key_get_locale (const gchar *key)
   if (locale)
     {
       locale = g_strdup (locale + 1);
-      locale[strlen (locale)] = '\0';
+      locale[strlen (locale) - 1] = '\0';
     }
 
   return locale;
@@ -1566,7 +1561,8 @@ egg_desktop_entries_get_locale_string (EggDesktopEntries  *entries,
 							 candidate_key, NULL);
       g_free (candidate_key);
     }
-  else if (lang && country)
+
+  if (!translated_value && lang && country)
     {
       candidate_key = g_strdup_printf ("%s[%s_%s]", key, lang, country);
 
@@ -1574,7 +1570,8 @@ egg_desktop_entries_get_locale_string (EggDesktopEntries  *entries,
 							 candidate_key, NULL);
       g_free (candidate_key);
     }
-  else if (lang && modifier)
+  
+  if (!translated_value && lang && modifier)
     {
       candidate_key = g_strdup_printf ("%s[%s@%s]", key, lang, modifier);
 
@@ -1582,7 +1579,8 @@ egg_desktop_entries_get_locale_string (EggDesktopEntries  *entries,
 							 candidate_key, NULL);
       g_free (candidate_key);
     }
-  else if (lang)
+      
+   if (!translated_value && lang)
     {
       candidate_key = g_strdup_printf ("%s[%s]", key, lang);
 
@@ -1590,8 +1588,6 @@ egg_desktop_entries_get_locale_string (EggDesktopEntries  *entries,
 							 candidate_key, NULL);
       g_free (candidate_key);
     }
-  else
-    g_assert_not_reached ();
 
   if (translated_value)
     {
@@ -2239,6 +2235,18 @@ egg_desktop_entries_add_group (EggDesktopEntries *entries,
     entries->start_group_name = g_strdup (group_name);
 }
 
+
+static void 
+egg_desktop_entry_free (EggDesktopEntry *entry) 
+{
+  if (entry != NULL)
+    {
+      g_free (entry->key);
+      g_free (entry->value);
+      g_free (entry);
+    }
+}
+
 static void
 egg_desktop_entries_remove_group_node (EggDesktopEntries      *entries,
 				       GList                  *group_node)
@@ -2266,7 +2274,7 @@ egg_desktop_entries_remove_group_node (EggDesktopEntries      *entries,
 
   g_free ((gchar *) group->name);
 
-  g_list_foreach (group->entries, (GFunc) g_free, NULL);
+  g_list_foreach (group->entries, (GFunc) egg_desktop_entry_free, NULL);
   g_list_free (group->entries);
   group->entries = NULL;
 

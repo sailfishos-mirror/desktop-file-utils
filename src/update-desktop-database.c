@@ -38,15 +38,14 @@
 
 #define NAME "update-desktop-database"
 #define CACHE_FILENAME "mimeinfo.cache"
-#define TEMP_CACHE_FILENAME_PREFIX ".mimeinfo.cache."
-#define TEMP_CACHE_FILENAME_MAX_LENGTH 64
+#define TEMP_CACHE_FILENAME_PREFIX ".mimeinfo.cache.XXXXXX"
 
 #define udd_debug(...) if (verbose) g_printerr (__VA_ARGS__)
 
-static int open_temp_cache_file (const char  *dir,
-                                 char       **filename,
-                                 GError     **error);
-static void add_mime_type (const char *mime_type, GList *desktop_files, int fd);
+static FILE *open_temp_cache_file (const char  *dir,
+				   char       **filename,
+				   GError     **error);
+static void add_mime_type (const char *mime_type, GList *desktop_files, FILE *f);
 static void sync_database (const char *dir, GError **error);
 static void cache_desktop_file (const char  *desktop_file, 
                                 const char  *mime_type,
@@ -66,6 +65,13 @@ static GHashTable *mime_types_map = NULL;
 static gboolean verbose = FALSE, quiet = FALSE;
 
 static void
+list_free_deep (gpointer key, GList *l, gpointer data)
+{
+  g_list_foreach (l, (GFunc)g_free, NULL);
+  g_list_free (l);
+}
+
+static void
 cache_desktop_file (const char  *desktop_file,
                     const char  *mime_type,
                     GError     **error)
@@ -78,13 +84,74 @@ cache_desktop_file (const char  *desktop_file,
   g_hash_table_insert (mime_types_map, g_strdup (mime_type), desktop_files);
 }
 
+
+static gboolean
+is_valid_mime_type_char (const guchar c)
+{
+  char invalid_chars [] = "()<>@,;:\\/[]?=\"";
+  
+  if ((c <= 32) || (c == 127)) 
+    {
+      /* Filter out control chars and space */
+      return FALSE;
+    }
+  
+  if (memchr (invalid_chars, c, sizeof (invalid_chars)) != NULL) 
+    {
+      return FALSE;
+    }
+  
+  return TRUE;
+}
+
+
 static gboolean
 is_valid_mime_type (const char *mime_type)
 {
-  char *index;
-  index = strchr (mime_type, '/');
-
-  return index != NULL && index != mime_type && index[1] != '\0';
+  gulong subtype_offset;
+  gulong valid_chars;
+  
+  valid_chars = 0;
+  subtype_offset = 0;
+  
+  while (mime_type[valid_chars] != '\0') 
+    {
+      if (mime_type[valid_chars] == '/') 
+	{
+	  if (valid_chars == 0) 
+	    {
+	      /* We encountered a / before any valid char */
+	      return FALSE;
+	    }
+	  if (subtype_offset != 0) 
+	    {
+	      /* We already encountered a '/' previously */
+	      g_warning ("%s is invalid", mime_type);
+	      return FALSE;
+	    }
+	  subtype_offset = valid_chars;
+	} 
+      else if (!is_valid_mime_type_char (mime_type[valid_chars])) 
+	{
+	  return FALSE;
+	}
+      
+      valid_chars++;			    
+    }
+  
+  if (subtype_offset == 0) 
+    {
+      /* The mime type didn't contain any / */
+      return FALSE;
+    }
+  
+  if ((subtype_offset != 0) && (subtype_offset == valid_chars)) 
+    {
+      /* Missing subtype name */
+      return FALSE;
+    }
+  
+  return TRUE;
 }
 
 static void
@@ -92,7 +159,8 @@ process_desktop_file (const char  *desktop_file,
                       const char  *name,
                       GError     **error)
 {
-  GError *load_error; EggDesktopEntries *entries;
+  GError *load_error; 
+  EggDesktopEntries *entries;
   char **mime_types; 
   int i;
 
@@ -103,37 +171,42 @@ process_desktop_file (const char  *desktop_file,
                                        EGG_DESKTOP_ENTRIES_DISCARD_TRANSLATIONS,
                                        &load_error);
 
-  if (load_error != NULL) {
-    g_propagate_error (error, load_error);
-    return;
-  }
+  if (load_error != NULL) 
+    {
+      g_propagate_error (error, load_error);
+      return;
+    }
 
   mime_types = egg_desktop_entries_get_string_list (entries, 
                                               egg_desktop_entries_get_start_group (entries),
                                               "MimeType", NULL, &load_error);
 
+  egg_desktop_entries_free (entries);
+
   if (load_error != NULL) 
     {
       g_propagate_error (error, load_error);
-      egg_desktop_entries_free (entries);
       return;
     }
 
   for (i = 0; mime_types[i] != NULL; i++)
     {
-      if (!is_valid_mime_type (mime_types[i]))
-        continue;
+      char *mime_type;
 
-      cache_desktop_file (name, mime_types[i], &load_error);
+      mime_type = g_strchomp (mime_types[i]);
+      if (!is_valid_mime_type (mime_types[i])) 
+	continue;
+
+      cache_desktop_file (name, mime_type, &load_error);
 
       if (load_error != NULL)
         {
           g_propagate_error (error, load_error);
+	  g_strfreev (mime_types);
           return;
         }
     }
-
-  egg_desktop_entries_free (entries);
+  g_strfreev (mime_types);
 }
 
 static void
@@ -207,91 +280,52 @@ process_desktop_files (const char  *desktop_dir,
   g_dir_close (dir);
 }
 
-static int
+static FILE *
 open_temp_cache_file (const char *dir, char **filename, GError **error)
 {
-  GRand *rand;
-  GString *candidate_filename;
   int fd;
+  char *file;
+  FILE *fp;
 
-  enum 
-    { 
-      CHOICE_UPPER_CASE = 0, 
-      CHOICE_LOWER_CASE, 
-      CHOICE_DIGIT, 
-      NUM_CHOICES
-    } choice;
+  file = g_build_filename (dir, TEMP_CACHE_FILENAME_PREFIX, NULL);
+  fd = g_mkstemp (file);
 
-  candidate_filename = g_string_new (TEMP_CACHE_FILENAME_PREFIX);
-
-  /* Generate a unique candidate_filename and open it for writing
-   */
-  rand = g_rand_new ();
-  fd = -1;
-  while (fd < 0)
+  if (fd < 0) 
     {
-      char *full_path;
-
-      if (candidate_filename->len > TEMP_CACHE_FILENAME_MAX_LENGTH) 
-        g_string_assign (candidate_filename, TEMP_CACHE_FILENAME_PREFIX);
-
-      choice = g_rand_int_range (rand, 0, NUM_CHOICES);
-
-      switch (choice)
-        {
-        case CHOICE_UPPER_CASE:
-          g_string_append_c (candidate_filename,
-                             g_rand_int_range (rand, 'A' , 'Z' + 1));
-          break;
-        case CHOICE_LOWER_CASE:
-          g_string_append_c (candidate_filename,
-                             g_rand_int_range (rand, 'a' , 'z' + 1));
-          break;
-        case CHOICE_DIGIT:
-          g_string_append_c (candidate_filename,
-                             g_rand_int_range (rand, '0' , '9' + 1));
-          break;
-        default:
-          g_assert_not_reached ();
-          break;
-        }
-
-      full_path = g_build_filename (dir, candidate_filename->str, NULL);
-      fd = open (full_path, O_CREAT | O_WRONLY | O_EXCL, 0644); 
-
-      if (fd < 0) 
-        {
-          if (errno != EEXIST)
-            {
-              g_set_error (error, G_FILE_ERROR,
-                           g_file_error_from_errno (errno),
-                           "%s", g_strerror (errno));
-              break;
-            }
-        }
-      else if (fd >= 0 && filename != NULL)
-        {
-          *filename = full_path;
-          break;
-        }
-
-      g_free (full_path);
+      g_set_error (error, G_FILE_ERROR,
+		   g_file_error_from_errno (errno),
+		   "%s", g_strerror (errno));
+      g_free (file);
+      return NULL;
     }
 
-  g_rand_free (rand);
+  fp = fdopen (fd, "w+");
+  if (fp == NULL) 
+    {
+      g_set_error (error, G_FILE_ERROR,
+		   g_file_error_from_errno (errno),
+		   "%s", g_strerror (errno));
+      g_free (file);
+      close (fd);
+      return NULL;
+    }
 
-  g_string_free (candidate_filename, TRUE);
+  if (filename)
+    *filename = file;
+  else
+    g_free (file);
 
-  return fd;
+  return fp;
 }
 
 static void
-add_mime_type (const char *mime_type, GList *desktop_files, int fd)
+add_mime_type (const char *mime_type, GList *desktop_files, FILE *f)
 {
   GString *list;
   GList *desktop_file;
 
-  list = g_string_new("");
+  list = g_string_new (mime_type);
+  g_string_append_c (list, '=');
   for (desktop_file = desktop_files;
        desktop_file != NULL; 
        desktop_file = desktop_file->next)
@@ -301,11 +335,9 @@ add_mime_type (const char *mime_type, GList *desktop_files, int fd)
       if (desktop_files->next != NULL)
         g_string_append_c (list, ';');
     }
+  g_string_append_c (list, '\n');
 
-  write (fd, mime_type, strlen(mime_type));
-  write (fd, "=", 1);
-  write (fd, list->str, list->len);
-  write (fd, "\n", 1);
+  fputs (list->str, f);
 
   g_string_free (list, TRUE);
 }
@@ -315,10 +347,10 @@ sync_database (const char *dir, GError **error)
 {
   GError *sync_error;
   char *temp_cache_file, *cache_file;
-  int fd;
+  FILE *tmp_file;
 
   sync_error = NULL;
-  fd = open_temp_cache_file (dir, &temp_cache_file, &sync_error);
+  tmp_file = open_temp_cache_file (dir, &temp_cache_file, &sync_error);
 
   if (sync_error != NULL)
     {
@@ -326,11 +358,10 @@ sync_database (const char *dir, GError **error)
       return;
     }
 
-  write (fd, "[MIME Cache]\n", sizeof ("[MIME Cache\n]") - 1);
-  g_hash_table_foreach (mime_types_map, (GHFunc) add_mime_type,
-                        GINT_TO_POINTER (fd));
+  fputs ("[MIME Cache]\n", tmp_file);
+  g_hash_table_foreach (mime_types_map, (GHFunc) add_mime_type, tmp_file);
 
-  close (fd);
+  fclose (tmp_file);
 
   cache_file = g_build_filename (dir, CACHE_FILENAME, NULL);
   if (rename (temp_cache_file, cache_file) < 0)
@@ -342,6 +373,7 @@ sync_database (const char *dir, GError **error)
 
       unlink (temp_cache_file);
     }
+  g_free (temp_cache_file);
   g_free (cache_file);
 }
 
@@ -351,7 +383,9 @@ update_database (const char  *desktop_dir,
 {
   GError *update_error;
 
-  mime_types_map = g_hash_table_new (g_str_hash, g_str_equal);
+  mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal, 
+					  (GDestroyNotify)g_free,
+					  NULL);
 
   update_error = NULL;
   process_desktop_files (desktop_dir, "", &update_error);
@@ -364,7 +398,7 @@ update_database (const char  *desktop_dir,
       if (update_error != NULL)
         g_propagate_error (error, update_error);
     }
-
+  g_hash_table_foreach (mime_types_map, (GHFunc) list_free_deep, NULL);
   g_hash_table_destroy (mime_types_map);
 }
 

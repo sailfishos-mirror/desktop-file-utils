@@ -41,6 +41,13 @@ gboolean               desktop_entry_tree_cache_delete (DesktopEntryTreeCache *c
                                                         const char            *menu_file,
                                                         const char            *menu_path,
                                                         GError               **error);
-
+gboolean               desktop_entry_tree_cache_mkdir  (DesktopEntryTreeCache *cache,
+                                                        const char            *menu_file,
+                                                        const char            *menu_path,
+                                                        GError               **error);
+gboolean               desktop_entry_tree_cache_rmdir  (DesktopEntryTreeCache *cache,
+                                                        const char            *menu_file,
+                                                        const char            *menu_path,
+                                                        GError               **error);
 
 #endif /* MENU_TREE_CACHE_H */

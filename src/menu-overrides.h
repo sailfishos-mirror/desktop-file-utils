@@ -24,6 +24,11 @@
 
 #include "menu-util.h"
 
+/* A tricky thing here is that name_to_override/name_to_unoverride
+ * can be a long name with dir separators, like "foo/bar.desktop"
+ * i.e. it's anything that can be in an include/exclude
+ */
+
 typedef struct MenuOverrideDir MenuOverrideDir;
 
 MenuOverrideDir* menu_override_dir_create      (const char       *path,

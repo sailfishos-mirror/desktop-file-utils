@@ -524,7 +524,7 @@ desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
   char *current_fs_path;
   gboolean retval;
   char *menu_path_dirname;
-  char *menu_path_basename;
+  char *menu_entry_relative_path;
   char *override_dir;
   
   menu_verbose ("Creating \"%s\" in menu %s\n",
@@ -550,14 +550,33 @@ desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
   
   current_fs_path = NULL;
   desktop_entry_tree_resolve_path (tree, menu_path,
-                                   NULL, &current_fs_path);
+                                   NULL, &current_fs_path,
+                                   &menu_entry_relative_path);
 
+  /* if there's no existing .desktop file we're based on,
+   * we invent a random name to avoid collisions
+   */
+  if (menu_entry_relative_path == NULL)
+    {
+      GString *str;
+
+      str = g_string_new ("menuitem-");
+      g_string_append_random_ascii (str, 10);
+      g_string_append (str, ".desktop");
+      
+      menu_entry_relative_path = g_string_free (str, FALSE);
+      
+      menu_verbose ("Generated new entry name \"%s\"\n",
+                    menu_entry_relative_path);
+    }
+
+  g_assert (menu_entry_relative_path != NULL);
+  
   menu_path_dirname = g_path_get_dirname (menu_path);
-  menu_path_basename = g_path_get_basename (menu_path);
   
   if (!menu_override_dir_add (entry->overrides,
                               menu_path_dirname,
-                              menu_path_basename,
+                              menu_entry_relative_path,
                               current_fs_path,
                               error))
     goto out;
@@ -574,7 +593,7 @@ desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
   /* Now include the .desktop file in the .menu file */
   if (!desktop_entry_tree_include (tree,
                                    menu_path_dirname,
-                                   menu_path_basename,
+                                   menu_entry_relative_path,
                                    override_dir,
                                    error))
     goto out;
@@ -588,7 +607,7 @@ desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
 
   g_free (override_dir);
   g_free (menu_path_dirname);
-  g_free (menu_path_basename);
+  g_free (menu_entry_relative_path);
   g_free (current_fs_path);
   desktop_entry_tree_unref (tree);
   
@@ -601,9 +620,213 @@ desktop_entry_tree_cache_delete (DesktopEntryTreeCache *cache,
                                  const char            *menu_path,
                                  GError               **error)
 {
+  CacheEntry *entry;
+  DesktopEntryTree *tree;
+  gboolean retval;
+  char *menu_path_dirname;
+  char *menu_entry_relative_path;
+  char *override_dir;
+
   menu_verbose ("Deleting \"%s\" in menu %s\n",
                 menu_path, menu_file);
+  
+  entry = cache_lookup (cache, menu_file, TRUE, error);
 
+  if (entry == NULL)
+    return FALSE;
 
-  return TRUE;
+  try_create_overrides (entry, menu_file, error);
+  
+  if (entry->overrides == NULL)
+    return FALSE;
+
+  tree = desktop_entry_tree_cache_lookup (cache, menu_file,
+                                          TRUE, error);
+  if (tree == NULL)
+    return FALSE;
+  
+  retval = FALSE;
+  override_dir = NULL;
+
+  menu_path_dirname = g_path_get_dirname (menu_path);
+
+  menu_entry_relative_path = NULL;
+  desktop_entry_tree_resolve_path (tree, menu_path,
+                                   NULL, NULL,
+                                   &menu_entry_relative_path);
+  if (menu_entry_relative_path == NULL)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_EXIST,
+                   _("\"%s\" not found\n"),
+                   menu_path);
+      goto out;
+    }
+
+  g_assert (menu_entry_relative_path != NULL);
+
+  /* Ignore errors on this, as it's just mopping
+   * up clutter, not required for function
+   */
+  menu_override_dir_remove (entry->overrides,
+                            menu_path_dirname,
+                            menu_entry_relative_path,
+                            NULL);
+
+  override_dir = menu_override_dir_get_fs_path (entry->overrides,
+                                                menu_path_dirname,
+                                                NULL);
+
+  /* tell the tree that it needs to reload the .desktop file
+   * cache
+   */
+  desktop_entry_tree_invalidate (tree, override_dir);
+
+  /* Now include the .desktop file in the .menu file */
+  if (!desktop_entry_tree_exclude (tree,
+                                   menu_path_dirname,
+                                   menu_entry_relative_path,
+                                   error))
+    goto out;
+  
+  /* Mark cache entry to be reloaded next time we cache_lookup() */
+  entry->needs_reload = TRUE;
+  
+  retval = TRUE;
+  
+ out:
+
+  g_free (override_dir);
+  g_free (menu_path_dirname);
+  g_free (menu_entry_relative_path);
+  desktop_entry_tree_unref (tree);
+  
+  return retval;
+}
+
+gboolean
+desktop_entry_tree_cache_mkdir (DesktopEntryTreeCache *cache,
+                                const char            *menu_file,
+                                const char            *menu_path,
+                                GError               **error)
+{
+  CacheEntry *entry;
+  DesktopEntryTree *tree;
+  DesktopEntryTreeNode *node;
+  gboolean retval;
+
+  menu_verbose ("Making directory \"%s\" in menu %s\n",
+                menu_path, menu_file);
+  
+  tree = desktop_entry_tree_cache_lookup (cache, menu_file,
+                                          TRUE, error);
+  if (tree == NULL)
+    return FALSE;
+  
+  retval = FALSE;
+  node = NULL;
+
+  /* resolve_path returns TRUE if it's an entry instead
+   * of a dir
+   */
+  desktop_entry_tree_resolve_path (tree, menu_path,
+                                   &node, NULL, NULL);
+  if (node != NULL)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_EXIST,
+                   _("\"%s\" already exists\n"),
+                   menu_path);
+      goto out;
+    }
+  
+  /* Create the directory */
+  if (!desktop_entry_tree_mkdir (tree,
+                                 menu_path,
+                                 error))
+    goto out;
+
+  entry = cache_lookup (cache, menu_file, TRUE, error);
+
+  if (entry == NULL)
+    return FALSE;
+  
+  /* Mark cache entry to be reloaded next time we cache_lookup() */
+  entry->needs_reload = TRUE;
+  
+  retval = TRUE;
+  
+ out:
+
+  desktop_entry_tree_unref (tree);
+  
+  return retval;
+}
+
+gboolean
+desktop_entry_tree_cache_rmdir (DesktopEntryTreeCache *cache,
+                                const char            *menu_file,
+                                const char            *menu_path,
+                                GError               **error)
+{
+  CacheEntry *entry;
+  DesktopEntryTree *tree;
+  DesktopEntryTreeNode *node;
+  gboolean retval;
+
+  menu_verbose ("Removing directory \"%s\" in menu %s\n",
+                menu_path, menu_file);
+  
+  tree = desktop_entry_tree_cache_lookup (cache, menu_file,
+                                          TRUE, error);
+  if (tree == NULL)
+    return FALSE;
+  
+  retval = FALSE;
+  node = NULL;
+
+  /* resolve_path returns TRUE if it's an entry instead
+   * of a dir
+   */
+  desktop_entry_tree_resolve_path (tree, menu_path,
+                                   &node, NULL, NULL);
+  if (node == NULL)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_NOENT,
+                   _("\"%s\" doesn't exist\n"),
+                   menu_path);
+      goto out;
+    }
+
+  if (desktop_entry_tree_has_entries (tree, node))
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_FAILED,
+                   _("\"%s\" is not empty\n"),
+                   menu_path);
+      goto out;
+    }
+  
+  /* Remove the directory */
+  if (!desktop_entry_tree_rmdir (tree,
+                                 menu_path,
+                                 error))
+    goto out;
+
+  entry = cache_lookup (cache, menu_file, TRUE, error);
+
+  if (entry == NULL)
+    return FALSE;
+  
+  /* Mark cache entry to be reloaded next time we cache_lookup() */
+  entry->needs_reload = TRUE;
+  
+  retval = TRUE;
+  
+ out:
+
+  desktop_entry_tree_unref (tree);
+  
+  return retval;
 }

@@ -589,7 +589,8 @@ static gboolean
 tree_node_find_subdir_or_entry (TreeNode   *node,
                                 const char *name,
                                 TreeNode  **subdir_p,
-                                char      **real_fs_absolute_path_p)
+                                char      **real_fs_absolute_path_p,
+                                char      **entry_relative_name_p)
 {
   char **split;
   int i;
@@ -601,6 +602,8 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
     *subdir_p = NULL;
   if (real_fs_absolute_path_p)
     *real_fs_absolute_path_p = NULL;
+  if (entry_relative_name_p)
+    *entry_relative_name_p = NULL;
   
   entry = NULL;
 
@@ -673,9 +676,14 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
 
   menu_verbose (" Found node %p and entry path \"%s\"\n",
                 iter, entry ? entry_get_absolute_path (entry) : "(none)");
-  
-  if (real_fs_absolute_path_p && entry)
-    *real_fs_absolute_path_p = g_strdup (entry_get_absolute_path (entry));
+
+  if (entry != NULL)
+    {
+      if (real_fs_absolute_path_p)
+        *real_fs_absolute_path_p = g_strdup (entry_get_absolute_path (entry));
+      if (entry_relative_name_p)
+        *entry_relative_name_p = g_strdup (entry_get_relative_path (entry));
+    }
   
   if (subdir_p)
     {
@@ -695,7 +703,7 @@ tree_node_find_subdir (TreeNode   *node,
 {
   TreeNode *ret;
   ret = NULL;
-  tree_node_find_subdir_or_entry (node, name, &ret, NULL);
+  tree_node_find_subdir_or_entry (node, name, &ret, NULL, NULL);
   return ret;
 }
 
@@ -718,7 +726,8 @@ gboolean
 desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
                                  const char             *path,
                                  DesktopEntryTreeNode  **node_p,
-                                 char                  **real_fs_absolute_path_p)
+                                 char                  **real_fs_absolute_path_p,
+                                 char                  **entry_relative_name_p)
 {  
   build_tree (tree);
   if (tree->root == NULL)
@@ -726,7 +735,8 @@ desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
   
   return tree_node_find_subdir_or_entry (tree->root,
                                          path, node_p,
-                                         real_fs_absolute_path_p);
+                                         real_fs_absolute_path_p,
+                                         entry_relative_name_p);
 }
 
 void
@@ -877,6 +887,15 @@ desktop_entry_tree_list_all (DesktopEntryTree       *tree,
   
   if (n_names)
     *n_names = len;
+}
+
+gboolean
+desktop_entry_tree_has_entries (DesktopEntryTree       *tree,
+                                DesktopEntryTreeNode   *parent_node)
+{
+  g_return_val_if_fail (parent_node != NULL, FALSE);
+  
+  return parent_node->entries != NULL;
 }
 
 char*
@@ -1578,31 +1597,34 @@ menu_node_find_submenu (MenuNode   *node,
 }
 
 static void
-menu_node_ensure_child (MenuNode    *parent,
-                        MenuNodeType child_type,
-                        const char  *child_content,
-                        gboolean     content_as_path)
+menu_node_ensure_child_at_end (MenuNode    *parent,
+                               MenuNodeType child_type,
+                               const char  *child_content,
+                               gboolean     content_as_path)
 {
   MenuNode *tmp;
-  gboolean already_there;
+  MenuNode *already_there;
 
-  menu_verbose ("Checking whether we already have a subnode with type %d and content \"%s\"\n", child_type, child_content);
+  menu_verbose ("Checking whether we already have a subnode with type %d and content \"%s\"\n", child_type, child_content ? child_content : "(none)");
 
-  already_there = FALSE;
+  already_there = NULL;
   tmp = menu_node_get_children (parent);
-  while (tmp != NULL && !already_there)
+  while (tmp != NULL && already_there == NULL)
     {
       if (menu_node_get_type (tmp) == child_type)
         {
-
-          if (content_as_path)
+          if (child_content == NULL)
+            {
+              already_there = tmp;
+            }
+          else if (content_as_path)
             {
               char *name;
               name = menu_node_get_content_as_path (tmp);
               if (name && strcmp (name, child_content) == 0)
                 {
                   menu_verbose ("Already have it!\n");
-                  already_there = TRUE;
+                  already_there = tmp;
                 }
 
               g_free (name);
@@ -1614,7 +1636,7 @@ menu_node_ensure_child (MenuNode    *parent,
               if (name && strcmp (name, child_content) == 0)
                 {
                   menu_verbose ("Already have it!\n");
-                  already_there = TRUE;
+                  already_there = tmp;
                 }
             }
         }
@@ -1622,7 +1644,14 @@ menu_node_ensure_child (MenuNode    *parent,
       tmp = menu_node_get_next (tmp);
     }
 
-  if (!already_there)
+  if (already_there != NULL)
+    {
+      /* Move it to the end to be sure it overrides */
+      menu_node_steal (already_there);
+      menu_node_append_child (parent, already_there);
+      menu_node_unref (already_there);
+    }
+  else    
     {
       MenuNode *node;
       
@@ -1640,7 +1669,7 @@ menu_node_ensure_child (MenuNode    *parent,
 gboolean
 desktop_entry_tree_include (DesktopEntryTree *tree,
                             const char       *menu_path_dirname,
-                            const char       *menu_path_basename,
+                            const char       *relative_entry_name,
                             const char       *override_fs_dirname,
                             GError          **error)
 {
@@ -1665,12 +1694,12 @@ desktop_entry_tree_include (DesktopEntryTree *tree,
 
   /* Add the given stuff to it */
 
-  menu_node_ensure_child (submenu, MENU_NODE_APP_DIR,
-                          override_fs_dirname,
-                          TRUE);
-  menu_node_ensure_child (submenu, MENU_NODE_INCLUDE,
-                          menu_path_basename,
-                          FALSE);
+  menu_node_ensure_child_at_end (submenu, MENU_NODE_APP_DIR,
+                                 override_fs_dirname,
+                                 TRUE);
+  menu_node_ensure_child_at_end (submenu, MENU_NODE_INCLUDE,
+                                 relative_entry_name,
+                                 FALSE);
   
   /* Write to disk */
   if (!menu_cache_sync_for_file (tree->menu_cache,
@@ -1693,23 +1722,126 @@ desktop_entry_tree_include (DesktopEntryTree *tree,
 gboolean
 desktop_entry_tree_exclude (DesktopEntryTree *tree,
                             const char       *menu_path_dirname,
-                            const char       *menu_path_basename,
+                            const char       *relative_entry_name,
                             GError          **error)
 {
+  gboolean retval;
+  MenuNode *node;
+  MenuNode *submenu;
+  
+  retval = FALSE;
 
-  return TRUE;
+  /* Get node to modify and save */
+  node = menu_cache_get_menu_for_canonical_file (tree->menu_cache,
+                                                 tree->menu_file,
+                                                 NULL, error);
+  if (node == NULL)
+    goto out;
+
+
+  /* Create submenu */
+  submenu = menu_node_find_submenu (node, menu_path_dirname, TRUE);
+
+  g_assert (submenu != NULL);
+
+  /* Add the given stuff to it */
+  
+  menu_node_ensure_child_at_end (submenu, MENU_NODE_EXCLUDE,
+                                 relative_entry_name,
+                                 FALSE);
+  
+  /* Write to disk */
+  if (!menu_cache_sync_for_file (tree->menu_cache,
+                                 tree->menu_file,
+                                 error))
+    goto out;
+  
+  /* We have to reload the menu file */
+  menu_cache_invalidate (tree->menu_cache,
+                         tree->menu_file);
+  
+
+  retval = TRUE;
+
+ out:
+  
+  return retval;
+}
+
+static gboolean
+ensure_menu_with_child_node (DesktopEntryTree *tree,
+                             const char       *menu_path_dirname,
+                             MenuNodeType      child_node_type,
+                             GError          **error)
+{
+  gboolean retval;
+  MenuNode *node;
+  MenuNode *submenu;
+  
+  retval = FALSE;
+
+  /* Get node to modify and save */
+  node = menu_cache_get_menu_for_canonical_file (tree->menu_cache,
+                                                 tree->menu_file,
+                                                 NULL, error);
+  if (node == NULL)
+    goto out;
+
+  /* Create submenu */
+  submenu = menu_node_find_submenu (node, menu_path_dirname, TRUE);
+
+  g_assert (submenu != NULL);
+
+  /* Add the given stuff to it */
+
+  menu_node_ensure_child_at_end (submenu, child_node_type,
+                                 NULL, FALSE);
+  
+  /* Write to disk */
+  if (!menu_cache_sync_for_file (tree->menu_cache,
+                                 tree->menu_file,
+                                 error))
+    goto out;
+  
+  /* We have to reload the menu file */
+  menu_cache_invalidate (tree->menu_cache,
+                         tree->menu_file);
+
+  retval = TRUE;
+
+ out:
+  
+  return retval;
+}
+
+gboolean
+desktop_entry_tree_mkdir (DesktopEntryTree *tree,
+                          const char       *menu_path_dirname,
+                          GError          **error)
+{
+  return ensure_menu_with_child_node (tree, menu_path_dirname,
+                                      MENU_NODE_NOT_DELETED, error);
+}
+
+gboolean
+desktop_entry_tree_rmdir (DesktopEntryTree *tree,
+                          const char       *menu_path_dirname,
+                          GError          **error)
+{
+  return ensure_menu_with_child_node (tree, menu_path_dirname,
+                                      MENU_NODE_DELETED, error);
 }
 
 gboolean
 desktop_entry_tree_move (DesktopEntryTree *tree,
                          const char       *menu_path_dirname_src,
                          const char       *menu_path_dirname_dest,
-                         const char       *menu_path_basename,
+                         const char       *relative_entry_name,
                          const char       *override_fs_dirname_dest,
                          GError          **error)
 {
-
-
-
+  
+  
+  
   return TRUE;
 }

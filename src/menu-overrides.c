@@ -119,6 +119,22 @@ menu_override_dir_add (MenuOverrideDir  *override,
                         based_on_fs_path);
           goto out;
         }
+
+      /* The name_to_override may have had '/' in it; if
+       * so we have more directories to create
+       */
+      if (strchr (name_to_override, '/') != NULL)
+        {
+          char *subdir;
+          subdir = g_path_get_dirname (fs_file_path);
+          if (!g_create_dir (subdir, 0755, error))
+            {
+              menu_verbose ("Failed to create subdir \"%s\"\n", subdir);
+              g_free (subdir);
+              goto out;              
+            }
+          g_free (subdir);
+        }
       
       if (!g_file_save_atomically (fs_file_path,
                                    contents, len,
@@ -140,14 +156,42 @@ menu_override_dir_add (MenuOverrideDir  *override,
   return retval;
 }
 
+/* somewhat unreliable function, but in
+ * the context it's currently used that
+ * should be acceptable
+ */
+static gboolean
+same_dir (const char *dir_a,
+          const char *dir_b)
+{
+  struct stat sa;
+  struct stat sb;
+
+  if (stat (dir_a, &sa) < 0)
+    return FALSE;
+  if (stat (dir_b, &sb) < 0)
+    return FALSE;
+
+  /* this is a bit scattershot */
+  return
+    sa.st_mode == sb.st_mode &&
+    sa.st_dev == sb.st_dev &&
+    sa.st_ino == sb.st_ino &&
+    sa.st_nlink == sb.st_nlink &&
+    sa.st_size == sb.st_size &&
+    sa.st_atime == sb.st_atime &&
+    sa.st_mtime == sb.st_mtime &&
+    sa.st_ctime == sb.st_ctime;
+}
+
 gboolean
 menu_override_dir_remove (MenuOverrideDir  *override,
                           const char       *menu_path,
                           const char       *name_to_unoverride,
                           GError          **error)
 {
-  char *fs_dir_path;
   char *fs_file_path;  
+  char *dirname;
   
   fs_file_path =
     menu_override_dir_get_fs_path (override, menu_path, name_to_unoverride);
@@ -163,11 +207,20 @@ menu_override_dir_remove (MenuOverrideDir  *override,
 
   /* always try removing the directory, it will fail if the dir isn't
    * empty and succeed if the directory has nothing worthwhile in it.
+   * Again remember that name_to_unoverride may have some '/' in it,
+   * so we may need to remove multiple dirs.
    */
-  fs_dir_path =
-    menu_override_dir_get_fs_path (override, menu_path, NULL);
-  rmdir (fs_dir_path);
-  g_free (fs_dir_path);
+  dirname = g_path_get_dirname (fs_file_path);
+  while (TRUE)
+    {
+      if (rmdir (dirname) < 0)
+        break;
+      if (same_dir (dirname, override->root_dir))
+        break;
+      g_free (dirname);
+      dirname = g_path_get_dirname (dirname);
+    }
+  g_free (dirname);
 
   return TRUE;
 }

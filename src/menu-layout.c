@@ -89,6 +89,20 @@ struct MenuNodeLegacyDir
   NULL : (((node)->next == (node)->parent->children) ?  \
           NULL : (node)->next)
 
+static int
+null_safe_strcmp (const char *a,
+                  const char *b)
+{
+  if (a == NULL && b == NULL)
+    return 0;
+  else if (a == NULL)
+    return -1;
+  else if (b == NULL)
+    return 1;
+  else
+    return strcmp (a, b);
+}
+
 void
 menu_node_ref (MenuNode *node)
 {
@@ -896,6 +910,85 @@ menu_node_menu_get_directory_entries (MenuNode *node)
   return nm->dir_dirs;
 }
 
+/* Remove sequences of include/exclude of the same file, etc. */
+static gboolean
+nodes_have_same_content (MenuNode *a,
+                         MenuNode *b)
+{
+  const char *ac;
+  const char *bc;
+
+  ac = menu_node_get_content (a);
+  bc = menu_node_get_content (b);
+
+  if (null_safe_strcmp (ac, bc) == 0)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+void
+menu_node_remove_redundancy (MenuNode *node)
+{
+  MenuNode *child;
+  MenuNode *prev;
+
+  menu_verbose ("Removing redundancy in menu node %p\n",
+                node);
+  
+  prev = NULL;
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      switch (menu_node_get_type (child))
+        {
+          /* These are dups if their content is the same */
+        case MENU_NODE_APP_DIR:
+        case MENU_NODE_DIRECTORY_DIR:
+        case MENU_NODE_DIRECTORY:
+        case MENU_NODE_INCLUDE:
+        case MENU_NODE_EXCLUDE:
+          if (prev &&
+              ((prev->type == child->type) ||
+               (prev->type == MENU_NODE_EXCLUDE &&
+                child->type == MENU_NODE_INCLUDE) ||
+               (prev->type == MENU_NODE_INCLUDE &&
+                child->type == MENU_NODE_EXCLUDE)) &&
+              nodes_have_same_content (prev, child))
+            {
+              menu_verbose ("Consolidating two adjacent nodes with types %d %d content %s\n",
+                            prev->type, child->type,
+                            menu_node_get_content (child) ?
+                            menu_node_get_content (child) : "(none)");
+              menu_node_unlink (prev);
+            }
+          break;
+
+        case MENU_NODE_DELETED:
+        case MENU_NODE_NOT_DELETED:
+          if (prev &&
+              (prev->type == MENU_NODE_DELETED ||
+               prev->type == MENU_NODE_NOT_DELETED))
+            {
+              menu_verbose ("Consolidating two adjacent Deleted/NotDeleted nodes\n");
+              menu_node_unlink (prev);
+            }
+          break;
+          
+        case MENU_NODE_MENU:
+          /* recurse */
+          menu_node_remove_redundancy (child);
+          break;
+          
+        default:
+          break;
+        }
+
+      prev = child;
+      child = menu_node_get_next (child);
+    }
+}
+
 /*
  * The menu cache
  */
@@ -1417,6 +1510,10 @@ menu_cache_sync_for_file (MenuCache   *cache,
       goto out;
     }
 
+  /* Clean up the menu, to avoid collecting lots of junk over time */
+  menu_node_remove_redundancy (file->root);
+
+  /* now save */
   str = g_string_new (NULL);
   menu_node_append_to_string (file->root, 0, str);
 
@@ -1447,20 +1544,6 @@ menu_node_debug_print (MenuNode *node)
 }
 
 #ifdef DFU_BUILD_TESTS
-static int
-null_safe_strcmp (const char *a,
-                  const char *b)
-{
-  if (a == NULL && b == NULL)
-    return 0;
-  else if (a == NULL)
-    return -1;
-  else if (b == NULL)
-    return 1;
-  else
-    return strcmp (a, b);
-}
-
 static gboolean
 node_has_child (MenuNode *node,
                 MenuNode *child)

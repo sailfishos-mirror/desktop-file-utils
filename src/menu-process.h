@@ -61,7 +61,8 @@ gboolean desktop_entry_tree_get_node     (DesktopEntryTree       *tree,
 gboolean desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
                                           const char             *path,
                                           DesktopEntryTreeNode  **node,
-                                          char                  **real_fs_absolute_path_p);
+                                          char                  **real_fs_absolute_path_p,
+                                          char                  **entry_relative_name_p);
 void     desktop_entry_tree_list_subdirs (DesktopEntryTree       *tree,
                                           DesktopEntryTreeNode   *parent_node,
                                           DesktopEntryTreeNode ***subdirs,
@@ -75,6 +76,8 @@ void     desktop_entry_tree_list_all     (DesktopEntryTree       *tree,
                                           char                 ***names,
                                           int                    *n_names,
                                           int                    *n_subdirs);
+gboolean desktop_entry_tree_has_entries  (DesktopEntryTree       *tree,
+                                          DesktopEntryTreeNode   *parent_node);
 
 /* returns a copy of .directory file absolute path */
 char*       desktop_entry_tree_node_get_directory (DesktopEntryTreeNode *node);
@@ -96,12 +99,18 @@ void menu_set_verbose_queries      (gboolean    value);
 /* Editing stuff */
 gboolean desktop_entry_tree_include (DesktopEntryTree *tree,
                                      const char       *menu_path_dirname,
-                                     const char       *menu_path_basename,
+                                     const char       *relative_entry_name,
                                      const char       *override_fs_dirname,
                                      GError          **error);
 gboolean desktop_entry_tree_exclude (DesktopEntryTree *tree,
                                      const char       *menu_path_dirname,
-                                     const char       *menu_path_basename,
+                                     const char       *relative_entry_name,
+                                     GError          **error);
+gboolean desktop_entry_tree_mkdir   (DesktopEntryTree *tree,
+                                     const char       *menu_path_dirname,
+                                     GError          **error);
+gboolean desktop_entry_tree_rmdir   (DesktopEntryTree *tree,
+                                     const char       *menu_path_dirname,
                                      GError          **error);
 gboolean desktop_entry_tree_move    (DesktopEntryTree *tree,
                                      const char       *menu_path_dirname_src,

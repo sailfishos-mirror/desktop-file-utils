@@ -108,6 +108,8 @@ EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
 
 void menu_node_debug_print (MenuNode *node);
 
+void menu_node_remove_redundancy (MenuNode *node);
+
 typedef struct MenuCache MenuCache;
 
 MenuCache* menu_cache_new   (void);

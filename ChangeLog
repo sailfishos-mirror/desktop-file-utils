@@ -1,5 +1,23 @@
 2003-05-31  Havoc Pennington  <hp@pobox.com>
 
+	* src/menu-tree-cache.c (desktop_entry_tree_cache_rmdir):
+	implement
+	(desktop_entry_tree_cache_mkdir): implement
+
+	* src/menu-process.c (desktop_entry_tree_mkdir): implement
+	(desktop_entry_tree_rmdir): implement
+
+	* src/menu-overrides.c: handle overriding a desktop file 
+	with a '/' in the name
+
+	* src/menu-method.c (menu_method_unlink): implement
+
+	* src/menu-process.c (desktop_entry_tree_exclude): implement
+
+	* src/menu-tree-cache.c (desktop_entry_tree_cache_delete): implement
+
+2003-05-31  Havoc Pennington  <hp@pobox.com>
+
 	* src/menu-util.c: move some functions that didn't make sense 
 	in other files into here
 

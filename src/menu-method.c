@@ -74,7 +74,13 @@ static GnomeVFSResult    menu_method_move        (MenuMethod               *meth
 static GnomeVFSResult    menu_method_unlink      (MenuMethod               *method,
 						  GnomeVFSURI              *uri,
 						  GnomeVFSContext          *context);
-
+static GnomeVFSResult    menu_method_mkdir       (MenuMethod               *method,
+						  GnomeVFSURI              *uri,
+						  guint                     perm,
+						  GnomeVFSContext          *context);
+static GnomeVFSResult    menu_method_rmdir       (MenuMethod               *method,
+						  GnomeVFSURI              *uri,
+						  GnomeVFSContext          *context);
 
 static gboolean menu_method_resolve_uri_writable (MenuMethod               *method,
 						  GnomeVFSURI              *uri,
@@ -400,8 +406,16 @@ do_make_directory (GnomeVFSMethod  *vtable,
                    guint            perm,
                    GnomeVFSContext *context)
 {
-	
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+        MenuMethod *method;
+        GnomeVFSResult result;
+        
+        method = method_checkout ();
+
+        result = menu_method_mkdir (method, uri, perm, context);
+
+        method_return (method);
+        
+        return result;
 }
 
 static GnomeVFSResult
@@ -409,8 +423,16 @@ do_remove_directory (GnomeVFSMethod  *vtable,
                      GnomeVFSURI     *uri,
                      GnomeVFSContext *context)
 {
+        MenuMethod *method;
+        GnomeVFSResult result;
+        
+        method = method_checkout ();
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+        result = menu_method_rmdir (method, uri, context);
+
+        method_return (method);
+        
+        return result;
 }
 
 static GnomeVFSResult
@@ -620,64 +642,80 @@ scheme_to_menu (const char *scheme)
 }
 
 static gboolean
+unpack_uri (GnomeVFSURI  *uri,
+	    const char  **menu_file_p,
+	    char        **menu_path_p,
+	    GError      **error)
+{
+	if (menu_file_p)
+		*menu_file_p = NULL;
+	if (menu_path_p)
+		*menu_path_p = NULL;
+	
+	if (menu_file_p) {
+		const char *scheme;
+		
+		scheme = gnome_vfs_uri_get_scheme (uri);
+		g_assert (scheme != NULL);
+
+		*menu_file_p = scheme_to_menu (scheme);
+
+		if (*menu_file_p == NULL) {
+			menu_verbose ("Unknown protocol %s\n", scheme);
+			g_set_error (error, G_FILE_ERROR,
+				     G_FILE_ERROR_FAILED,
+				     _("Unknown protocol \"%s\"\n"),
+				     scheme);
+			return FALSE;
+		}
+	}
+
+	if (menu_path_p) {
+		char *unescaped;
+		
+		unescaped = gnome_vfs_unescape_string (uri->text, "");
+
+		*menu_path_p = unescaped;
+	}
+
+	return TRUE;
+}
+
+static gboolean
 menu_method_ensure_override (MenuMethod   *method,
 			     GnomeVFSURI  *uri,
 			     GError      **error)
 {
-        const char *scheme;
-        char *unescaped;
-	const char *menu;
-        
-        scheme = gnome_vfs_uri_get_scheme (uri);
-        g_assert (scheme != NULL);
+        const char *menu_file;
+        char *menu_path;
 
-	menu = scheme_to_menu (scheme);
-	if (menu == NULL) {
-		menu_verbose ("Unknown protocol %s\n", scheme);
-                g_set_error (error, G_FILE_ERROR,
-                             G_FILE_ERROR_FAILED,
-                             _("Unknown protocol \"%s\"\n"),
-                             scheme);
+	if (!unpack_uri (uri, &menu_file, &menu_path, error)) {
 		return FALSE;
 	}
-        
-        unescaped = gnome_vfs_unescape_string (uri->text, "");
 	
 	if (!desktop_entry_tree_cache_create (method->cache,
-					      menu, unescaped,
+					      menu_file, menu_path,
 					      error)) {
-		g_free (unescaped);
+		g_free (menu_path);
 		return FALSE;
 	}
 
-	g_free (unescaped);
+	g_free (menu_path);
 	return TRUE;
 }
 
 static DesktopEntryTree*
 menu_method_get_tree (MenuMethod  *method,
-                      const char  *scheme,
+                      const char  *menu_file,
                       GError     **error)
 {
         DesktopEntryTree *tree;
-	const char *menu;
 	
-	menu_verbose ("Getting scheme %s tree\n", scheme);
+	menu_verbose ("Getting tree for %s\n", menu_file);
 
-	menu = scheme_to_menu (scheme);
-
-	if (menu != NULL) {
-                tree = desktop_entry_tree_cache_lookup (method->cache,
-							menu, TRUE,
-                                                        error);
-        } else {
-		menu_verbose ("Unknown protocol %s\n", scheme);
-                g_set_error (error, G_FILE_ERROR,
-                             G_FILE_ERROR_FAILED,
-                             _("Unknown protocol \"%s\"\n"),
-                             scheme);
-                tree = NULL;
-        }
+	tree = desktop_entry_tree_cache_lookup (method->cache,
+						menu_file, TRUE,
+						error);
 
         return tree;    
 }
@@ -690,8 +728,8 @@ menu_method_resolve_uri (MenuMethod            *method,
                          char                 **real_path_p, /* path to .desktop file */
                          GError               **error)
 {
-        const char *scheme;
-        char *unescaped;
+        const char *menu_file;
+	char *menu_path;
         DesktopEntryTree *tree;
         DesktopEntryTreeNode *node;
         
@@ -701,29 +739,29 @@ menu_method_resolve_uri (MenuMethod            *method,
                 *node_p = NULL;
         if (real_path_p)
                 *real_path_p = NULL;
-        
-        scheme = gnome_vfs_uri_get_scheme (uri);
-        g_assert (scheme != NULL);
-        
-        tree = menu_method_get_tree (method, scheme, error);
+
+	if (!unpack_uri (uri, &menu_file, &menu_path, error))
+		return FALSE;
+
+        tree = menu_method_get_tree (method, menu_path, error);
         if (tree == NULL) {
 		menu_verbose ("Got NULL tree from menu method\n");
+		g_free (menu_path);
                 return FALSE;
 	}
-        
-        unescaped = gnome_vfs_unescape_string (uri->text, "");
 
         /* May not find a node, perhaps because it's a .desktop not a
-         * directory, which is very possible.
+         * directory, which is very possible. resolve_path returns
+	 * TRUE if the path is an entry.
          */
-        if (!desktop_entry_tree_resolve_path (tree, unescaped, &node,
-                                              real_path_p)) {
+        if (!desktop_entry_tree_resolve_path (tree, menu_path, &node,
+                                              real_path_p, NULL)) {
                 desktop_entry_tree_unref (tree);
                 g_set_error (error, G_FILE_ERROR,
                              G_FILE_ERROR_EXIST,
                              _("No such file or directory \"%s\"\n"),
-                             unescaped);
-                g_free (unescaped);
+                             menu_path);
+                g_free (menu_path);
 
 		menu_verbose ("Failed to resolve path in desktop entry tree\n");
 		
@@ -738,7 +776,7 @@ menu_method_resolve_uri (MenuMethod            *method,
         if (node_p)
                 *node_p = node; /* remember, node may be NULL */
 
-        g_free (unescaped);
+        g_free (menu_path);
 
         return TRUE;
 }
@@ -995,9 +1033,112 @@ menu_method_unlink (MenuMethod               *method,
 		    GnomeVFSURI              *uri,
 		    GnomeVFSContext          *context)
 {
+	const char *menu_file;
+	char *menu_path;
+	GnomeVFSResult retval;
+	GError *tmp_error;
 	
+	retval = GNOME_VFS_OK;
 
-	return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	if (!unpack_uri (uri, &menu_file, &menu_path, NULL)) {
+		return GNOME_VFS_ERROR_NOT_FOUND;
+	}	
+	
+	menu_verbose ("Unlinking file %s path %s\n",
+		      menu_file, menu_path);
+
+	tmp_error = NULL;
+	if (!desktop_entry_tree_cache_delete (method->cache,
+					      menu_file,
+					      menu_path,
+					      &tmp_error)) {
+		retval = GNOME_VFS_ERROR_GENERIC;
+		menu_verbose ("Failed to delete item in tree cache: %s\n",
+			      tmp_error->message);
+		g_error_free (tmp_error);
+	}
+
+	g_free (menu_path);
+	return retval;
+}
+
+static GnomeVFSResult
+menu_method_mkdir (MenuMethod      *method,
+		   GnomeVFSURI     *uri,
+		   guint            perm,
+		   GnomeVFSContext *context)
+{
+	const char *menu_file;
+	char *menu_path;
+	GnomeVFSResult retval;
+	GError *tmp_error;
+	
+	retval = GNOME_VFS_OK;
+
+	if (!unpack_uri (uri, &menu_file, &menu_path, NULL)) {
+		return GNOME_VFS_ERROR_NOT_FOUND;
+	}	
+	
+	menu_verbose ("Making directory in %s path %s\n",
+		      menu_file, menu_path);
+
+	tmp_error = NULL;
+	if (!desktop_entry_tree_cache_mkdir (method->cache,
+					     menu_file,
+					     menu_path,
+					     &tmp_error)) {
+		if (g_error_matches (tmp_error,
+				     G_FILE_ERROR,
+				     G_FILE_ERROR_EXIST))
+			retval = GNOME_VFS_ERROR_FILE_EXISTS;
+		else
+			retval = GNOME_VFS_ERROR_GENERIC;
+		menu_verbose ("Failed to mkdir: %s\n",
+			      tmp_error->message);
+		g_error_free (tmp_error);
+	}
+
+	g_free (menu_path);
+	return retval;
+}
+
+static GnomeVFSResult
+menu_method_rmdir (MenuMethod      *method,
+		   GnomeVFSURI     *uri,
+		   GnomeVFSContext *context)
+{
+	const char *menu_file;
+	char *menu_path;
+	GnomeVFSResult retval;
+	GError *tmp_error;
+	
+	retval = GNOME_VFS_OK;
+
+	if (!unpack_uri (uri, &menu_file, &menu_path, NULL)) {
+		return GNOME_VFS_ERROR_NOT_FOUND;
+	}	
+	
+	menu_verbose ("Removing directory in %s path %s\n",
+		      menu_file, menu_path);
+
+	tmp_error = NULL;
+	if (!desktop_entry_tree_cache_rmdir (method->cache,
+					     menu_file,
+					     menu_path,
+					     &tmp_error)) {
+		if (g_error_matches (tmp_error,
+				     G_FILE_ERROR,
+				     G_FILE_ERROR_NOENT))
+			retval = GNOME_VFS_ERROR_NOT_FOUND;
+		else
+			retval = GNOME_VFS_ERROR_GENERIC;
+		menu_verbose ("Failed to rmdir: %s\n",
+			      tmp_error->message);
+		g_error_free (tmp_error);
+	}
+
+	g_free (menu_path);
+	return retval;
 }
 
 /*

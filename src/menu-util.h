@@ -47,4 +47,10 @@ gboolean g_file_save_atomically (const char *filename,
                                  int         len,
                                  GError    **error);
 
+void g_string_append_random_bytes (GString *str,
+                                   int      n_bytes);
+void g_string_append_random_ascii (GString *str,
+                                   int      n_bytes);
+
+
 #endif /* MENU_UTIL_H */

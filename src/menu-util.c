@@ -219,3 +219,36 @@ menu_verbose (const char *format,
   g_free (str);
 }
 
+void
+g_string_append_random_bytes (GString    *str,
+                              int         n_bytes)
+{
+  int i;
+  i = 0;
+  while (i < n_bytes)
+    {
+      g_string_append_c (str,
+                         g_random_int_range (0, 256));
+      ++i;
+    }
+}
+
+void
+g_string_append_random_ascii (GString *str,
+                              int      n_bytes)
+{
+  static const char letters[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz";
+  int i;
+
+  g_string_append_random_bytes (str, n_bytes);
+  
+  i = str->len - n_bytes;
+  while (i < str->len)
+    {
+      str->str[i] = letters[str->str[i] % (sizeof (letters) - 1)];
+      ++i;
+    }
+
+  return TRUE;
+}

@@ -414,7 +414,13 @@ parse_comment_or_blank (GnomeDesktopFileParser *parser)
   
   line->value = g_strndup (parser->line, line_end - parser->line);
 
-  parser->line = (line_end) ? line_end + 1 : NULL;
+    if (*line_end == '\n')
+    ++line_end;
+  else if (*line_end == '\0')
+    line_end = NULL;
+  
+  parser->line = line_end;
+
   parser->line_nr++;
 }
 
@@ -474,8 +480,14 @@ parse_section_start (GnomeDesktopFileParser *parser, GError **error)
       g_free (section_name);
       return FALSE;
     }
+
+  if (*line_end == '\n')
+    ++line_end;
+  else if (*line_end == '\0')
+    line_end = NULL;
   
-  parser->line = (line_end) ? line_end + 1 : NULL;
+  parser->line = line_end;
+  
   parser->line_nr++;
 
   g_free (section_name);
@@ -586,8 +598,13 @@ parse_key_value (GnomeDesktopFileParser *parser, GError **error)
   if (locale_start)
     line->locale = g_strndup (locale_start, locale_end - locale_start);
   line->value = value;
+
+  if (*line_end == '\n')
+    ++line_end;
+  else if (*line_end == '\0')
+    line_end = NULL;
   
-  parser->line = (line_end) ? line_end + 1 : NULL;
+  parser->line = line_end;
   parser->line_nr++;
   
   return TRUE;

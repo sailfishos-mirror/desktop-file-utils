@@ -426,8 +426,10 @@ struct {
   { "MountPoint", validate_string },
   { "ReadOnly", validate_boolean_or_01 },
   { "UnmountIcon", validate_string },
-  { "SortOrder", validate_strings /* Fixme: Also comma-separated */},
+  { "SortOrder", validate_strings /* FIXME: Also comma-separated */},
   { "URL", validate_string },
+  { "Categories", validate_strings }, /* FIXME: should check that each category is known */
+  { "OnlyShowIn", validate_strings }
 };
 
 void

@@ -1,4 +1,11 @@
 ===========
+Version 0.9
+===========
+
+  o Many update-desktop-database improvements (Ray Strode,  Dan Williams)
+  o Fix desktop-file-install --remove-only-show-in (Ray Strode)
+
+===========
 Version 0.8
 ===========
 

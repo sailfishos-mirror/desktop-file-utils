@@ -1,3 +1,7 @@
+2004-09-28  Mark McLoughlin  <mark@skynet.ie>
+
+	* configure.in: Version 0.9.
+
 2004-09-27  Ray Strode  <rstrode@redhat.com>
 
 	* src/eggdesktopentries 

@@ -168,7 +168,7 @@ main (int argc, char **argv)
   
   setlocale (LC_ALL, "");
   
-  ctx = poptGetContext ("desktop-menu-gen-compat-dir", argc, (const char **) argv, options, 0);
+  ctx = poptGetContext ("desktop-menu-tool", argc, (const char **) argv, options, 0);
 
   poptReadDefaultConfig (ctx, TRUE);
 

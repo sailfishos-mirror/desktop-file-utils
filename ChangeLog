@@ -1,3 +1,10 @@
+2002-06-05  Havoc Pennington  <hp@redhat.com>
+
+	* configure.in: 0.2 version
+
+	* src/Makefile.am (desktop_menu_tool_SOURCES): rename
+	desktop-menu-gen-compat-dir to desktop-menu-tool
+
 2002-05-25  Havoc Pennington  <hp@pobox.com>
 
 	* src/vfolder-query.c (add_or_free_desktop_file): add OnlyShowIn

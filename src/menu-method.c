@@ -37,6 +37,8 @@
 #include <libgnomevfs/gnome-vfs-module.h>
 #include <libgnomevfs/gnome-vfs-utils.h>
 
+#define READ_ONLY 1
+
 /* This is from gnome-vfs-monitor-private.h which isn't installed */
 void gnome_vfs_monitor_callback (GnomeVFSMethodHandle *method_handle,
                                  GnomeVFSURI *info_uri,
@@ -634,7 +636,7 @@ do_set_file_info (GnomeVFSMethod          *vtable,
                   GnomeVFSContext         *context)
 {
 	menu_verbose ("method: Set file info %s\n", uri->text);
-
+	
 	/* This is the only error code nautilus can handle here;
 	 * if you change it, you have to go fix nautilus or it will
 	 * spew g_warning()
@@ -935,6 +937,10 @@ menu_method_resolve_uri_writable (MenuMethod               *method,
 	DesktopEntryTreeNode *node;
 	DesktopEntryTree *tree;
 	GnomeVFSResult retval;
+
+#ifdef READ_ONLY
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
 	
 	real_path = NULL;
 	node = NULL;
@@ -1016,7 +1022,10 @@ fill_in_generic_dir_info (GnomeVFSFileInfo         *info,
 		GNOME_VFS_PERM_GROUP_EXEC |
 		GNOME_VFS_PERM_OTHER_READ |
 		GNOME_VFS_PERM_OTHER_EXEC;
-
+#ifdef READ_ONLY
+	info->permissions &= ~ (GNOME_VFS_PERM_USER_WRITE);
+#endif
+	
 	/* We always own it */
 	info->uid = getuid ();
 	info->gid = getgid ();
@@ -1061,6 +1070,10 @@ fill_in_generic_file_info (GnomeVFSFileInfo         *info,
 		GNOME_VFS_PERM_GROUP_READ |
 		GNOME_VFS_PERM_OTHER_READ;
 
+#ifdef READ_ONLY
+	info->permissions &= ~ (GNOME_VFS_PERM_USER_WRITE);
+#endif
+	
 	/* We always own it */
 	info->uid = getuid ();
 	info->gid = getgid ();
@@ -1148,6 +1161,10 @@ menu_method_truncate (MenuMethod               *method,
         DesktopEntryTreeNode *node;
 	char *path;
 
+#ifdef READ_ONLY
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
+	
 	path = NULL;
 	node = NULL;
 	tree = NULL;
@@ -1180,7 +1197,9 @@ menu_method_move (MenuMethod               *method,
 		  gboolean                  force_replace,
 		  GnomeVFSContext          *context)
 {
-
+#ifdef READ_ONLY
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
 
 	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
@@ -1195,6 +1214,10 @@ menu_method_unlink (MenuMethod               *method,
 	GnomeVFSResult retval;
 	GError *tmp_error;
 
+#ifdef READ_ONLY
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
+	
 	retval = unpack_uri (uri, &menu_file, &menu_path);
 	if (retval != GNOME_VFS_OK)
 		return retval;
@@ -1265,6 +1288,10 @@ menu_method_rmdir (MenuMethod      *method,
 	GnomeVFSResult retval;
 	GError *tmp_error;
 
+#ifdef READ_ONLY
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
+	
 	retval = unpack_uri (uri, &menu_file, &menu_path);
 	if (retval != GNOME_VFS_OK)
 		return retval;
@@ -1425,7 +1452,7 @@ struct FileHandle
 
 static gboolean
 unix_flags_from_vfs_mode (GnomeVFSOpenMode mode,
-			 int             *unix_flags)
+			  int             *unix_flags)
 {
 	*unix_flags = 0;
 
@@ -1526,6 +1553,11 @@ file_handle_open (MenuMethod        *method,
 		  FileHandle       **handle_p)
 {
 	int unix_flags;
+
+#ifdef READ_ONLY
+	if (mode & GNOME_VFS_OPEN_WRITE)
+		return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
 	
 	if (!unix_flags_from_vfs_mode (mode, &unix_flags))
 		return GNOME_VFS_ERROR_INVALID_OPEN_MODE;
@@ -1543,6 +1575,10 @@ file_handle_create (MenuMethod        *method,
 		    mode_t             perms)
 {
 	int unix_flags;
+
+#ifdef READ_ONLY
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
 	
 	unix_flags = O_CREAT | O_TRUNC;
 	
@@ -1610,6 +1646,10 @@ file_handle_write (FileHandle               *handle,
 		   GnomeVFSContext          *context)
 {
 	int write_val;
+
+#ifdef READ_ONLY
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
+#endif
 	
 	do {
 		write_val = write (handle->fd, buffer, num_bytes);
@@ -1719,7 +1759,11 @@ file_handle_get_info (FileHandle               *handle,
 		GNOME_VFS_PERM_GROUP_EXEC |
 		GNOME_VFS_PERM_OTHER_READ |
 		GNOME_VFS_PERM_OTHER_EXEC;
-		
+
+#ifdef READ_ONLY
+	file_info->permissions &= ~ (GNOME_VFS_PERM_USER_WRITE);
+#endif
+	
 	file_info->valid_fields = GNOME_VFS_FILE_INFO_FIELDS_TYPE;
 	file_info->type = GNOME_VFS_FILE_TYPE_REGULAR;
 	file_info->name = g_strdup (handle->name);

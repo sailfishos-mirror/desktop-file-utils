@@ -1,3 +1,8 @@
+2003-07-17  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-method.c: add a bunch of #ifdef READ_ONLY sections for
+	using the backend without editing
+
 2003-06-11  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-tree-cache.c (reload_entry): diff old vs. new tree and

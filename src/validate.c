@@ -320,6 +320,7 @@ struct {
   { "Encoding", validate_string },
   { "Version", validate_numeric },
   { "Name", validate_localestring },
+  { "GenericName", validate_localestring },
   { "Type", validate_string },
   { "FilePattern", validate_regexps },
   { "TryExec", validate_string },
@@ -346,7 +347,9 @@ struct {
   { "SortOrder", validate_strings /* FIXME: Also comma-separated */},
   { "URL", validate_string },
   { "Categories", validate_strings }, /* FIXME: should check that each category is known */
-  { "OnlyShowIn", validate_only_show_in }
+  { "OnlyShowIn", validate_only_show_in },
+  { "StartupNotify", validate_boolean },
+  { "StartupWMClass", validate_string }
 };
 
 void
@@ -415,21 +418,23 @@ enum_keys (GnomeDesktopFile *df,
       if (key_table[i].validate_type)
 	(*key_table[i].validate_type) (value, key, locale, data->filename, df);
       if (key_table[i].deprecated)
-	print_warning ("Warning, file %s contains key %s. Usage of this key is not recommended, since it has been deprecated\n", data->filename, key);
-      
+	print_warning ("Warning, file %s contains key %s. Usage of this key is not recommended, since it has been deprecated\n", data->filename, key);      
     }
   else
     {
       if (strncmp (key, "X-", 2) != 0)
-	print_fatal ("Error, file %s contains unknown key %s, extensions to the spec should use keys starting with \"X-\".\n", data->filename, key);
+	print_warning ("Warning in file %s: nonstandard key \"%s\" lacks the \"X-\" prefix.\n", data->filename, key);
     }
 
   /* Validation of specific keys */
 
   if (strcmp (key, "Icon") == 0)
     {
+#if 0
+      /* With new icon theme spec we allow this */
       if (strchr (value, '.') == NULL)
 	print_warning ("Warning, icon '%s' specified in file %s does not seem to contain a filename extension\n", value, data->filename);
+#endif
     }
   
   if (strcmp (key, "Exec") == 0)
@@ -601,6 +606,9 @@ desktop_file_validate (GnomeDesktopFile *df, const char *filename)
 {
   const char *name;
   const char *comment;
+
+  /* FIXME global variable cruft */
+  fatal_error_occurred = FALSE;
   
   if (!required_section (df, filename))
     return !fatal_error_occurred;

@@ -27,7 +27,9 @@
 
 typedef struct _DesktopEntryTree DesktopEntryTree;
 
-DesktopEntryTree* desktop_entry_tree_load (const char *filename);
+DesktopEntryTree* desktop_entry_tree_load  (const char  *filename,
+                                            GError     **error);
+void              desktop_entry_tree_unref (DesktopEntryTree *tree);
 
 void desktop_entry_tree_list_subdirs (DesktopEntryTree *tree,
                                       const char       *parent_dir,
@@ -41,5 +43,22 @@ void desktop_entry_tree_list_entries (DesktopEntryTree *tree,
 /* returns a copy of .directory file absolute path */
 char* desktop_entry_tree_get_directory (DesktopEntryTree *tree,
                                         const char       *dirname);
+
+
+typedef enum
+{
+  DESKTOP_ENTRY_TREE_PRINT_NAME          = 1 << 0,
+  DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME  = 1 << 1,
+  DESKTOP_ENTRY_TREE_PRINT_COMMENT       = 1 << 2
+} DesktopEntryTreePrintFlags;
+
+void desktop_entry_tree_print             (DesktopEntryTree           *tree,
+                                           DesktopEntryTreePrintFlags  flags);
+void desktop_entry_tree_write_symlink_dir (DesktopEntryTree           *tree,
+                                           const char                 *dirname);
+void desktop_entry_tree_dump_desktop_list (DesktopEntryTree           *tree);
+
+void menu_set_verbose_queries      (gboolean    value);
+void menu_set_only_show_in_desktop (const char *desktop_name);
 
 #endif /* MENU_PROCESS_H */

@@ -1,4 +1,10 @@
 
+/* The vfolder stuff is a bunch of cruft that needs to die die die,
+ * only the new menu spec is interesting going forward. i.e. menu-*.[hc]
+ * is good, vfolder-*.[hc] is bad, this file is crufted up with both
+ * of them.
+ */
+
 #include <config.h>
 
 #include <glib.h>
@@ -8,6 +14,7 @@
 #include "validate.h"
 #include "vfolder-parser.h"
 #include "vfolder-query.h"
+#include "menu-process.h"
 
 #include <libintl.h>
 #include <stdlib.h>
@@ -15,6 +22,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <stdio.h>
 
 #define _(x) gettext ((x))
 #define N_(x) x
@@ -30,6 +39,7 @@ static void parse_options_callback (poptContext              ctx,
                                     const struct poptOption *opt,
                                     const char              *arg,
                                     void                    *data);
+static void process_one_file       (const char              *filename);
 
 enum {
   OPTION_DIR,
@@ -151,7 +161,8 @@ parse_options_callback (poptContext              ctx,
         }
 
       do_verbose = TRUE;
-      set_verbose_queries (TRUE);
+      vfolder_set_verbose_queries (TRUE);
+      menu_set_verbose_queries (TRUE);
       break;
 
     case OPTION_DESKTOP:
@@ -183,7 +194,6 @@ main (int argc, char **argv)
 {
   poptContext ctx;
   int nextopt;
-  GError* err = NULL;
   const char** args;
   int i;
   
@@ -212,24 +222,167 @@ main (int argc, char **argv)
     }
 
   if (only_show_in_desktop)
-    set_only_show_in_desktop (only_show_in_desktop);
+    {
+      vfolder_set_only_show_in_desktop (only_show_in_desktop);
+      menu_set_only_show_in_desktop (only_show_in_desktop);
+    }
   
   args = poptGetArgs (ctx);
 
   i = 0;
   while (args && args[i])
     {
+      process_one_file (args[i]);
+      ++i;
+    }
+
+  if (i == 0)
+    {
+      g_printerr (_("Must specify one menu file to parse\n"));
+
+      return 1;
+    }
+  
+  poptFreeContext (ctx);
+        
+  return 0;
+}
+
+static void
+start_element_handler (GMarkupParseContext  *context,
+                       const gchar          *element_name,
+                       const gchar         **attribute_names,
+                       const gchar         **attribute_values,
+                       gpointer              user_data,
+                       GError              **error)
+{
+  char **root_element = user_data;
+
+  g_assert (*root_element == NULL);
+
+  *root_element = g_strdup (element_name);
+
+  g_set_error (error, G_MARKUP_ERROR,
+               G_MARKUP_ERROR_INVALID_CONTENT,
+               "Fake error to force gmarkup to abort parsing");
+}
+
+static GMarkupParser scan_elements_funcs = {
+  start_element_handler,
+  NULL,
+  NULL,
+  NULL,
+  NULL
+};
+
+static char*
+markup_get_root_node_name (const char  *filename,
+                           GError     **error)
+{
+  GMarkupParseContext *context;
+  char *root_element;
+  FILE *f;
+#define BUFLEN 128
+  char buf[BUFLEN];
+  int bytes_read;
+  
+  root_element = NULL;
+
+  f = fopen (filename, "r");
+  if (f == NULL)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to open \"%s\": %s\n"),
+                   filename, g_strerror (errno));
+      return NULL;
+    }
+  
+  context = g_markup_parse_context_new (&scan_elements_funcs,
+                                        0, &root_element, NULL);
+
+
+  bytes_read = fread (buf, 1, BUFLEN, f);
+  while (bytes_read > 0)
+    {
+      g_assert (root_element == NULL);
+      
+      if (!g_markup_parse_context_parse (context,
+                                         buf, bytes_read,
+                                         NULL))
+        goto out;
+      
+      bytes_read = fread (buf, 1, BUFLEN, f);
+    }
+
+  if (ferror (f))
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to read from \"%s\": %s\n"),
+                   filename, g_strerror (errno));
+      goto out;
+    }
+
+  if (!g_markup_parse_context_end_parse (context, NULL))
+    goto out;
+
+  goto out;
+
+ out:
+
+  fclose (f);
+  
+  if (context)
+    g_markup_parse_context_free (context);
+
+  /* note we may return NULL without setting error if the file
+   * simply lacked a root element
+   */
+  if (root_element != NULL)
+    return root_element;
+  else
+    return NULL;
+}
+
+static void
+process_one_file (const char *filename)
+{
+  GError *err;
+  char *root_element;
+
+  err = NULL;
+  root_element = markup_get_root_node_name (filename, &err);
+
+  if (err != NULL)
+    {
+      g_printerr (_("Failed to load %s: %s\n"),
+                  filename, err->message);
+      g_error_free (err);
+      
+      exit (1);
+    }
+
+  if (root_element == NULL)
+    {
+      g_printerr (_("No root XML element found in %s\n"),
+                  filename);
+      exit (1);                  
+    }
+
+  if (strcmp (root_element, "VFolderInfo") == 0)
+    {
       Vfolder *folder;
 
       err = NULL;
-      folder = vfolder_load (args[i], &err);
+      folder = vfolder_load (filename, &err);
       if (err)
         {
           g_printerr (_("Failed to load %s: %s\n"),
-                      args[i], err->message);
+                      filename, err->message);
           g_error_free (err);
 
-          return 1;
+          exit (1);
         }
 
       if (folder)
@@ -253,18 +406,41 @@ main (int argc, char **argv)
           
           vfolder_free (folder);
         }
-      
-      ++i;
     }
-
-  if (i == 0)
+  else if (strcmp (root_element, "Menu") == 0)
     {
-      g_printerr (_("Must specify one menu file to parse\n"));
+      DesktopEntryTree *tree;
 
-      return 1;
+      err = NULL;
+      tree = desktop_entry_tree_load (filename, &err);
+      if (err)
+        {
+          g_printerr (_("Failed to load %s: %s\n"),
+                      filename, err->message);
+          g_error_free (err);
+
+          exit (1);
+        }
+
+      if (print_available)
+        desktop_entry_tree_dump_desktop_list (tree);
+      
+      if (do_print)
+        desktop_entry_tree_print (tree,
+                                  DESKTOP_ENTRY_TREE_PRINT_NAME |
+                                  DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME); 
+      
+      if (target_dir)
+        desktop_entry_tree_write_symlink_dir (tree, target_dir);
+      
+      desktop_entry_tree_unref (tree);      
     }
-  
-  poptFreeContext (ctx);
-        
-  return 0;
+  else
+    {
+      g_printerr (_("In file \"%s\", root element <%s> is unknown\n"),
+                  filename, root_element);
+      exit (1);
+    }
+
+  g_free (root_element);
 }

@@ -107,9 +107,12 @@ EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
  * the menu node for each file is cached while references
  * are outstanding.
  */
-MenuNode* menu_node_get_for_file            (const char *filename);
-MenuNode* menu_node_get_for_canonical_file  (const char *filename);
-void      menu_node_sync_for_file           (const char *filename);
+MenuNode* menu_node_get_for_file           (const char  *filename,
+                                            GError     **error);
+MenuNode* menu_node_get_for_canonical_file (const char  *filename,
+                                            GError     **error);
+gboolean  menu_node_sync_for_file          (const char  *filename,
+                                            GError     **error);
 
 /* random utility function */
 void menu_verbose    (const char *format,

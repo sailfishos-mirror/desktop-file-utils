@@ -1,5 +1,16 @@
 2003-05-01  Havoc Pennington  <hp@redhat.com>
 
+	* src/validate.c: change to only warn about invalid keys, don't
+	die
+	(enum_keys): remove warning about Icon field with no .png extension	
+	(desktop_file_validate): fix to reset fatal_error_occurred on each
+	call
+
+	* src/gen-compat-tree.c: hook up the new menu code, so we can
+	start debugging
+
+	* src/validate.c: allow GenericName, StartupNotify, StartupWMClass
+
 	* src/menu-parser.c: got it compiling, most code should be there,
 	untested
 

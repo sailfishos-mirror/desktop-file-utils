@@ -23,6 +23,10 @@
 #include "canonicalize.h"
 #include <string.h>
 
+#include <libintl.h>
+#define _(x) gettext ((x))
+#define N_(x) x
+
 static void menu_node_resolve_files (const char *node_dirname,
                                      const char *node_filename,
                                      MenuNode   *node);
@@ -142,7 +146,7 @@ menu_node_resolve_files (const char *node_dirname,
             if (filename == NULL)
               goto done;
             
-            to_merge = menu_node_get_for_file (filename);
+            to_merge = menu_node_get_for_file (filename, NULL); /* missing files ignored */
             if (to_merge == NULL)
               goto done;
             
@@ -406,10 +410,12 @@ struct _DesktopEntryTree
   int refcount;
 };
 
-static void build_tree (DesktopEntryTree *tree);
+static void build_tree     (DesktopEntryTree *tree);
+static void tree_node_free (TreeNode *node);
 
 DesktopEntryTree*
-desktop_entry_tree_load (const char *filename)
+desktop_entry_tree_load (const char  *filename,
+                         GError     **error)
 {
   DesktopEntryTree *tree;
   MenuNode *orig_node;
@@ -419,9 +425,16 @@ desktop_entry_tree_load (const char *filename)
 
   canonical = g_canonicalize_file_name (filename);
   if (canonical == NULL)
-    return NULL;
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_FAILED,
+                   _("Could not canonicalize filename \"%s\"\n"),
+                   filename);
+      return NULL;
+    }
   
-  orig_node = menu_node_get_for_canonical_file (canonical);
+  orig_node = menu_node_get_for_canonical_file (canonical,
+                                                error);
   if (orig_node == NULL)
     {
       g_free (canonical);
@@ -444,6 +457,26 @@ desktop_entry_tree_load (const char *filename)
   tree->refcount = 1;
   
   return tree;
+}
+
+void
+desktop_entry_tree_unref (DesktopEntryTree *tree)
+{
+  g_return_if_fail (tree != NULL);
+  g_return_if_fail (tree->refcount > 0);
+
+  tree->refcount -= 1;
+
+  if (tree->refcount == 0)
+    {
+      g_free (tree->menu_file);
+      g_free (tree->menu_file_dir);
+      menu_node_unref (tree->orig_node);
+      menu_node_unref (tree->resolved_node);
+      if (tree->root)
+        tree_node_free (tree->root);
+      g_free (tree);
+    }
 }
 
 static TreeNode*
@@ -909,3 +942,42 @@ build_tree (DesktopEntryTree *tree)
       menu_verbose ("Broken root node!\n");
     }
 }
+
+
+void
+desktop_entry_tree_print (DesktopEntryTree           *tree,
+                          DesktopEntryTreePrintFlags  flags)
+{
+
+
+}
+
+void
+desktop_entry_tree_write_symlink_dir (DesktopEntryTree *tree,
+                                      const char       *dirname)
+{
+
+
+}
+
+void
+desktop_entry_tree_dump_desktop_list (DesktopEntryTree *tree)
+{
+
+
+}
+
+static char *only_show_in_desktop = NULL;
+void
+menu_set_only_show_in_desktop (const char *desktop_name)
+{
+  g_free (only_show_in_desktop);
+  only_show_in_desktop = g_strdup (desktop_name);
+}
+
+void
+menu_set_verbose_queries (gboolean setting)
+{
+  /* FIXME */
+}
+

@@ -402,8 +402,8 @@ start_menu_child_element (MenuParser          *parser,
         {
           set_error (error, context, G_MARKUP_ERROR,
                      G_MARKUP_ERROR_UNKNOWN_ELEMENT,
-                     _("Element <%s> may not appear in this context\n"),
-                     element_name);
+                     _("Element <%s> may not appear below <%s>\n"),
+                     element_name, "Menu");
         }
     }
 }
@@ -480,8 +480,8 @@ start_move_child_element (MenuParser          *parser,
     {
       set_error (error, context, G_MARKUP_ERROR,
                  G_MARKUP_ERROR_UNKNOWN_ELEMENT,
-                 _("Element <%s> may not appear in this context\n"),
-                 element_name);
+                 _("Element <%s> may not appear below <%s>\n"),
+                 element_name, "Move");
     }
 }
 
@@ -521,7 +521,7 @@ start_element_handler (GMarkupParseContext *context,
     {
       start_menu_child_element (parser, context, element_name,
                                 attribute_names, attribute_values,
-                                error);      
+                                error);
     }
   else if (menu_node_get_type (parser->stack_top) == MENU_NODE_INCLUDE ||
            menu_node_get_type (parser->stack_top) == MENU_NODE_EXCLUDE ||
@@ -716,7 +716,8 @@ menu_parser_init (MenuParser *parser)
 static void
 menu_parser_free (MenuParser *parser)
 {
-  menu_node_unref (parser->root);
+  if (parser->root)
+    menu_node_unref (parser->root);
 }
 
 MenuNode*
@@ -733,6 +734,7 @@ menu_load (const char *filename,
   text = NULL;
   length = 0;
   retval = NULL;
+  context = NULL;
   
   if (!g_file_get_contents (filename,
                             &text,
@@ -758,12 +760,12 @@ menu_load (const char *filename,
   if (!g_markup_parse_context_end_parse (context, &error))
     goto out;
 
-  g_markup_parse_context_free (context);
-
   goto out;
 
  out:
 
+  if (context)
+    g_markup_parse_context_free (context);
   g_free (text);
   
   if (error)

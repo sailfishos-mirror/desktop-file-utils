@@ -1036,6 +1036,7 @@ vfolder_load (const char *filename,
   text = NULL;
   length = 0;
   retval = NULL;
+  context = NULL;
   
   if (!g_file_get_contents (filename,
                             &text,
@@ -1061,12 +1062,12 @@ vfolder_load (const char *filename,
   if (!g_markup_parse_context_end_parse (context, &error))
     goto out;
 
-  g_markup_parse_context_free (context);
-
   goto out;
 
  out:
 
+  if (context)
+    g_markup_parse_context_free (context);
   g_free (text);
   
   if (error)

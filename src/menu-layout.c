@@ -25,6 +25,7 @@
 #include "menu-layout.h"
 #include "canonicalize.h"
 #include "menu-entries.h"
+#include "menu-parser.h"
 
 #include <libintl.h>
 #define _(x) gettext ((x))
@@ -156,6 +157,8 @@ menu_node_new (MenuNodeType type)
   else
     node = g_new0 (MenuNode, 1);
 
+  node->type = type;
+  
   node->refcount = 1;
   
   /* we're in a list of one node */
@@ -271,15 +274,13 @@ menu_node_insert_before (MenuNode *node,
   RETURN_IF_HAS_ENTRY_DIRS (new_sibling);
   g_return_if_fail (new_sibling != NULL);
   g_return_if_fail (new_sibling->parent == NULL);
-  
-  new_sibling->parent = node->parent;
+
+  new_sibling->next = node;
   new_sibling->prev = node->prev;
   node->prev = new_sibling;
-  new_sibling->next = node;
-  if (node->next == node)
-    node->next = new_sibling;
+  new_sibling->prev->next = new_sibling;
 
-  /* FIXME fill in new_sibling->prev->next ? */
+  new_sibling->parent = node->parent;
   
   if (node == node->parent->children)
     node->parent->children = new_sibling;
@@ -295,13 +296,13 @@ menu_node_insert_after (MenuNode *node,
   RETURN_IF_HAS_ENTRY_DIRS (new_sibling);
   g_return_if_fail (new_sibling != NULL);
   g_return_if_fail (new_sibling->parent == NULL);
-  
-  new_sibling->parent = node->parent;
+
+  new_sibling->prev = node;
   new_sibling->next = node->next;
   node->next = new_sibling;
-  new_sibling->prev = node;
-  if (node->prev == node)
-    node->prev = new_sibling;
+  new_sibling->next->prev = new_sibling;
+  
+  new_sibling->parent = node->parent;
   
   menu_node_ref (new_sibling);
 }
@@ -325,7 +326,7 @@ menu_node_prepend_child (MenuNode *parent,
 void
 menu_node_append_child (MenuNode *parent,
                         MenuNode *new_child)
-{
+{  
   RETURN_IF_HAS_ENTRY_DIRS (new_child);
   
   if (parent->children)
@@ -790,9 +791,11 @@ drop_menu_file (MenuFile *file)
 }
 
 MenuNode*
-menu_node_get_for_canonical_file  (const char *canonical)
+menu_node_get_for_canonical_file  (const char *canonical,
+                                   GError    **error)
 {
   MenuFile *file;
+  MenuNode *node;
   
   file = find_file_by_name (canonical);
   
@@ -804,48 +807,81 @@ menu_node_get_for_canonical_file  (const char *canonical)
       return file->root;
     }
 
-  /* FIXME load file */
+  node = menu_load (canonical, error);
+  if (node == NULL)
+    return NULL; /* FIXME - cache failures? */
   
-  return NULL;
+  file = g_new0 (MenuFile, 1);
+
+  file->filename = g_strdup (canonical);
+  file->root = node;
+
+  menu_files = g_slist_prepend (menu_files, file);
+
+  menu_node_ref (file->root);
+  
+  return file->root;
 }
 
 MenuNode*
-menu_node_get_for_file  (const char *filename)
+menu_node_get_for_file  (const char *filename,
+                         GError    **error)
 {
   char *canonical;
   MenuNode *node;
 
   canonical = g_canonicalize_file_name (filename);
   if (canonical == NULL)
-    return NULL;
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_FAILED,
+                   _("Could not canonicalize filename \"%s\"\n"),
+                   filename);
+      return NULL;
+    }
   
-  node = menu_node_get_for_canonical_file (canonical);
+  node = menu_node_get_for_canonical_file (canonical,
+                                           error);
 
   g_free (canonical);
 
   return node;
 }
 
-void
-menu_node_sync_for_file (const char *filename)
+gboolean
+menu_node_sync_for_file (const char  *filename,
+                         GError     **error)
 {
   MenuFile *file;
   char *canonical;
 
   canonical = g_canonicalize_file_name (filename);
   if (canonical == NULL)
-    return;
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_FAILED,
+                   _("Could not canonicalize filename \"%s\"\n"),
+                   filename);
+      return FALSE;
+    }
   
   file = find_file_by_name (canonical);
 
   g_free (canonical);
   
   if (file == NULL)
-    return;
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_FAILED,
+                   _("No menu file loaded for filename \"%s\"\n"),
+                   filename);
+      return FALSE;
+    }
 
   /* FIXME save file */
-}
 
+  return TRUE;
+}
 
 static int
 utf8_fputs (const char *str,

@@ -62,7 +62,7 @@ static void distribute_unallocated (DesktopFileTree *tree,
 
 static char *only_show_in_desktop = NULL;
 void
-set_only_show_in_desktop (const char *desktop_name)
+vfolder_set_only_show_in_desktop (const char *desktop_name)
 {
   g_free (only_show_in_desktop);
   only_show_in_desktop = g_strdup (desktop_name);
@@ -854,7 +854,7 @@ load_tree (DesktopFileTree *tree)
 
 static gboolean is_verbose = FALSE;
 void
-set_verbose_queries (gboolean value)
+vfolder_set_verbose_queries (gboolean value)
 {
   is_verbose = value;
 }

@@ -1,5 +1,11 @@
 2004-09-03  Mark McLoughlin  <mark@skynet.ie>
 
+	* configure.in: post-release bump to 0.9.
+
+==================== 0.8 ====================
+
+2004-09-03  Mark McLoughlin  <mark@skynet.ie>
+
 	* configure.in: Version 0.8.
 	
 2004-09-02  Mark McLoughlin  <mark@skynet.ie>

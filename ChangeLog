@@ -1,5 +1,10 @@
 2004-04-19  Mark McLoughlin  <mark@skynet.ie>
 
+	* configure.in,
+	  misc/Makefile.am: install the elisp.
+
+2004-04-19  Mark McLoughlin  <mark@skynet.ie>
+
 	Patch from Ville Skyttä <ville.skytta@iki.fi>
 	
 	* misc/desktop-entry-mode.el: make it work a bit better

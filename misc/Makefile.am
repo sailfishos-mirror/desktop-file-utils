@@ -1,1 +1,1 @@
-EXTRA_DIST = desktop-entry-mode.el
+lisp_LISP = desktop-entry-mode.el

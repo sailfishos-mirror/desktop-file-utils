@@ -116,6 +116,8 @@ AC_SUBST(VFS_LIBS)
 
 AM_CONDITIONAL(HAVE_GNOME_VFS, test x$have_gnome_vfs = xyes)
 
+AM_PATH_LISPDIR
+
 AC_OUTPUT([
 Makefile
 src/Makefile

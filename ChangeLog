@@ -1,3 +1,8 @@
+2003-05-06  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.c (foreach_print): add ability to print in the
+	format of test suite expected results file
+
 2003-05-05  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-process.c (tree_node_free_if_broken): allow nodes with

@@ -33,6 +33,7 @@ static gboolean do_print = FALSE;
 static gboolean do_verbose = FALSE;
 static char *only_show_in_desktop = NULL;
 static gboolean print_available = FALSE;
+static gboolean do_print_test_results = FALSE;
 
 static void parse_options_callback (poptContext              ctx,
                                     enum poptCallbackReason  reason,
@@ -47,6 +48,7 @@ enum {
   OPTION_VERBOSE,
   OPTION_DESKTOP,
   OPTION_PRINT_AVAILABLE,
+  OPTION_TEST_RESULTS,
   OPTION_LAST
 };
 
@@ -85,6 +87,15 @@ struct poptOption options[] = {
     NULL,
     OPTION_PRINT,
     N_("Print a human-readable representation of the menu to standard output."),
+    NULL
+  },
+  {
+    "test-results",
+    '\0',
+    POPT_ARG_NONE,
+    NULL,
+    OPTION_TEST_RESULTS,
+    N_("Print menu in test results format for menu test suite to standard output."),
     NULL
   },
   {
@@ -184,6 +195,17 @@ parse_options_callback (poptContext              ctx,
         }
       print_available = TRUE;
       break;
+
+    case OPTION_TEST_RESULTS:
+      if (do_print_test_results)
+        {
+          g_printerr (_("Can only specify %s once\n"), "--test-results");
+
+          exit (1);
+        }
+      do_print_test_results = TRUE;
+      break;
+      
     default:
       break;
     }
@@ -215,7 +237,7 @@ main (int argc, char **argv)
       return 1;
     }
 
-  if (target_dir == NULL && !do_print && !print_available)
+  if (target_dir == NULL && !do_print && !print_available && !do_print_test_results)
     {
       g_printerr (_("Must specify --dir option for target directory or --print option to print the menu or --print-available to print available desktop files.\n"));
       return 1;
@@ -429,6 +451,10 @@ process_one_file (const char *filename)
         desktop_entry_tree_print (tree,
                                   DESKTOP_ENTRY_TREE_PRINT_NAME |
                                   DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME); 
+
+      if (do_print_test_results)
+        desktop_entry_tree_print (tree,
+                                  DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS);
       
       if (target_dir)
         desktop_entry_tree_write_symlink_dir (tree, target_dir);

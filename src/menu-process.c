@@ -1014,8 +1014,8 @@ static gboolean
 foreach_print (DesktopEntryTree *tree,
                gboolean          is_dir,
                int               depth,
-               const char       *menu_dirname,
-               const char       *menu_path,
+               const char       *menu_basename,
+               const char       *menu_fullpath,
                const char       *filesystem_path_to_entry,
                void             *data)
 {
@@ -1029,7 +1029,7 @@ foreach_print (DesktopEntryTree *tree,
   char *generic_name;
   char *comment;
 
-  g_assert (menu_dirname != NULL);
+  g_assert (menu_basename != NULL);
   
   pd = data;
 
@@ -1070,7 +1070,7 @@ foreach_print (DesktopEntryTree *tree,
     }
 
   if (name == NULL)
-    name = g_strdup (menu_dirname);
+    name = g_strdup (menu_basename);
 
   if (generic_name == NULL)
     generic_name = g_strdup (_("<missing GenericName>"));    
@@ -1103,9 +1103,9 @@ foreach_print (DesktopEntryTree *tree,
       fields[i] = comment;
       ++i;
     }
-
+  
   switch (i)
-    {
+    {      
     case 3:
       g_print ("%s : %s : %s\n",
                fields[0], fields[1], fields[2]);
@@ -1118,11 +1118,21 @@ foreach_print (DesktopEntryTree *tree,
       g_print ("%s\n",
                fields[0]);
       break;
+    case 0:
+      break;
     }
 
   g_free (name);
   g_free (generic_name);
   g_free (comment);
+
+  if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS)
+    {
+      if (is_dir)
+        g_print ("DIRECTORY %s\n", menu_basename);
+      else
+        g_print ("ENTRY %s\n", filesystem_path_to_entry);
+    }
   
   return TRUE;
 }
@@ -1134,6 +1144,15 @@ desktop_entry_tree_print (DesktopEntryTree           *tree,
   PrintData pd;
 
   pd.flags = flags;
+
+  if (flags & DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS)
+    {
+      char *basename;
+
+      basename = g_path_get_basename (tree->menu_file);
+      g_print ("MENU \"%s\"\n", basename);
+      g_free (basename);
+    }
   
   desktop_entry_tree_foreach (tree, "/", foreach_print, &pd);
 }

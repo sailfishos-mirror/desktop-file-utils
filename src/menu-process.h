@@ -29,8 +29,8 @@ typedef struct _DesktopEntryTree DesktopEntryTree;
 typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree *tree,
                                                   gboolean          is_dir,
                                                   int               depth,
-                                                  const char       *menu_dirname,
-                                                  const char       *menu_path,
+                                                  const char       *menu_basename,
+                                                  const char       *menu_fullpath,
                                                   const char       *filesystem_path_to_entry,
                                                   void             *data);
 
@@ -38,7 +38,8 @@ typedef enum
 {
   DESKTOP_ENTRY_TREE_PRINT_NAME          = 1 << 0,
   DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME  = 1 << 1,
-  DESKTOP_ENTRY_TREE_PRINT_COMMENT       = 1 << 2
+  DESKTOP_ENTRY_TREE_PRINT_COMMENT       = 1 << 2,
+  DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS  = 1 << 3
 } DesktopEntryTreePrintFlags;
 
 DesktopEntryTree* desktop_entry_tree_load  (const char  *filename,

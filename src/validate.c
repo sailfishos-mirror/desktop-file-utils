@@ -3,6 +3,11 @@
 #include <string.h>
 #include "desktop_file.h"
 
+#include <libintl.h>
+#define _(x) gettext ((x))
+#define N_(x) x
+
+
 struct KeyHashData {
   gboolean has_non_translated;
   gboolean has_translated;
@@ -535,7 +540,7 @@ required_keys (GnomeDesktopFile *df, const char *filename)
 }
 
 gboolean
-validate_desktop_file (GnomeDesktopFile *df, const char *filename)
+desktop_file_validate (GnomeDesktopFile *df, const char *filename)
 {
   const char *name;
   const char *comment;
@@ -555,4 +560,57 @@ validate_desktop_file (GnomeDesktopFile *df, const char *filename)
     }
 
   return !fatal_error_occurred;
+}
+
+/* return FALSE if we were unable to fix the file */
+gboolean
+desktop_file_fixup (GnomeDesktopFile *df,
+                    const char       *filename)
+{
+  const char *val;
+  gboolean fix_encoding;
+
+  fix_encoding = FALSE;
+  
+  if (gnome_desktop_file_get_raw (df, NULL,
+				  "Encoding",
+				  NULL, &val))
+    {
+      if (strcmp (val, "UTF-8") != 0 &&
+	  strcmp (val, "Legacy-Mixed") != 0)
+        {
+          g_printerr (_("File \"%s\" has bogus encoding \"%s\" "),
+                      filename, val);
+          fix_encoding = TRUE;
+        }
+    }
+  else
+    {
+      g_printerr (_("File \"%s\" has missing encoding "),
+                  filename);
+      fix_encoding = TRUE;
+    }
+
+  if (fix_encoding)
+    {
+      /* If Encoding was missing or bogus, the desktop file parser guessed */
+      switch (gnome_desktop_file_get_encoding (df))
+        {
+        case GNOME_DESKTOP_FILE_ENCODING_LEGACY:
+          g_printerr (_(" (guessed Legacy-Mixed)\n"));
+          gnome_desktop_file_set_raw (df, NULL, "Encoding", NULL, "Legacy-Mixed");
+          break;
+        case GNOME_DESKTOP_FILE_ENCODING_UTF8:
+          g_printerr (_(" (guessed UTF-8)\n"));
+          gnome_desktop_file_set_raw (df, NULL, "Encoding", NULL, "UTF-8");
+          break;          
+        case GNOME_DESKTOP_FILE_ENCODING_UNKNOWN:
+          g_printerr (_("\nNot enough data to guess at encoding of \"%s\"!\n"),
+                      filename);
+          return FALSE;
+          break;
+        }
+    }
+
+  return TRUE;
 }

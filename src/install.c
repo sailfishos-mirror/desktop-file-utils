@@ -78,57 +78,6 @@ files_are_the_same (const char *first,
 }
 
 static void
-desktop_file_fixup (GnomeDesktopFile *df,
-                    const char       *filename)
-{
-  const char *val;
-  gboolean fix_encoding;
-
-
-  fix_encoding = FALSE;
-  
-  if (gnome_desktop_file_get_raw (df, NULL,
-				  "Encoding",
-				  NULL, &val))
-    {
-      if (strcmp (val, "UTF-8") != 0 &&
-	  strcmp (val, "Legacy-Mixed") != 0)
-        {
-          g_printerr (_("File \"%s\" has bogus encoding \"%s\" "),
-                      filename, val);
-          fix_encoding = TRUE;
-        }
-    }
-  else
-    {
-      g_printerr (_("File \"%s\" has missing encoding "),
-                  filename);
-      fix_encoding = TRUE;
-    }
-
-  if (fix_encoding)
-    {
-      /* If Encoding was missing or bogus, the desktop file parser guessed */
-      switch (gnome_desktop_file_get_encoding (df))
-        {
-        case GNOME_DESKTOP_FILE_ENCODING_LEGACY:
-          g_printerr (_(" (guessed Legacy-Mixed)\n"));
-          gnome_desktop_file_set_raw (df, NULL, "Encoding", NULL, "Legacy-Mixed");
-          break;
-        case GNOME_DESKTOP_FILE_ENCODING_UTF8:
-          g_printerr (_(" (guessed UTF-8)\n"));
-          gnome_desktop_file_set_raw (df, NULL, "Encoding", NULL, "UTF-8");
-          break;          
-        case GNOME_DESKTOP_FILE_ENCODING_UNKNOWN:
-          g_printerr (_("\nNot enough data to guess at encoding of \"%s\"!\n"),
-                      filename);
-          exit (1);
-          break;
-        }
-    }
-}
-
-static void
 process_one_file (const char *filename,
                   GError    **err)
 {
@@ -162,7 +111,8 @@ process_one_file (const char *filename,
   if (df == NULL)
     goto cleanup;
 
-  desktop_file_fixup (df, filename);
+  if (!desktop_file_fixup (df, filename))
+    exit (1);
   
   /* Mark file as having been processed by us, so automated
    * tools can check that desktop files went through our
@@ -229,8 +179,11 @@ process_one_file (const char *filename,
   if (df == NULL)
     goto cleanup;
   
-  if (!validate_desktop_file (df, new_filename))
-    exit (1);
+  if (!desktop_file_validate (df, new_filename))
+    {
+      g_printerr (_("desktop-file-install created an invalid desktop file!\n"));
+      exit (1);
+    }
   
  cleanup:
   g_free (new_filename);

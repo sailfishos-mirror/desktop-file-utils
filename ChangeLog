@@ -1,3 +1,13 @@
+2002-05-25  Havoc Pennington  <hp@pobox.com>
+
+	* src/validate.c (desktop_file_fixup): move here from install.c
+
+	* src/gen-compat-tree.c (main): initial test version, 
+	doesn't work yet
+
+	* src/desktop_file.c (gnome_desktop_file_save): do an atomic save
+	via rename() for safety
+
 2002-05-06  Havoc Pennington  <hp@redhat.com>
 
 	* Initial module creation

@@ -91,21 +91,24 @@ typedef enum
   STATE_AND,
   STATE_OR,
   STATE_NOT,
-  STATE_KEYWORD
+  STATE_KEYWORD,
+  STATE_ONLY_UNALLOCATED
 } ParseState;
 
+/* When adding fields add them to parse_info_init */
 typedef struct
 {
   GSList *states;
 
   GSList *folder_stack;
-  
-  Vfolder *vfolder;
+
+  Vfolder *root_folder;
+
+  GSList *merge_dirs;
+  GSList *desktop_dirs;
 } ParseInfo;
 
 static Vfolder* vfolder_new  (void);
-static void     vfolder_free (Vfolder *folder);
-
 
 static void set_error (GError             **err,
                        GMarkupParseContext *context,
@@ -224,18 +227,30 @@ static void
 parse_info_init (ParseInfo *info)
 {
   info->states = g_slist_prepend (NULL, GINT_TO_POINTER (STATE_START));
-  info->vfolder = vfolder_new ();
+  info->folder_stack = NULL;
+  info->root_folder = NULL;
+  info->merge_dirs = NULL;
+  info->desktop_dirs = NULL;
 }
 
 static void
 parse_info_free (ParseInfo *info)
 {
-  if (info->vfolder)
-    vfolder_free (info->vfolder);
+  if (info->root_folder)
+    {
+      g_assert (info->folder_stack == NULL);
+      vfolder_free (info->root_folder);
+    }      
+  
   g_slist_free (info->states);
 
   g_slist_foreach (info->folder_stack, (GFunc) vfolder_free, NULL);
   g_slist_free (info->folder_stack);
+
+  g_slist_foreach (info->merge_dirs, (GFunc) g_free, NULL);
+  g_slist_free (info->merge_dirs);
+  g_slist_foreach (info->desktop_dirs, (GFunc) g_free, NULL);
+  g_slist_free (info->desktop_dirs);
 }
 
 static Vfolder*
@@ -485,10 +500,19 @@ parse_folder_child_element (GMarkupParseContext  *context,
                             ParseInfo            *info,
                             GError              **error)
 {
+  if (ELEMENT_IS ("Folder"))
+    {
+      parse_folder_element (context, element_name,
+                            attribute_names, attribute_values,
+                            info, error);
+
+      return;
+    }
+  
   if (!check_no_attributes (context, element_name,
                             attribute_names, attribute_values,
                             error))
-    return;  
+    return;
   
   if (ELEMENT_IS ("Name"))
     {
@@ -513,6 +537,14 @@ parse_folder_child_element (GMarkupParseContext  *context,
   else if (ELEMENT_IS ("Include"))
     {
       push_state (info, STATE_INCLUDE);
+    }
+  else if (ELEMENT_IS ("OnlyUnallocated"))
+    {
+      Vfolder *folder = parse_info_peek_folder (info);
+
+      folder->only_unallocated = TRUE;
+      
+      push_state (info, STATE_ONLY_UNALLOCATED);
     }
   else
     {
@@ -657,6 +689,13 @@ start_element_handler (GMarkupParseContext *context,
                  _("Element <%s> is not allowed inside a <%s> element"),
                  element_name, "Keyword");
       break;
+
+    case STATE_ONLY_UNALLOCATED:
+      set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                 _("Element <%s> is not allowed inside a <%s> element"),
+                 element_name, "OnlyUnallocated");
+      break;
+
     }
 }
 
@@ -676,9 +715,61 @@ end_element_handler (GMarkupParseContext *context,
       pop_state (info);
       g_assert (peek_state (info) == STATE_START);
       break;
+    case STATE_FOLDER:
+      {
+        Vfolder *folder;
+
+        folder = parse_info_peek_folder (info);
+
+        if (folder->desktop_file == NULL)
+          {
+            set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                       _("<Folder> does not specify a desktop file with <Desktop>"));
+            return;
+          }
+
+        if (folder->name == NULL)
+          {
+            set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                       _("<Folder> does not specify a name with <Name>"));
+            return;
+          }
+        
+        parse_info_pop_folder (info);        
+        pop_state (info);
+
+        if (info->folder_stack == NULL)
+          {
+            if (info->root_folder)
+              {
+                vfolder_free (folder);
+                set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                           _("Two root-level <Folder> elements given"));
+                return;
+              }
+            else
+              {
+                info->root_folder = folder;
+                info->root_folder->merge_dirs = info->merge_dirs;
+                info->root_folder->desktop_dirs = info->desktop_dirs;
+                info->merge_dirs = NULL;
+                info->desktop_dirs = NULL;
+              }
+          }
+        else
+          {
+            /* Add as a subfolder to parent */
+            Vfolder *parent;
+
+            parent = parse_info_peek_folder (info);
+
+            parent->subfolders = g_slist_append (parent->subfolders,
+                                                 folder);
+          }
+      }
+      break;
     case STATE_MERGE_DIR:
     case STATE_DESKTOP_DIR:
-    case STATE_FOLDER:
     case STATE_FOLDER_NAME:
     case STATE_FOLDER_DESKTOP_FILE:
     case STATE_EXCLUDE:
@@ -689,6 +780,7 @@ end_element_handler (GMarkupParseContext *context,
     case STATE_OR:
     case STATE_NOT:
     case STATE_KEYWORD:
+    case STATE_ONLY_UNALLOCATED:
       pop_state (info);
       break;
     }
@@ -743,13 +835,13 @@ text_handler (GMarkupParseContext *context,
       NO_TEXT ("VFolderInfo");
       break;
     case STATE_DESKTOP_DIR:
-      info->vfolder->desktop_dirs =
-        g_slist_append (info->vfolder->desktop_dirs,
+      info->desktop_dirs =
+        g_slist_append (info->desktop_dirs,
                         g_strndup (text, text_len));
       break;
     case STATE_MERGE_DIR:
-      info->vfolder->merge_dirs =
-        g_slist_append (info->vfolder->merge_dirs,
+      info->merge_dirs =
+        g_slist_append (info->merge_dirs,
                         g_strndup (text, text_len));
       break;
     case STATE_FOLDER:
@@ -801,6 +893,9 @@ text_handler (GMarkupParseContext *context,
       break;
     case STATE_NOT:
       NO_TEXT ("Not");
+      break;
+    case STATE_ONLY_UNALLOCATED:
+      NO_TEXT ("OnlyUnallocated");
       break;
 #if 0
     case STATE_KEYWORD:
@@ -861,10 +956,10 @@ vfolder_load (const char *filename,
     {
       g_propagate_error (err, error);
     }
-  else if (info.vfolder)
+  else if (info.root_folder)
     {
-      retval = info.vfolder;
-      info.vfolder = NULL;
+      retval = info.root_folder;
+      info.root_folder = NULL;
     }
   else
     {
@@ -894,6 +989,18 @@ GSList*
 vfolder_get_includes (Vfolder *folder)
 {
   return folder->includes;
+}
+
+GSList*
+vfolder_get_merge_dirs (Vfolder *folder)
+{
+  return folder->merge_dirs;
+}
+
+GSList*
+vfolder_get_desktop_dirs (Vfolder *folder)
+{
+  return folder->desktop_dirs;
 }
 
 const char*
@@ -970,10 +1077,30 @@ vfolder_new  (void)
   return folder;
 }
 
-static void
+void
 vfolder_free (Vfolder *folder)
 {
   g_return_if_fail (folder != NULL);
+
+  g_free (folder->name);
+  g_free (folder->desktop_file);
+
+  g_slist_foreach (folder->subfolders,
+                   (GFunc) vfolder_free, NULL);
+
+  /* FIXME free the query */  
+
+  g_slist_foreach (folder->merge_dirs,
+                   (GFunc) g_free, NULL);
+
+  g_slist_foreach (folder->desktop_dirs,
+                   (GFunc) g_free, NULL);
+
+  g_slist_foreach (folder->excludes,
+                   (GFunc) g_free, NULL);
+
+  g_slist_foreach (folder->includes,
+                   (GFunc) g_free, NULL);
   
   g_free (folder);
 }

@@ -6,6 +6,8 @@
 
 #include "desktop_file.h"
 #include "validate.h"
+#include "vfolder-parser.h"
+#include "vfolder-query.h"
 
 #include <libintl.h>
 #include <stdlib.h>
@@ -138,6 +140,30 @@ main (int argc, char **argv)
   i = 0;
   while (args && args[i])
     {
+      Vfolder *folder;
+
+      err = NULL;
+      folder = vfolder_load (args[i], &err);
+      if (err)
+        {
+          g_printerr (_("Failed to load %s: %s\n"),
+                      args[i], err->message);
+          g_error_free (err);
+        }
+      if (folder)
+        {
+          DesktopFileTree *tree;
+
+          tree = desktop_file_tree_new (folder);
+
+          desktop_file_tree_print (tree,
+                                   DESKTOP_FILE_TREE_PRINT_NAME |
+                                   DESKTOP_FILE_TREE_PRINT_GENERIC_NAME);          
+
+          desktop_file_tree_free (tree);
+          
+          vfolder_free (folder);
+        }
       
       ++i;
     }

@@ -928,15 +928,19 @@ gnome_desktop_file_save (GnomeDesktopFile *df,
   char *str;
   FILE *f;
   int fd;
+  char *tmp_filename;
 
-  f = fopen (path, "w");
+  tmp_filename = g_strconcat (path, ".new-tmp", NULL);
+  
+  f = fopen (tmp_filename, "w");
   if (f == NULL)
     {
       g_set_error (error, 
                    G_FILE_ERROR,
                    g_file_error_from_errno (errno),
                    _("Failed to open \"%s\": %s"),
-                   path, g_strerror (errno));
+                   tmp_filename, g_strerror (errno));
+      g_free (tmp_filename);
       return FALSE;
     }
   
@@ -947,10 +951,11 @@ gnome_desktop_file_save (GnomeDesktopFile *df,
       g_set_error (error, G_FILE_ERROR,
                    g_file_error_from_errno (errno),
                    _("Failed to set permissions %o on \"%s\": %s"),
-                   mode, path, g_strerror (errno));
+                   mode, tmp_filename, g_strerror (errno));
 
       fclose (f);
-      unlink (path);
+      unlink (tmp_filename);
+      g_free (tmp_filename);
       
       return FALSE;
     }
@@ -963,11 +968,12 @@ gnome_desktop_file_save (GnomeDesktopFile *df,
                    G_FILE_ERROR,
                    g_file_error_from_errno (errno),
                    _("Failed to write to \"%s\": %s"),
-                   path, g_strerror (errno));
+                   tmp_filename, g_strerror (errno));
 
       fclose (f);
-      unlink (path);
+      unlink (tmp_filename);
       g_free (str);
+      g_free (tmp_filename);
       
       return FALSE;
     }
@@ -980,13 +986,29 @@ gnome_desktop_file_save (GnomeDesktopFile *df,
                    G_FILE_ERROR,
                    g_file_error_from_errno (errno),
                    _("Failed to close \"%s\": %s"),
-                   path, g_strerror (errno));
+                   tmp_filename, g_strerror (errno));
 
-      unlink (path);
+      unlink (tmp_filename);
+      g_free (tmp_filename);
+      
+      return FALSE;
+    }
+
+  if (rename (tmp_filename, path) < 0)
+    {
+      g_set_error (error,
+                   G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to rename \"%s\" to \"%s\": %s"),
+                   tmp_filename, path, g_strerror (errno));
+      unlink (tmp_filename);
+      g_free (tmp_filename);
 
       return FALSE;
     }
 
+  g_free (tmp_filename);
+  
   return TRUE;
 }
 

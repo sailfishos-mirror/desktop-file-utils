@@ -32,7 +32,7 @@ main (int argc, char *argv[])
       return 1;
     }
 
-  if (validate_desktop_file (df, filename))
+  if (desktop_file_validate (df, filename))
     return 0;
   else
     return 1;

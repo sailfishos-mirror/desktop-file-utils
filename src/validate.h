@@ -3,5 +3,8 @@
 #include <string.h>
 #include "desktop_file.h"
 
-gboolean validate_desktop_file (GnomeDesktopFile *df, const char *filename);
+gboolean desktop_file_validate (GnomeDesktopFile *df,
+                                const char       *filename);
+gboolean desktop_file_fixup    (GnomeDesktopFile *df,
+                                const char       *filename);
 

@@ -21,8 +21,12 @@ desktop_menu_gen_compat_dir_SOURCES=		\
 	desktop_file.c				\
 	desktop_file.h				\
 	gen-compat-tree.c			\
+	validate.c				\
+	validate.h				\
 	vfolder-parser.c			\
-	vfolder-parser.h
+	vfolder-parser.h			\
+	vfolder-query.c				\
+	vfolder-query.h
 
 desktop_file_validate_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
 desktop_file_install_LDADD= $(DESKTOP_FILE_UTILS_LIBS)

@@ -2121,9 +2121,9 @@ process_only_unallocated (TreeNode   *node,
 
       process_only_unallocated (n, allocated);
 
-      if (node->subdirs == NULL && node->entries == NULL)
+      if (n->subdirs == NULL && n->entries == NULL)
         {
-          node->subdirs = g_slist_remove_link (node->subdirs,
+          node->subdirs = g_slist_delete_link (node->subdirs,
                                                tmp);
           tree_node_free (n);
         }

@@ -1,5 +1,15 @@
 2004-09-02  Mark McLoughlin  <mark@skynet.ie>
 
+	Fixes empty subdirs not getting removed.
+
+	* src/menu-process.c: (process_only_unallocated): check whether
+	the subdir has no entries, not this dir.
+
+2004-09-02  Mark McLoughlin  <mark@skynet.ie>
+
+	Fixes entries not moving between directories when you change
+	their Categories.
+
 	* src/menu-entries.c:
 	(handle_cached_dir_changed): always invalidate the cache,
 	even if a file has just changed - we need to re-read the

@@ -817,10 +817,6 @@ load_tree (DesktopFileTree *tree)
     return;
 
   tree->loaded = TRUE;
-
-  read_desktop_dir (tree->dirs, tree->apps,
-                    tree->dir_origins, tree->app_origins,
-                    DATADIR"/applications");
   
   list = vfolder_get_desktop_dirs (tree->folder);
   tmp = list;
@@ -831,6 +827,11 @@ load_tree (DesktopFileTree *tree)
                         tmp->data);
       tmp = tmp->next;
     }
+
+  if (list == NULL)
+    read_desktop_dir (tree->dirs, tree->apps,
+                      tree->dir_origins, tree->app_origins,
+                      DATADIR"/applications");
   
   list = vfolder_get_merge_dirs (tree->folder);
   tmp = list;

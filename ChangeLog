@@ -2,6 +2,8 @@
 
 	* src/vfolder-query.c (add_or_free_desktop_file): when complaining
 	about a duplicate, say where the other one is.
+	(load_tree): only read DATADIR/applications if the menu file
+	didn't specify any directories.
 
 2002-07-24  Havoc Pennington  <hp@redhat.com>
 

@@ -1,3 +1,10 @@
+2004-11-23  Mark McLoughlin  <mark@skynet.ie>
+
+	Patch from Ville Skyttä <ville.skytta@iki.fi>
+
+	* src/desktop_file.c: fix the lang -> encoding mapping
+	to what the Desktop Entry Specification specifies.
+
 2004-11-11  Mark McLoughlin  <mark@skynet.ie>
 
 	* configure.in: post-release bump to 0.11.

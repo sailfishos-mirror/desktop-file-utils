@@ -1479,15 +1479,15 @@ struct {
   const char *encoding;
   const char *langs[N_LANG];
 } known_encodings[] = {
-  {"ARMSCII-8", {"by"}},
+  {"ARMSCII-8", {"hy"}},
   {"BIG5", {"zh_TW"}},
   {"CP1251", {"be", "bg"}},
-  {"EUC-CN", {"zh_TW"}},
+  {"EUC-CN", {"zh_CN"}},
   {"EUC-JP", {"ja"}},
   {"EUC-KR", {"ko"}},
   {"GEORGIAN-ACADEMY", {}},
   {"GEORGIAN-PS", {"ka"}},
-  {"ISO-8859-1", {"br", "ca", "da", "de", "en", "es", "eu", "fi", "fr", "gl", "it", "nl", "wa", "no", "pt", "pt", "sv"}},
+  {"ISO-8859-1", {"br", "ca", "da", "de", "en", "es", "eu", "fi", "fr", "gl", "it", "nl", "no", "pt", "sv", "wa" }},
   {"ISO-8859-2", {"cs", "hr", "hu", "pl", "ro", "sk", "sl", "sq", "sr"}},
   {"ISO-8859-3", {"eo"}},
   {"ISO-8859-5", {"mk", "sp"}},

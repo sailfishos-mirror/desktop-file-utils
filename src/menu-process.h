@@ -23,7 +23,6 @@
 #define MENU_PROCESS_H
 
 #include <glib.h>
-#include "desktop_file.h"
 
 typedef struct DesktopEntryTree     DesktopEntryTree;
 typedef struct DesktopEntryTreeNode DesktopEntryTreeNode;

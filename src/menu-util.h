@@ -22,7 +22,7 @@
 #ifndef MENU_UTIL_H
 #define MENU_UTIL_H
 
-#include "menu-layout.h"
+#include <glib.h>
 
 gboolean g_create_dir (const char    *dir,
                        unsigned int   mode,

@@ -1,5 +1,8 @@
 #include <glib.h>
 
+#ifndef DESKTOP_FILE_H
+#define DESKTOP_FILE_H
+
 typedef struct _GnomeDesktopFile GnomeDesktopFile;
 typedef enum _GnomeDesktopFileEncoding GnomeDesktopFileEncoding;
 
@@ -137,3 +140,5 @@ void gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
 
 
 /* ... More setters ... */
+
+#endif

@@ -5,6 +5,7 @@
 #include <popt.h>
 
 #include "desktop_file.h"
+#include "validate.h"
 
 #include <libintl.h>
 #include <stdlib.h>
@@ -110,6 +111,9 @@ process_one_file (const char *filename,
   if (df == NULL)
     goto cleanup;
 
+  if (!validate_desktop_file (df, filename))
+    exit (1);
+  
   /* Mark file as having been processed by us, so automated
    * tools can check that desktop files went through our
    * munging

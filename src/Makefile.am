@@ -6,11 +6,15 @@ bin_PROGRAMS=desktop-file-validate desktop-file-install
 desktop_file_validate_SOURCES=			\
 	desktop_file.c				\
 	desktop_file.h				\
-	validate.c
+	validate.c				\
+	validate.h				\
+	validator.c
 
 desktop_file_install_SOURCES=			\
 	desktop_file.c				\
 	desktop_file.h				\
+	validate.c				\
+	validate.h				\
 	install.c
 
 desktop_file_validate_LDADD=$(DESKTOP_FILE_UTILS_LIBS)

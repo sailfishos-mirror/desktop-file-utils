@@ -10,7 +10,7 @@ struct KeyHashData {
 
 struct KeyData {
   GHashTable *hash;
-  char *filename;
+  const char *filename;
   gboolean deprecated;
 };
 
@@ -205,7 +205,7 @@ get_encoding (const char *locale)
 }
 
 void
-validate_string (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df)
+validate_string (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   const char *p;
   gboolean ok = TRUE;
@@ -235,7 +235,7 @@ validate_string (const char *value, const char *key, const char *locale, char *f
 }
 
 void
-validate_strings (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df)
+validate_strings (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   const char *p;
   gboolean ok = TRUE;
@@ -265,7 +265,7 @@ validate_strings (const char *value, const char *key, const char *locale, char *
 }
 
 void
-validate_localestring (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df)
+validate_localestring (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   char *k;
   const char *encoding;
@@ -332,7 +332,7 @@ validate_localestring (const char *value, const char *key, const char *locale, c
 }
 
 void
-validate_regexps (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df)
+validate_regexps (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   const char *p;
   gboolean ok = TRUE;
@@ -362,7 +362,7 @@ validate_regexps (const char *value, const char *key, const char *locale, char *
 }
 
 void
-validate_boolean (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df)
+validate_boolean (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   if (strcmp (value, "true") != 0 &&
       strcmp (value, "false") != 0)
@@ -371,7 +371,7 @@ validate_boolean (const char *value, const char *key, const char *locale, char *
 }
 
 void
-validate_boolean_or_01 (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df)
+validate_boolean_or_01 (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   if (strcmp (value, "true") != 0 &&
       strcmp (value, "false") != 0 &&
@@ -385,7 +385,7 @@ validate_boolean_or_01 (const char *value, const char *key, const char *locale, 
 }
 
 void
-validate_numeric (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df)
+validate_numeric (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   float d;
   int res;
@@ -397,7 +397,7 @@ validate_numeric (const char *value, const char *key, const char *locale, char *
 
 struct {
   char *keyname;
-  void (*validate_type) (const char *value, const char *key, const char *locale, char *filename, GnomeDesktopFile *df);
+  void (*validate_type) (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df);
   gboolean deprecated;
 } key_table[] = {
   { "Encoding", validate_string },
@@ -558,7 +558,7 @@ enum_hash_keys (gpointer       key,
 }
 
 void
-generic_keys (GnomeDesktopFile *df, char *filename)
+generic_keys (GnomeDesktopFile *df, const char *filename)
 {
   struct KeyData data = {0 };
   
@@ -579,7 +579,7 @@ struct SectionData {
   gboolean has_desktop_entry;
   gboolean has_kde_desktop_entry;
   GHashTable *hash;
-  char *filename;
+  const char *filename;
 };
 
 void
@@ -606,7 +606,7 @@ enum_sections (GnomeDesktopFile *df,
 }
 
 gboolean
-required_section (GnomeDesktopFile *df, char *filename)
+required_section (GnomeDesktopFile *df, const char *filename)
 {
   struct SectionData section = {FALSE, FALSE};
   
@@ -631,7 +631,7 @@ required_section (GnomeDesktopFile *df, char *filename)
 }
 
 gboolean
-required_keys (GnomeDesktopFile *df, char *filename)
+required_keys (GnomeDesktopFile *df, const char *filename)
 {
   const char *val;
   
@@ -679,16 +679,16 @@ required_keys (GnomeDesktopFile *df, char *filename)
   return TRUE;
 }
 
-static void
-validate_desktop_file (GnomeDesktopFile *df, char *filename)
+gboolean
+validate_desktop_file (GnomeDesktopFile *df, const char *filename)
 {
   const char *name;
   const char *comment;
   
   if (!required_section (df, filename))
-    return;
+    return !fatal_error_occurred;
   if (!required_keys (df, filename))
-    return;
+    return !fatal_error_occurred;
 
   generic_keys (df, filename);
 
@@ -697,48 +697,7 @@ validate_desktop_file (GnomeDesktopFile *df, char *filename)
     {
       if (strcmp (name, comment) == 0)
 	print_warning ("Warning in file %s, the fields Name and Comment have the same value\n", filename);
-    }      
-}
-
-
-
-int 
-main (int argc, char *argv[])
-{
-  char *contents;
-  GnomeDesktopFile *df;
-  GError *error;
-  char *filename;
-
-  if (argc == 2)
-    filename = argv[1];
-  else
-    {
-      g_printerr ("Usage: %s <desktop-file>\n", argv[0]);
-      exit (1);
-    }
-  
-  if (!g_file_get_contents (filename, &contents,
-			    NULL, NULL))
-    {
-      g_printerr ("error reading desktop file '%s'\n", filename);
-      return 1;
     }
 
-  error = NULL;
-  df = gnome_desktop_file_new_from_string (contents, &error);
-  
-  if (!df)
-    {
-      g_printerr ("Error parsing %s: %s\n", filename, error->message);
-      return 1;
-    }
-
-  if (df)
-    validate_desktop_file (df, filename);
-
-  if (fatal_error_occurred)
-    return 1;
-  else
-    return 0;
+  return !fatal_error_occurred;
 }

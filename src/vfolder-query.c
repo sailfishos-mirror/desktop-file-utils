@@ -471,6 +471,12 @@ add_or_free_desktop_file (GHashTable       *dirs_hash,
 
           g_strfreev (only_show_in);
         }
+
+      if (!show)
+        {
+          gnome_desktop_file_free (df);
+          return;
+        }
     }
   
   type = NULL;

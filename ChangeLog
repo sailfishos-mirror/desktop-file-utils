@@ -1,3 +1,12 @@
+2004-08-25  Mark McLoughlin  <mark@skynet.ie>
+
+	* src/menu-process.c: (resolve_legacy_dir),
+	(tree_node_from_menu_node): don't leak the entry
+	sets. Patch from Kjartan Maraas in rh bug #130673
+	
+	* src/menu-method.c: (menu_method_get_info):
+	free the resolved path. Another leak from rh bug #130673
+
 2004-07-22  Ray Strode  <rstrode@redhat.com>
 
 	* src/egg*.[ch]: sync with libegg

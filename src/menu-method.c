@@ -1139,6 +1139,7 @@ menu_method_get_info (MenuMethod               *method,
 	file_info->name = get_base_from_uri (uri);
 
 	desktop_entry_tree_unref (tree);
+	g_free (path);
 	
         return retval;
 }

@@ -435,6 +435,8 @@ resolve_legacy_dir (MenuCache  *menu_cache,
 
       entries = entry_set_list_entries (set);
 
+      entry_set_unref (set);
+
       while (entries != NULL)
         {
           Entry *e = entries->data;
@@ -1970,6 +1972,7 @@ tree_node_from_menu_node (TreeNode   *parent,
 
   if (deleted)
     {
+      entry_set_unref (entries);
       tree_node_free (tree_node);
       return NULL;
     }

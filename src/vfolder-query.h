@@ -41,6 +41,7 @@ void             desktop_file_tree_print (DesktopFileTree           *tree,
                                           DesktopFileTreePrintFlags  flags);
 void             desktop_file_tree_write_symlink_dir (DesktopFileTree *tree,
                                                       const char      *dirname);
+void             desktop_file_tree_dump_desktop_list (DesktopFileTree *tree);
 
 void set_verbose_queries      (gboolean    value);
 void set_only_show_in_desktop (const char *desktop_name);

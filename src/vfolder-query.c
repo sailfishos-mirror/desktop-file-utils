@@ -252,6 +252,61 @@ desktop_file_tree_print (DesktopFileTree          *tree,
 }
 
 static void
+dump_foreach (void *key, void *data)
+{
+  const char *basename = key;
+  DesktopFileTree *tree = data;
+  char *s;
+  GnomeDesktopFile *df;
+
+  df = g_hash_table_lookup (tree->apps, basename);
+  g_assert (df != NULL);
+  
+  g_print ("File: \t%s\n", basename);
+  s = NULL;
+  gnome_desktop_file_get_locale_string (df, NULL, "Name", &s);
+  g_print ("  Name: \t%s\n", s ? s : "(unset)");
+  s = NULL;
+  gnome_desktop_file_get_string (df, NULL, "Categories", &s);
+  g_print ("  Categories: \t%s\n", s ? s : "(unset)");
+  s = NULL;
+  gnome_desktop_file_get_string (df, NULL, "OnlyShowIn", &s);
+  g_print ("  OnlyShowIn: \t%s\n", s ? s : "(unset)");
+  s = NULL;
+  gnome_desktop_file_get_locale_string (df, NULL, "Comment", &s);
+  g_print ("  Comment: \t%s\n", s ? s : "(unset)");
+  s = NULL;
+  gnome_desktop_file_get_locale_string (df, NULL, "GenericName", &s);
+  g_print ("  GenericName: \t%s\n", s ? s : "(unset)");
+
+  s = g_hash_table_lookup (tree->app_origins, basename);
+  g_print ("  Path: \t%s\n", s ? s : "unknown??? (probably a bug in desktop-file-utils)");
+}
+
+static void
+listify_foreach (void *key, void *value, void *data)
+{
+  GSList **list = data;
+
+  *list = g_slist_prepend (*list, key);
+}
+
+void
+desktop_file_tree_dump_desktop_list (DesktopFileTree *tree)
+{
+  GSList *entries;
+  
+  load_tree (tree);
+
+  entries = NULL;
+  g_hash_table_foreach (tree->apps, listify_foreach, &entries);
+
+  entries = g_slist_sort (entries, (GCompareFunc) strcmp);
+
+  g_slist_foreach (entries, dump_foreach, tree);
+}
+
+static void
 symlink_recurse_nodes (GNode      *node,
                        const char *parent_dir,
                        GHashTable *dir_origins,

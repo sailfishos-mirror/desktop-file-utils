@@ -23,6 +23,7 @@ static char *target_dir = NULL;
 static gboolean do_print = FALSE;
 static gboolean do_verbose = FALSE;
 static char *only_show_in_desktop = NULL;
+static gboolean print_available = FALSE;
 
 static void parse_options_callback (poptContext              ctx,
                                     enum poptCallbackReason  reason,
@@ -35,6 +36,7 @@ enum {
   OPTION_PRINT,
   OPTION_VERBOSE,
   OPTION_DESKTOP,
+  OPTION_PRINT_AVAILABLE,
   OPTION_LAST
 };
 
@@ -82,6 +84,15 @@ struct poptOption options[] = {
     NULL,
     OPTION_DESKTOP,
     N_("Specify the current desktop, for purposes of OnlyShowIn."),
+    NULL
+  },
+  {
+    "print-available",
+    '\0',
+    POPT_ARG_NONE,
+    NULL,
+    OPTION_PRINT_AVAILABLE,
+    N_("Print the set of desktop files used for a given menu file."),
     NULL
   },
   {
@@ -152,6 +163,16 @@ parse_options_callback (poptContext              ctx,
         }
 
       only_show_in_desktop = g_strdup (poptGetOptArg (ctx));
+      break;
+    case OPTION_PRINT_AVAILABLE:
+      if (print_available)
+        {
+          g_printerr (_("Can only specify %s once\n"), "--print-available");
+
+          exit (1);
+        }
+      print_available = TRUE;
+      break;
     default:
       break;
     }
@@ -184,9 +205,9 @@ main (int argc, char **argv)
       return 1;
     }
 
-  if (target_dir == NULL && !do_print)
+  if (target_dir == NULL && !do_print && !print_available)
     {
-      g_printerr (_("Must specify --dir option for target directory or --print option to print the menu\n"));
+      g_printerr (_("Must specify --dir option for target directory or --print option to print the menu or --print-available to print available desktop files.\n"));
       return 1;
     }
 
@@ -217,6 +238,9 @@ main (int argc, char **argv)
 
           tree = desktop_file_tree_new (folder);
 
+          if (print_available)
+            desktop_file_tree_dump_desktop_list (tree);
+          
           if (do_print)
             desktop_file_tree_print (tree,
                                      DESKTOP_FILE_TREE_PRINT_NAME |

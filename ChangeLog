@@ -1,3 +1,11 @@
+2004-09-13  Dan Williams <dcbw@redhat.com>
+
+	* src/eggdesktopentreis.c:
+	(egg_desktop_entries_new_from_file): Don't try to
+	dispose of 'entries' if it's NULL, since then
+	egg_desktop_entries_free() prints out failure
+	messages.
+
 2004-09-08  Ray Strode  <rstrode@redhat.com>
 
 	* src/update-desktop-database.c: 

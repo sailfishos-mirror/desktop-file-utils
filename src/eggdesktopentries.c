@@ -516,7 +516,8 @@ egg_desktop_entries_new_from_data (const gchar           *data,
   if (entries_error) 
     {
       g_propagate_error (error, entries_error);
-      egg_desktop_entries_free (entries);
+      if (entries)
+        egg_desktop_entries_free (entries);
 
       return NULL;
     }

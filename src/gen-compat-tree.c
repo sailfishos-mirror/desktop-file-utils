@@ -22,6 +22,7 @@
 static char *target_dir = NULL;
 static gboolean do_print = FALSE;
 static gboolean do_verbose = FALSE;
+static char *only_show_in_desktop = NULL;
 
 static void parse_options_callback (poptContext              ctx,
                                     enum poptCallbackReason  reason,
@@ -33,6 +34,7 @@ enum {
   OPTION_DIR,
   OPTION_PRINT,
   OPTION_VERBOSE,
+  OPTION_DESKTOP,
   OPTION_LAST
 };
 
@@ -71,6 +73,15 @@ struct poptOption options[] = {
     NULL,
     OPTION_PRINT,
     N_("Print a human-readable representation of the menu to standard output."),
+    NULL
+  },
+  {
+    "desktop",
+    '\0',
+    POPT_ARG_STRING,
+    NULL,
+    OPTION_DESKTOP,
+    N_("Specify the current desktop, for purposes of OnlyShowIn."),
     NULL
   },
   {
@@ -131,7 +142,16 @@ parse_options_callback (poptContext              ctx,
       do_verbose = TRUE;
       set_verbose_queries (TRUE);
       break;
-      
+
+    case OPTION_DESKTOP:
+      if (only_show_in_desktop)
+        {
+          g_printerr (_("Can only specify %s once\n"), "--desktop");
+
+          exit (1);
+        }
+
+      only_show_in_desktop = g_strdup (poptGetOptArg (ctx));
     default:
       break;
     }
@@ -169,6 +189,9 @@ main (int argc, char **argv)
       g_printerr (_("Must specify --dir option for target directory or --print option to print the menu\n"));
       return 1;
     }
+
+  if (only_show_in_desktop)
+    set_only_show_in_desktop (only_show_in_desktop);
   
   args = poptGetArgs (ctx);
 

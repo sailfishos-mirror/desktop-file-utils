@@ -60,6 +60,14 @@ static GNode* node_from_application (const char       *basename,
 static void distribute_unallocated (DesktopFileTree *tree,
                                     GNode           *node);
 
+static char *only_show_in_desktop = NULL;
+void
+set_only_show_in_desktop (const char *desktop_name)
+{
+  g_free (only_show_in_desktop);
+  only_show_in_desktop = g_strdup (desktop_name);
+}
+
 struct _DesktopFileTree
 {
   Vfolder *folder;
@@ -378,6 +386,38 @@ add_or_free_desktop_file (GHashTable       *dirs_hash,
       return;
     }
 
+  if (only_show_in_desktop)
+    {
+      char **only_show_in;
+      int n_only_show_in;
+      int i;
+      gboolean show;
+
+      show = TRUE;
+
+      only_show_in = NULL;
+      if (gnome_desktop_file_get_strings (df, NULL, "OnlyShowIn", NULL,
+                                          &only_show_in, &n_only_show_in))
+        {
+          show = FALSE;
+          
+          i = 0;
+          while (i < n_only_show_in)
+            {
+              if (strcmp (only_show_in[i],
+                          only_show_in_desktop) == 0)
+                {
+                  show = TRUE;
+                  break;
+                }
+                  
+              ++i;
+            }
+
+          g_strfreev (only_show_in);
+        }
+    }
+  
   type = NULL;
   if (!gnome_desktop_file_get_string (df, NULL,
                                       "Type", &type))

@@ -1,5 +1,10 @@
 2002-05-25  Havoc Pennington  <hp@pobox.com>
 
+	* src/vfolder-query.c (add_or_free_desktop_file): add OnlyShowIn
+	support.
+
+2002-05-25  Havoc Pennington  <hp@pobox.com>
+
 	* src/vfolder-query.c (desktop_file_tree_write_symlink_dir): 
 	Add the create-a-dir-of-symlinks support.
 

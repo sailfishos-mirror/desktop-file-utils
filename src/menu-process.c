@@ -2042,18 +2042,14 @@ process_only_unallocated (TreeNode   *node,
       GSList *next = tmp->next;
 
       process_only_unallocated (n, allocated);
-#if 0
-      /* FIXME I believe the spec says not to do this
-       * (don't delete empty menus) since it would
-       * make editing behave strangely
-       */
+
       if (node->subdirs == NULL && node->entries == NULL)
         {
           node->subdirs = g_slist_remove_link (node->subdirs,
                                                tmp);
           tree_node_free (n);
         }
-#endif      
+
       tmp = next;
     }
 }

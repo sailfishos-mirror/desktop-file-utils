@@ -1,5 +1,12 @@
 2004-08-29  Mark McLoughlin  <mark@skynet.ie>
 
+	* src/menu-process.c: (process_only_unallocated): remove
+	FIXME to disable removing empty submenus. menu-spec says
+	the default value for the "show_empty" attribute in
+	DefaultLayout is "false" so ...
+
+2004-08-29  Mark McLoughlin  <mark@skynet.ie>
+
 	Based on a patch from Dan Williams <dcbw@redhat.com>
 
 	* src/menu-entries.[ch]:

@@ -1,3 +1,10 @@
+2004-10-18  Ray Strode  <rstrode@redhat.com>
+
+	* src/eggdesktopentries.c:
+	(egg_desktop_entries_parse_entry):
+	Error out if trying to add key-value pair to comment
+	group  (Patch from Miloslav Trmac <mitr@redhat.com>)
+
 2004-09-28  Mark McLoughlin  <mark@skynet.ie>
 
 	* configure.in: post-release bump to 0.10.

@@ -1,5 +1,15 @@
 2003-06-06  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-tree-cache.c (reload_entry): mark cache valid again
+	after reloading stuff, makes things a whole lot faster.
+
+	* src/menu-method.c: convert some GError to GnomeVFSResult, and 
+	return GNOME_VFS_ERROR_INVALID_URI when passed a non-.desktop 
+	or non-.directory file.
+	(dir_handle_new): remove extra unref on the DesktopEntryTree
+
+2003-06-06  Havoc Pennington  <hp@redhat.com>
+
 	Last bugfix so we can display redhat-menus pretty OK
 	
 	* src/menu-process.c (node_menu_compare_func): make this consider

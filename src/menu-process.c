@@ -291,8 +291,10 @@ load_merge_dir (MenuCache  *menu_cache,
   dir = g_dir_open (dirname, 0, &error);
   if (dir == NULL)
     {
+#if 0
       g_printerr (_("Error: \"%s\": failed to open directory: %s\n"),
                   dirname, error->message);
+#endif
       g_error_free (error);
 
       return;      
@@ -756,7 +758,9 @@ desktop_entry_tree_load (const char  *filename,
   
   menu_node_strip_duplicate_children (resolved_node);
 
+#if 0
   menu_node_debug_print (resolved_node);
+#endif
   
   tree = g_new0 (DesktopEntryTree, 1);
   tree->refcount = 1;
@@ -801,6 +805,7 @@ desktop_entry_tree_unref (DesktopEntryTree *tree)
 #if 1
       /* debugging, to make memory stuff fail */
       memset (tree, 0xff, sizeof (*tree));
+      tree->refcount = -5;
 #endif
       g_free (tree);
     }

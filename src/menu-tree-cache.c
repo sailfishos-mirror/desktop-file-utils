@@ -140,6 +140,8 @@ reload_entry (DesktopEntryTreeCache *cache,
       
       entry->load_failure_reason = tmp_error;
       entry->tree = reloaded;
+
+      entry->needs_reload = FALSE;
     }
   
   if (entry->tree == NULL)

@@ -43,7 +43,10 @@ const char*   vfolder_get_name             (Vfolder *folder);
 const char*   vfolder_get_desktop_file     (Vfolder *folder);
 gboolean      vfolder_get_show_if_empty    (Vfolder *folder);
 gboolean      vfolder_get_only_unallocated (Vfolder *folder);
+GSList*       vfolder_get_excludes         (Vfolder *folder);
+GSList*       vfolder_get_includes         (Vfolder *folder);
 VfolderQuery* vfolder_get_query            (Vfolder *folder);
+
 
 VfolderQueryType vfolder_query_get_type       (VfolderQuery *query);
 GSList*          vfolder_query_get_subqueries (VfolderQuery *query);

@@ -138,6 +138,7 @@ void gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
                                                  const char        *value);
 
 
+const char* desktop_file_get_encoding_for_locale (const char *locale);
 
 /* ... More setters ... */
 

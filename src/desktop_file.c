@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <locale.h>
 #include "desktop_file.h"
 
 
@@ -989,6 +990,191 @@ gnome_desktop_file_save (GnomeDesktopFile *df,
   return TRUE;
 }
 
+/* Mask for components of locale spec. The ordering here is from
+ * least significant to most significant
+ */
+enum
+{
+  COMPONENT_CODESET =   1 << 0,
+  COMPONENT_TERRITORY = 1 << 1,
+  COMPONENT_MODIFIER =  1 << 2
+};
+
+/* Break an X/Open style locale specification into components
+ */
+static guint
+explode_locale (const gchar *locale,
+		gchar      **language, 
+		gchar      **territory, 
+		gchar      **codeset, 
+		gchar      **modifier)
+{
+  const gchar *uscore_pos;
+  const gchar *at_pos;
+  const gchar *dot_pos;
+
+  guint mask = 0;
+
+  uscore_pos = strchr (locale, '_');
+  dot_pos = strchr (uscore_pos ? uscore_pos : locale, '.');
+  at_pos = strchr (dot_pos ? dot_pos : (uscore_pos ? uscore_pos : locale), '@');
+
+  if (at_pos)
+    {
+      mask |= COMPONENT_MODIFIER;
+      *modifier = g_strdup (at_pos);
+    }
+  else
+    at_pos = locale + strlen (locale);
+
+  if (dot_pos)
+    {
+      mask |= COMPONENT_CODESET;
+      *codeset = g_new (gchar, 1 + at_pos - dot_pos);
+      strncpy (*codeset, dot_pos, at_pos - dot_pos);
+      (*codeset)[at_pos - dot_pos] = '\0';
+    }
+  else
+    dot_pos = at_pos;
+
+  if (uscore_pos)
+    {
+      mask |= COMPONENT_TERRITORY;
+      *territory = g_new (gchar, 1 + dot_pos - uscore_pos);
+      strncpy (*territory, uscore_pos, dot_pos - uscore_pos);
+      (*territory)[dot_pos - uscore_pos] = '\0';
+    }
+  else
+    uscore_pos = dot_pos;
+
+  *language = g_new (gchar, 1 + uscore_pos - locale);
+  strncpy (*language, locale, uscore_pos - locale);
+  (*language)[uscore_pos - locale] = '\0';
+
+  return mask;
+}
+
+gboolean
+gnome_desktop_file_get_locale_string (GnomeDesktopFile  *df,
+                                      const char        *section,
+                                      const char        *keyname,
+                                      char             **val)
+{
+  const char *raw;
+  char *lang, *territory, *codeset, *modifier;
+  const char *locale;
+  char *with_territory;
+  char *used_locale;
+  GError *error;
+  
+  *val = NULL;
+  
+  lang = NULL;
+  territory = NULL;
+  codeset = NULL;
+  modifier = NULL;
+  used_locale = NULL;
+  
+  locale = setlocale (LC_MESSAGES, NULL);
+  if (locale != NULL)
+    explode_locale (locale, &lang, &territory, &codeset, &modifier);
+
+  if (territory)
+    with_territory = g_strconcat (lang, "_", territory, NULL);
+  else
+    with_territory = NULL;
+
+  if (with_territory == NULL ||
+      !gnome_desktop_file_get_raw (df, section, keyname, with_territory, &raw))
+    {
+      if (lang == NULL ||
+          !gnome_desktop_file_get_raw (df, section, keyname, lang, &raw))
+        {
+          gnome_desktop_file_get_raw (df, section, keyname, NULL, &raw);
+        }
+      else
+        {
+          used_locale = lang;
+          lang = NULL;
+        }
+    }
+  else
+    {
+      used_locale = with_territory;
+      with_territory = NULL;
+    }
+
+  g_free (lang);
+  g_free (territory);
+  g_free (codeset);
+  g_free (modifier);
+  g_free (with_territory);
+
+  if (raw == NULL)
+    return FALSE;
+  
+  if (gnome_desktop_file_get_encoding (df) == GNOME_DESKTOP_FILE_ENCODING_UTF8)
+    {
+      g_free (used_locale);
+      *val = g_strdup (raw);
+      return TRUE;      
+    }
+  else if (gnome_desktop_file_get_encoding (df) == GNOME_DESKTOP_FILE_ENCODING_LEGACY)
+    {
+      if (used_locale)
+	{
+          const char *encoding;
+          
+	  encoding = desktop_file_get_encoding_for_locale (used_locale);
+          g_free (used_locale);
+          
+	  if (encoding)
+	    {
+              char *res;
+              
+	      error = NULL;
+	      res = g_convert (raw, -1,            
+			       "UTF-8",
+			       encoding,
+			       NULL,     
+			       NULL,  
+			       &error);
+
+              if (res == NULL)
+                {
+                  g_printerr ("Error converting from UTF-8 to %s for key %s: %s\n",
+                              encoding, keyname, error->message);
+                  g_error_free (error);
+                }
+
+              *val = res;
+
+              return *val != NULL;
+	    }
+	  else
+            {
+              g_printerr ("Don't know encoding for desktop file field %s with locale \"%s\"\n",
+                          keyname, used_locale);
+              g_free (used_locale);
+              return FALSE;
+            }
+        }
+      else
+        {
+          /* this is just ASCII, hopefully OK, though it's really a bit
+           * broken to return it
+           */
+          *val = g_strdup (raw);
+          return TRUE;
+        }
+    }
+  else
+    {
+      g_printerr ("Desktop file doesn't have its encoding marked, can't parse it.\n");
+      return FALSE;
+    }
+}
+
 gboolean
 gnome_desktop_file_get_strings (GnomeDesktopFile   *df,
                                 const char         *section,
@@ -1192,3 +1378,148 @@ gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
     }
 }
 
+#define N_LANG 30
+
+/* #define VERIFY_CANONICAL_ENCODING_NAME */
+
+struct {
+  const char *encoding;
+  const char *langs[N_LANG];
+} known_encodings[] = {
+  {"ARMSCII-8", {"by"}},
+  {"BIG5", {"zh_TW"}},
+  {"CP1251", {"be", "bg"}},
+  {"EUC-CN", {"zh_TW"}},
+  {"EUC-JP", {"ja"}},
+  {"EUC-KR", {"ko"}},
+  {"GEORGIAN-ACADEMY", {}},
+  {"GEORGIAN-PS", {"ka"}},
+  {"ISO-8859-1", {"br", "ca", "da", "de", "en", "es", "eu", "fi", "fr", "gl", "it", "nl", "wa", "no", "pt", "pt", "sv"}},
+  {"ISO-8859-2", {"cs", "hr", "hu", "pl", "ro", "sk", "sl", "sq", "sr"}},
+  {"ISO-8859-3", {"eo"}},
+  {"ISO-8859-5", {"mk", "sp"}},
+  {"ISO-8859-7", {"el"}},
+  {"ISO-8859-9", {"tr"}},
+  {"ISO-8859-13", {"lv", "lt", "mi"}},
+  {"ISO-8859-14", {"ga", "cy"}},
+  {"ISO-8859-15", {"et"}},
+  {"KOI8-R", {"ru"}},
+  {"KOI8-U", {"uk"}},
+  {"TCVN-5712", {"vi"}},
+  {"TIS-620", {"th"}},
+  {"VISCII", {}},
+};
+
+struct {
+  const char *alias;
+  const char *value;
+} enc_aliases[] = {
+  {"GB2312", "EUC-CN"},
+  {"TCVN", "TCVN-5712" }
+};
+
+static gboolean
+aliases_equal (const char *enc1, const char *enc2)
+{
+  while (*enc1 && *enc2)
+    {
+      while (*enc1 == '-' ||
+	     *enc1 == '.' ||
+	     *enc1 == '_')
+	enc1++;
+      
+      while (*enc2 == '-' ||
+	     *enc2 == '.' ||
+	     *enc2 == '_')
+	enc2++;
+
+      if (g_ascii_tolower (*enc1) != g_ascii_tolower (*enc2))
+	return FALSE;
+      enc1++;
+      enc2++;
+    }
+
+  while (*enc1 == '-' ||
+	 *enc1 == '.' ||
+	 *enc1 == '_')
+    enc1++;
+  
+  while (*enc2 == '-' ||
+	 *enc2 == '.' ||
+	 *enc2 == '_')
+    enc2++;
+
+  if (*enc1 || *enc2)
+    return FALSE;
+  
+  return TRUE;
+}
+
+static const char *
+get_canonical_encoding (const char *encoding)
+{
+  int i;
+  for (i = 0; i < G_N_ELEMENTS (enc_aliases); i++)
+    {
+      if (aliases_equal (enc_aliases[i].alias, encoding))
+	return enc_aliases[i].value;
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (known_encodings); i++)
+    {
+      if (aliases_equal (known_encodings[i].encoding, encoding))
+	return known_encodings[i].encoding;
+    }
+  
+  return encoding;
+}
+
+static gboolean
+lang_tag_matches (const char *l, const char *spec)
+{
+  char *l2;
+  
+  if (strcmp (l, spec) == 0)
+    return TRUE;
+
+  l2 = strchr (l, '_');
+
+  if (l2 && strchr (spec, '_') == NULL &&
+      strncmp (l, spec, l2 - l) == 0)
+    return TRUE;
+  
+  return FALSE;
+}
+
+static const char *
+get_encoding_from_lang (const char *lang)
+{
+  int i, j;
+  
+  for (i = 0; i < G_N_ELEMENTS (known_encodings); i++)
+    {
+      for (j = 0; j < N_LANG; j++)
+	{
+	  if (known_encodings[i].langs[j] && lang_tag_matches (lang, known_encodings[i].langs[j]))
+	    return known_encodings[i].encoding;
+	}
+    }
+  return NULL;
+}
+
+const char*
+desktop_file_get_encoding_for_locale (const char *locale)
+{
+  char *encoding;
+
+  encoding = strchr(locale, '.');
+
+  if (encoding)
+    {
+      encoding++;
+
+      return get_canonical_encoding (encoding);
+    }
+  
+  return get_encoding_from_lang (locale);
+}

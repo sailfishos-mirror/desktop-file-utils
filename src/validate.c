@@ -14,46 +14,6 @@ struct KeyData {
   gboolean deprecated;
 };
 
-#define N_LANG 30
-
-/* #define VERIFY_CANONICAL_ENCODING_NAME */
-
-struct {
-  const char *encoding;
-  const char *langs[N_LANG];
-} known_encodings[] = {
-  {"ARMSCII-8", {"by"}},
-  {"BIG5", {"zh_TW"}},
-  {"CP1251", {"be", "bg"}},
-  {"EUC-CN", {"zh_TW"}},
-  {"EUC-JP", {"ja"}},
-  {"EUC-KR", {"ko"}},
-  {"GEORGIAN-ACADEMY", {}},
-  {"GEORGIAN-PS", {"ka"}},
-  {"ISO-8859-1", {"br", "ca", "da", "de", "en", "es", "eu", "fi", "fr", "gl", "it", "nl", "wa", "no", "pt", "pt", "sv"}},
-  {"ISO-8859-2", {"cs", "hr", "hu", "pl", "ro", "sk", "sl", "sq", "sr"}},
-  {"ISO-8859-3", {"eo"}},
-  {"ISO-8859-5", {"mk", "sp"}},
-  {"ISO-8859-7", {"el"}},
-  {"ISO-8859-9", {"tr"}},
-  {"ISO-8859-13", {"lv", "lt", "mi"}},
-  {"ISO-8859-14", {"ga", "cy"}},
-  {"ISO-8859-15", {"et"}},
-  {"KOI8-R", {"ru"}},
-  {"KOI8-U", {"uk"}},
-  {"TCVN-5712", {"vi"}},
-  {"TIS-620", {"th"}},
-  {"VISCII", {}},
-};
-
-struct {
-  const char *alias;
-  const char *value;
-} enc_aliases[] = {
-  {"GB2312", "EUC-CN"},
-  {"TCVN", "TCVN-5712" }
-};
-
 static gboolean fatal_error_occurred = FALSE;
 
 
@@ -95,113 +55,6 @@ print_warning (const char *format, ...)
   fflush (stdout);
   
   g_free (str);
-}
-
-
-gboolean
-aliases_equal (const char *enc1, const char *enc2)
-{
-  while (*enc1 && *enc2)
-    {
-      while (*enc1 == '-' ||
-	     *enc1 == '.' ||
-	     *enc1 == '_')
-	enc1++;
-      
-      while (*enc2 == '-' ||
-	     *enc2 == '.' ||
-	     *enc2 == '_')
-	enc2++;
-
-      if (g_ascii_tolower (*enc1) != g_ascii_tolower (*enc2))
-	return FALSE;
-      enc1++;
-      enc2++;
-    }
-
-  while (*enc1 == '-' ||
-	 *enc1 == '.' ||
-	 *enc1 == '_')
-    enc1++;
-  
-  while (*enc2 == '-' ||
-	 *enc2 == '.' ||
-	 *enc2 == '_')
-    enc2++;
-
-  if (*enc1 || *enc2)
-    return FALSE;
-  
-  return TRUE;
-}
-
-const char *
-get_canonical_encoding (const char *encoding)
-{
-  int i;
-  for (i = 0; i < G_N_ELEMENTS (enc_aliases); i++)
-    {
-      if (aliases_equal (enc_aliases[i].alias, encoding))
-	return enc_aliases[i].value;
-    }
-
-  for (i = 0; i < G_N_ELEMENTS (known_encodings); i++)
-    {
-      if (aliases_equal (known_encodings[i].encoding, encoding))
-	return known_encodings[i].encoding;
-    }
-  
-  return encoding;
-}
-
-gboolean
-lang_tag_matches (const char *l, const char *spec)
-{
-  char *l2;
-  
-  if (strcmp (l, spec) == 0)
-    return TRUE;
-
-  l2 = strchr (l, '_');
-
-  if (l2 && strchr (spec, '_') == NULL &&
-      strncmp (l, spec, l2 - l) == 0)
-    return TRUE;
-  
-  return FALSE;
-}
-
-const char *
-get_encoding_from_lang (const char *lang)
-{
-  int i, j;
-  
-  for (i = 0; i < G_N_ELEMENTS (known_encodings); i++)
-    {
-      for (j = 0; j < N_LANG; j++)
-	{
-	  if (known_encodings[i].langs[j] && lang_tag_matches (lang, known_encodings[i].langs[j]))
-	    return known_encodings[i].encoding;
-	}
-    }
-  return NULL;
-}
-
-const char *
-get_encoding (const char *locale)
-{
-  char *encoding;
-
-  encoding = strchr(locale, '.');
-
-  if (encoding)
-    {
-      encoding++;
-
-      return get_canonical_encoding (encoding);
-    }
-  
-  return get_encoding_from_lang (locale);
 }
 
 void
@@ -287,7 +140,7 @@ validate_localestring (const char *value, const char *key, const char *locale, c
     {
       if (locale)
 	{
-	  encoding = get_encoding (locale);
+	  encoding = desktop_file_get_encoding_for_locale (locale);
 
 	  if (encoding)
 	    {

@@ -24,6 +24,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <libintl.h>
+#define _(x) gettext ((x))
+#define N_(x) x
+
+
 struct _Vfolder
 {
   char *name;
@@ -35,6 +40,8 @@ struct _Vfolder
 
   GSList *merge_dirs;
   GSList *desktop_dirs;
+  GSList *excludes;
+  GSList *includes;
   
   guint only_unallocated : 1;
   guint show_if_empty : 1;
@@ -236,6 +243,8 @@ parse_info_push_folder (ParseInfo *info)
 {
   info->folder_stack = g_slist_prepend (info->folder_stack,
                                         vfolder_new ());
+
+  return info->folder_stack->data;
 }
 
 static Vfolder*
@@ -565,10 +574,14 @@ start_element_handler (GMarkupParseContext *context,
   switch (peek_state (info))
     {
     case STATE_START:
-      if (strcmp (element_name, "VFolderInfo") == 0)
+      if (ELEMENT_IS ("VFolderInfo"))
         {
+          if (!check_no_attributes (context, element_name,
+                                    attribute_names, attribute_values,
+                                    error))
+            return;
           
-          push_state (info, STATE_VFOLDER);
+          push_state (info, STATE_VFOLDER_INFO);
         }
       else
         set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
@@ -576,6 +589,12 @@ start_element_handler (GMarkupParseContext *context,
                    element_name);
       break;
 
+    case STATE_VFOLDER_INFO:
+      parse_toplevel_element (context, element_name,
+                              attribute_names, attribute_values,
+                              info, error);
+      break;
+      
     case STATE_MERGE_DIR:
       set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
                  _("Element <%s> is not allowed inside a <%s> element"),
@@ -593,6 +612,51 @@ start_element_handler (GMarkupParseContext *context,
                                   attribute_names, attribute_values,
                                   info, error);
       break;
+
+    case STATE_FOLDER_NAME:
+      set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                 _("Element <%s> is not allowed inside a <%s> element"),
+                 element_name, "Name");
+      break;
+
+    case STATE_FOLDER_DESKTOP_FILE:
+      set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                 _("Element <%s> is not allowed inside a <%s> element"),
+                 element_name, "Desktop");
+      break;      
+
+    case STATE_EXCLUDE:
+      set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                 _("Element <%s> is not allowed inside a <%s> element"),
+                 element_name, "Exclude");
+      break;
+
+    case STATE_INCLUDE:
+      set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                 _("Element <%s> is not allowed inside a <%s> element"),
+                 element_name, "Include");
+      break;
+
+    case STATE_QUERY:
+    case STATE_AND:
+    case STATE_OR:
+    case STATE_NOT:
+      parse_query_child_element (context, element_name,
+                                 attribute_names, attribute_values,
+                                 info, error);      
+      break;
+
+    case STATE_DONT_SHOW_IF_EMPTY:
+      set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                 _("Element <%s> is not allowed inside a <%s> element"),
+                 element_name, "DontShowIfEmpty");
+      break;
+
+    case STATE_KEYWORD:
+      set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                 _("Element <%s> is not allowed inside a <%s> element"),
+                 element_name, "Keyword");
+      break;
     }
 }
 
@@ -608,9 +672,24 @@ end_element_handler (GMarkupParseContext *context,
     {
     case STATE_START:
       break;
-    case STATE_VFOLDER:      
+    case STATE_VFOLDER_INFO:      
       pop_state (info);
       g_assert (peek_state (info) == STATE_START);
+      break;
+    case STATE_MERGE_DIR:
+    case STATE_DESKTOP_DIR:
+    case STATE_FOLDER:
+    case STATE_FOLDER_NAME:
+    case STATE_FOLDER_DESKTOP_FILE:
+    case STATE_EXCLUDE:
+    case STATE_INCLUDE:
+    case STATE_QUERY:
+    case STATE_DONT_SHOW_IF_EMPTY:
+    case STATE_AND:
+    case STATE_OR:
+    case STATE_NOT:
+    case STATE_KEYWORD:
+      pop_state (info);
       break;
     }
 }
@@ -646,7 +725,8 @@ text_handler (GMarkupParseContext *context,
               GError             **error)
 {
   ParseInfo *info = user_data;
-
+  Vfolder *folder;
+  
   if (all_whitespace (text, text_len))
     return;
   
@@ -659,7 +739,7 @@ text_handler (GMarkupParseContext *context,
     case STATE_START:
       g_assert_not_reached (); /* gmarkup shouldn't do this */
       break;
-    case STATE_VFOLDER:
+    case STATE_VFOLDER_INFO:
       NO_TEXT ("VFolderInfo");
       break;
     case STATE_DESKTOP_DIR:
@@ -672,9 +752,61 @@ text_handler (GMarkupParseContext *context,
         g_slist_append (info->vfolder->merge_dirs,
                         g_strndup (text, text_len));
       break;
-    case STATE_ROOT_FOLDER:
+    case STATE_FOLDER:
       NO_TEXT ("Folder");
       break;
+    case STATE_FOLDER_NAME:
+      folder = parse_info_peek_folder (info);
+      g_assert (folder != NULL);
+      if (folder->name)
+        set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE, _("Two names given for folder"));
+      else
+        folder->name = g_strndup (text, text_len);
+      break;
+    case STATE_FOLDER_DESKTOP_FILE:
+      folder = parse_info_peek_folder (info);
+      g_assert (folder != NULL);
+      if (folder->desktop_file)
+        set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE, _("Two desktop files given for folder"));
+      else
+        folder->desktop_file = g_strndup (text, text_len);
+      break;
+    case STATE_EXCLUDE:
+      folder = parse_info_peek_folder (info);
+      g_assert (folder != NULL);
+      folder->excludes =
+        g_slist_append (folder->excludes,
+                        g_strndup (text, text_len));
+      break;
+    case STATE_INCLUDE:
+      folder = parse_info_peek_folder (info);
+      g_assert (folder != NULL);
+      folder->includes =
+        g_slist_append (folder->includes,
+                        g_strndup (text, text_len));
+      break;
+    case STATE_DONT_SHOW_IF_EMPTY:
+      folder = parse_info_peek_folder (info);
+      g_assert (folder != NULL);
+      folder->show_if_empty = FALSE;
+      break;
+    case STATE_QUERY:
+      NO_TEXT ("Query");
+      break;
+    case STATE_AND:
+      NO_TEXT ("And");
+      break;
+    case STATE_OR:
+      NO_TEXT ("Or");
+      break;
+    case STATE_NOT:
+      NO_TEXT ("Not");
+      break;
+#if 0
+    case STATE_KEYWORD:
+      
+      break;
+#endif
     }
 }
 
@@ -752,6 +884,18 @@ vfolder_get_subfolders (Vfolder *folder)
   return folder->subfolders;
 }
 
+GSList*
+vfolder_get_excludes (Vfolder *folder)
+{
+  return folder->excludes;
+}
+
+GSList*
+vfolder_get_includes (Vfolder *folder)
+{
+  return folder->includes;
+}
+
 const char*
 vfolder_get_name (Vfolder *folder)
 {
@@ -795,7 +939,7 @@ vfolder_query_get_subqueries (VfolderQuery *query)
                         query->type == VFOLDER_QUERY_AND,
                         NULL);
 
-  return VFOLDER_LOGICAL_QUERY (query)->subqueries;
+  return VFOLDER_LOGICAL_QUERY (query)->sub_queries;
 }
 
 const char*

@@ -50,4 +50,7 @@ gboolean               desktop_entry_tree_cache_rmdir  (DesktopEntryTreeCache *c
                                                         const char            *menu_path,
                                                         GError               **error);
 
+GSList*                desktop_entry_tree_cache_get_changes (DesktopEntryTreeCache *cache,
+                                                             const char            *menu_file);
+
 #endif /* MENU_TREE_CACHE_H */

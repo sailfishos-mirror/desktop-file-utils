@@ -37,15 +37,21 @@
 #include <libgnomevfs/gnome-vfs-module.h>
 #include <libgnomevfs/gnome-vfs-utils.h>
 
+/* This is from gnome-vfs-monitor-private.h which isn't installed */
+void gnome_vfs_monitor_callback (GnomeVFSMethodHandle *method_handle,
+                                 GnomeVFSURI *info_uri,
+                                 GnomeVFSMonitorEventType event_type);
+
 #include "menu-tree-cache.h"
 #include "menu-util.h"
 
 /* FIXME - we have a gettext domain problem while not included in libgnomevfs */
 #define _(x) x
 
-typedef struct MenuMethod MenuMethod;
-typedef struct DirHandle  DirHandle;
-typedef struct FileHandle FileHandle;
+typedef struct MenuMethod    MenuMethod;
+typedef struct DirHandle     DirHandle;
+typedef struct FileHandle    FileHandle;
+typedef struct MonitorHandle MonitorHandle;
 
 static MenuMethod*       method_checkout         (void);
 static void              method_return           (MenuMethod               *method);
@@ -87,6 +93,8 @@ static GnomeVFSResult    menu_method_resolve_uri_writable (MenuMethod           
 							   DesktopEntryTree        **tree_p,
 							   DesktopEntryTreeNode    **node_p,
 							   char                    **real_path_p);
+
+static void              menu_method_notify_changes (MenuMethod *method);
 
 static GnomeVFSResult dir_handle_new            (MenuMethod               *method,
                                                  GnomeVFSURI              *uri,
@@ -132,14 +140,35 @@ static GnomeVFSResult file_handle_get_info (FileHandle               *handle,
 					    GnomeVFSFileInfo         *file_info,
 					    GnomeVFSFileInfoOptions   options);
 
+static GnomeVFSResult monitor_handle_new    (MenuMethod          *method,
+					     GnomeVFSURI         *uri,
+					     GnomeVFSMonitorType  monitor_type,
+					     MonitorHandle      **handle);
+static GnomeVFSResult monitor_handle_cancel (MenuMethod          *method,
+					     MonitorHandle       *handle);
+static void           monitor_handle_ref    (MonitorHandle       *handle);
+static void           monitor_handle_unref  (MonitorHandle       *handle);
+
+struct {
+	const char *scheme;
+	const char *menu_file;
+} all_schemes[] = {
+	{ "menu-test", "applications.menu" }
+};
+
 static const char*
 scheme_to_menu (const char *scheme)
 {
-        if (strcmp (scheme, "menu-test") == 0) {
-		return "applications.menu";
-	} else {
-		return NULL;
+	unsigned int i;
+
+	i = 0;
+	while (i < G_N_ELEMENTS (all_schemes)) {
+		if (strcmp (all_schemes[i].scheme, scheme) == 0)
+			return all_schemes[i].menu_file;
+		++i;
 	}
+
+	return NULL;
 }
 
 static gboolean
@@ -619,18 +648,42 @@ do_monitor_add (GnomeVFSMethod        *vtable,
                 GnomeVFSURI           *uri,
                 GnomeVFSMonitorType    monitor_type)
 {
+        MenuMethod *method;
+        GnomeVFSResult result;
+        MonitorHandle *handle;
+
 	menu_verbose ("method: Monitor add %s\n", uri->text);
 	
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+        method = method_checkout ();
+
+        handle = NULL;
+        result = monitor_handle_new (method, uri, monitor_type, &handle);
+        *method_handle_return = (GnomeVFSMethodHandle*) handle;
+	
+        method_return (method);
+        
+        return result;
 }
 
 static GnomeVFSResult
 do_monitor_cancel (GnomeVFSMethod       *vtable,
                    GnomeVFSMethodHandle *method_handle)
 {
+        MenuMethod *method;
+        GnomeVFSResult result;
+        MonitorHandle *handle;
+
 	menu_verbose ("method: Monitor cancel\n");
+
+	handle = (MonitorHandle*) method_handle;
 	
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+        method = method_checkout ();
+
+        result = monitor_handle_cancel (method, handle);
+	
+        method_return (method);
+        
+        return result;
 }
 
 static GnomeVFSResult
@@ -695,7 +748,7 @@ struct MenuMethod
 {
         int refcount;
         DesktopEntryTreeCache *cache;
-
+	GSList *monitors;
 };
 
 static MenuMethod*
@@ -706,7 +759,8 @@ menu_method_new (void)
         method = g_new0 (MenuMethod, 1);
         method->refcount = 1;
         method->cache = desktop_entry_tree_cache_new ();
-
+	method->monitors = NULL;
+	
         return method;
 }
 
@@ -724,7 +778,17 @@ menu_method_unref (MenuMethod *method)
         method->refcount -= 1;
 
         if (method->refcount == 0) {
+		GSList *tmp;
+		
                 desktop_entry_tree_cache_unref (method->cache);
+
+		tmp = method->monitors;
+		while (tmp != NULL) {
+			monitor_handle_unref (tmp->data);
+			tmp = tmp->next;
+		}
+		g_slist_free (method->monitors);
+		
                 g_free (method);
         }
 }
@@ -924,6 +988,12 @@ static void
 method_return (MenuMethod *method)
 {
         g_assert (method == global_method);
+
+	/* Queue up any change notifies resulting from
+	 * using the method
+	 */
+	menu_method_notify_changes (method);
+	
         G_UNLOCK (global_method);
 }
 
@@ -1662,3 +1732,209 @@ file_handle_get_info (FileHandle               *handle,
 	return GNOME_VFS_OK;
 }
 
+struct MonitorHandle
+{
+	int                 refcount;
+	GnomeVFSMonitorType type;
+	char               *scheme;
+	char               *path;
+	unsigned int        canceled : 1;
+};
+
+static gboolean
+path_at_or_one_below (const char *possible_parent,
+		      const char *path)
+{
+	char *child_dirname;
+
+	/* FIXME could canonicalize these paths a bit more I suppose */
+	
+	if (strcmp (possible_parent, path) == 0)
+		return TRUE; /* same file */
+	
+	child_dirname = g_path_get_dirname (path);
+
+	if (strcmp (possible_parent, child_dirname) == 0) {
+		g_free (child_dirname);
+		return TRUE;
+	} else {
+		g_free (child_dirname);
+		return FALSE;
+	}
+}
+
+/* Invoke monitors for all files and dirs at path */
+static void
+invoke_monitors (MenuMethod               *method,
+		 const char               *scheme,
+		 const char               *path,
+		 GnomeVFSMonitorEventType  event_type)
+{
+	GSList *tmp;
+	GnomeVFSURI *uri;
+	char *s;
+
+	uri = NULL;
+
+	tmp = method->monitors;
+	while (tmp != NULL) {
+		MonitorHandle *handle = tmp->data;
+		
+		if (strcmp (handle->scheme, scheme) == 0 &&
+		    path_at_or_one_below (handle->path, path)) {
+
+			/* demand-create our URI */
+			if (uri == NULL) {
+				s = g_strconcat (scheme, ":///", NULL);
+				uri = gnome_vfs_uri_new (s);
+				gnome_vfs_uri_append_path (uri, path);
+				g_free (s);
+			}
+			
+			/* This queues an idle, so there are no reentrancy issues, we just
+			 * hold the MenuMethod lock as we iterate over the whole list.
+			 */
+			gnome_vfs_monitor_callback ((GnomeVFSMethodHandle*) handle,
+						    uri, 
+						    event_type);
+		}
+		
+		tmp = tmp->next;
+	}
+
+	if (uri)
+		gnome_vfs_uri_unref (uri);
+}
+
+static void
+menu_method_notify_changes (MenuMethod *method)
+{
+	unsigned int i;
+	
+	i = 0;
+	while (i < G_N_ELEMENTS (all_schemes)) {
+		GSList *changes;
+		GSList *tmp;
+		
+		changes = desktop_entry_tree_cache_get_changes (method->cache,
+								all_schemes[i].menu_file);
+		
+		tmp = changes;
+		while (tmp != NULL) {
+			DesktopEntryTreeChange *change = tmp->data;
+			GnomeVFSMonitorEventType t;
+
+			t = -1;
+			switch (change->type) {
+			case DESKTOP_ENTRY_TREE_DIR_CREATED:
+			case DESKTOP_ENTRY_TREE_FILE_CREATED:
+				t = GNOME_VFS_MONITOR_EVENT_CREATED;
+				break;
+			case DESKTOP_ENTRY_TREE_DIR_DELETED:
+			case DESKTOP_ENTRY_TREE_FILE_DELETED:
+				t = GNOME_VFS_MONITOR_EVENT_DELETED;
+				break;
+			case DESKTOP_ENTRY_TREE_DIR_CHANGED:
+			case DESKTOP_ENTRY_TREE_FILE_CHANGED:
+				t = GNOME_VFS_MONITOR_EVENT_CHANGED;
+				break;
+			}
+			g_assert (t >= 0);
+
+			invoke_monitors (method,
+					 all_schemes[i].scheme,
+					 change->path,
+					 t);
+			
+			tmp = tmp->next;
+		}
+
+		g_slist_foreach (changes, (GFunc) desktop_entry_tree_change_free, NULL);
+		g_slist_free (changes);
+		
+		++i;
+	}
+}
+
+/* Event types are:
+ * event_type = GNOME_VFS_MONITOR_EVENT_CREATED;
+ * event_type = GNOME_VFS_MONITOR_EVENT_DELETED;
+ * event_type = GNOME_VFS_MONITOR_EVENT_CHANGED;
+ * 
+ * They are sent only for changes immediately below the directory in
+ * question.
+ */
+
+/* Monitor types are:
+ * GNOME_VFS_MONITOR_FILE
+ * GNOME_VFS_MONITOR_DIRECTORY
+ */
+static GnomeVFSResult
+monitor_handle_new (MenuMethod          *method,
+		    GnomeVFSURI         *uri,
+		    GnomeVFSMonitorType  monitor_type,
+		    MonitorHandle      **handle_p)
+{
+	MonitorHandle *handle;
+	const char *menu_file;
+	char *menu_path;
+	GnomeVFSResult res;
+	
+	res = unpack_uri (uri, &menu_file, &menu_path);
+	if (res != GNOME_VFS_OK)
+		return res;
+	
+	handle = g_new0 (MonitorHandle, 1);
+
+	handle->refcount = 1;
+	handle->type = monitor_type;
+	handle->path = menu_path; /* adopt ownership of memory */
+	handle->scheme = g_strdup (gnome_vfs_uri_get_scheme (uri));
+	handle->canceled = FALSE;
+
+	method->monitors = g_slist_prepend (method->monitors,
+					    handle);
+
+	*handle_p = handle;
+	
+	return GNOME_VFS_OK;
+}
+
+static GnomeVFSResult
+monitor_handle_cancel (MenuMethod          *method,
+		       MonitorHandle       *handle)
+{
+	g_return_val_if_fail (g_slist_find (method->monitors, handle) != NULL,
+			      GNOME_VFS_ERROR_BAD_PARAMETERS);
+	
+	handle->canceled = TRUE;
+	method->monitors = g_slist_remove (method->monitors, handle);
+	monitor_handle_unref (handle);
+
+	return GNOME_VFS_OK;
+}
+
+static void
+monitor_handle_ref    (MonitorHandle       *handle)
+{
+	g_return_if_fail (handle != NULL);
+	g_return_if_fail (handle->refcount > 0);
+	
+	handle->refcount += 1;
+}
+
+static void
+monitor_handle_unref (MonitorHandle *handle)
+{
+	g_return_if_fail (handle != NULL);
+	g_return_if_fail (handle->refcount > 0);
+	
+	handle->refcount -= 1;
+	
+	if (handle->refcount == 0) {
+		g_assert (handle->canceled);
+		g_free (handle->scheme);
+		g_free (handle->path);
+		g_free (handle);
+	}
+}

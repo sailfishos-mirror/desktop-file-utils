@@ -681,6 +681,7 @@ menu_node_strip_duplicate_children (MenuNode *node)
 
 struct DesktopEntryTreeNode
 {
+  DesktopEntryTreeNode *parent;
   char   *name;
   Entry  *dir_entry; /* may be NULL, name should be used as user-visible dirname */
   GSList *entries;
@@ -1243,11 +1244,12 @@ desktop_entry_tree_foreach (DesktopEntryTree            *tree,
 }
 
 static TreeNode*
-tree_node_new (void)
+tree_node_new (TreeNode *parent)
 {
   TreeNode *node;
 
   node = g_new0 (TreeNode, 1);
+  node->parent = parent;
   node->name = NULL;
   node->dir_entry = NULL;
   node->entries = NULL;
@@ -1467,7 +1469,7 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
           {
             TreeNode *child_tree;
             
-            child_tree = tree_node_new ();
+            child_tree = tree_node_new (tree_node);
             fill_tree_node_from_menu_node (child_tree, child);
             if (!tree_node_free_if_broken (child_tree))
               tree_node->subdirs = g_slist_prepend (tree_node->subdirs,
@@ -1577,7 +1579,7 @@ build_tree (DesktopEntryTree *tree)
   if (tree->root != NULL)
     return;
   
-  tree->root = tree_node_new ();
+  tree->root = tree_node_new (NULL);
   fill_tree_node_from_menu_node (tree->root,
                                  find_menu_child (tree->resolved_node));
   if (tree_node_free_if_broken (tree->root))
@@ -2145,47 +2147,247 @@ desktop_entry_tree_move (DesktopEntryTree *tree,
 }
 
 static DesktopEntryTreeChange*
-change_new (DesktopEntryTreeChangeType  type,
-            const char                 *path)
+change_new_adopting_path (DesktopEntryTreeChangeType  type,
+                          char                       *path)
 {
   DesktopEntryTreeChange *change;
 
   change = g_new0 (DesktopEntryTreeChange, 1);
   change->type = type;
-  change->path = g_strdup (path);
+  change->path = path;
   return change;
 }
 
-static void
-tree_created (TreeNode *node)
+static int
+compare_entry_basenames_func (const void *a,
+                              const void *b)
 {
+  Entry *ae = (Entry*) a;
+  Entry *be = (Entry*) b;
 
+  return strcmp (entry_get_name (ae),
+                 entry_get_name (be));
 }
 
-static void
-tree_deleted (TreeNode *node)
+static int
+compare_node_names_func (const void *a,
+                         const void *b)
 {
+  TreeNode *an = (TreeNode*) a;
+  TreeNode *bn = (TreeNode*) b;
 
+  return strcmp (an->name, bn->name);
 }
 
+static char*
+path_to_entry (TreeNode *parent,
+               Entry    *entry)
+{
+  GString *str;
+  TreeNode *iter;
+
+  str = g_string_new (entry_get_name (entry));
+  g_string_prepend (str, "/");
+
+  iter = parent;
+  while (iter != NULL)
+    {
+      g_string_prepend (str, iter->name);
+      g_string_prepend (str, "/");
+      iter = iter->parent;
+    }
+
+  return g_string_free (str, FALSE);
+}
+
+static char*
+path_to_node (TreeNode *node)
+{
+  GString *str;
+  TreeNode *iter;
+
+  str = g_string_new (NULL);
+
+  iter = node;
+  while (iter != NULL)
+    {
+      g_string_prepend (str, iter->name);
+      g_string_prepend (str, "/");
+      iter = iter->parent;
+    }
+
+  return g_string_free (str, FALSE);
+}
 
 static void
 recursive_diff (TreeNode  *old_node,
                 TreeNode  *new_node,
                 GSList   **changes_p)
 {
-  if (old_node && new_node == NULL)
+  GSList *old_list;
+  GSList *new_list;
+  GSList *old_iter;
+  GSList *new_iter;
+
+  /* Diff the entries */
+  if (!(old_node || new_node))
+    return;
+  
+  old_list = old_node ? g_slist_copy (old_node->entries) : NULL;
+  new_list = new_node ? g_slist_copy (new_node->entries) : NULL;
+  old_list = g_slist_sort (old_list,
+                           compare_entry_basenames_func);
+  new_list = g_slist_sort (new_list,
+                           compare_entry_basenames_func);
+
+  old_iter = old_list;
+  new_iter = new_list;
+  while (old_iter || new_iter)
     {
-      tree_deleted (old_node);
-    }
-  else if (old_node == NULL && new_node)
-    {
-      tree_created (new_node);
-    }
-  else
-    {
+      Entry *old = old_iter ? old_iter->data : NULL;
+      Entry *new = new_iter ? new_iter->data : NULL;
+      int c;
+
+      if (old && new)
+        c = strcmp (entry_get_name (old),
+                    entry_get_name (new));
+      else if (old)
+        c = -1;
+      else if (new)
+        c = 1;
+      else
+        {
+          g_assert_not_reached ();
+          c = -100;
+        }
       
+      if (c == 0)
+        {
+          /* No change, item still here */
+          g_assert (old_iter && new_iter);
+              
+          old_iter = old_iter->next;
+          new_iter = new_iter->next;
+        }
+      else if (c < 0)
+        {
+          /* old item comes before the new item; thus
+           * we know the old item will not occur after this
+           * new item, and has vanished
+           */
+          g_assert (old != NULL);
+              
+          *changes_p =
+            g_slist_prepend (*changes_p,
+                             change_new_adopting_path (DESKTOP_ENTRY_TREE_FILE_DELETED,
+                                                       path_to_entry (old_node, old)));
+          old_iter = old_iter->next;
+        }
+      else if (c > 0)
+        {
+          /* old item comes after the new item;
+           * thus the old item may still be present
+           * somewhere ahead in new_list.
+           * However, the new item is definitely not
+           * in the list of old items since we would
+           * have gotten to it already.
+           */
+          g_assert (new != NULL);
+
+          *changes_p =
+            g_slist_prepend (*changes_p,
+                             change_new_adopting_path (DESKTOP_ENTRY_TREE_FILE_CREATED,
+                                                       path_to_entry (new_node, new)));          
+
+          new_iter = new_iter->next;
+        }
     }
+      
+  g_slist_free (old_list);
+  g_slist_free (new_list);
+
+  /* diff the subnodes */
+  
+  old_list = old_node ? g_slist_copy (old_node->subdirs) : NULL;
+  new_list = new_node ? g_slist_copy (new_node->subdirs) : NULL;
+  old_list = g_slist_sort (old_list,
+                           compare_node_names_func);
+  new_list = g_slist_sort (new_list,
+                           compare_node_names_func);
+
+  old_iter = old_list;
+  new_iter = new_list;
+  while (old_iter || new_iter)
+    {
+      TreeNode *old = old_iter ? old_iter->data : NULL;
+      TreeNode *new = new_iter ? new_iter->data : NULL;
+      int c;
+
+      if (old && new)
+        c = strcmp (old->name, new->name);
+      else if (old)
+        c = -1;
+      else if (new)
+        c = 1;
+      else
+        {
+          g_assert_not_reached ();
+          c = -100;
+        }
+      
+      if (c == 0)
+        {
+          /* No change, item still here */
+          g_assert (old_iter && new_iter);
+
+          recursive_diff (old, new, changes_p);
+          
+          old_iter = old_iter->next;
+          new_iter = new_iter->next;
+        }
+      else if (c < 0)
+        {
+          /* old item comes before the new item; thus
+           * we know the old item will not occur after this
+           * new item, and has vanished
+           */
+          g_assert (old != NULL);
+
+          *changes_p =
+            g_slist_prepend (*changes_p,
+                             change_new_adopting_path (DESKTOP_ENTRY_TREE_DIR_DELETED,
+                                                       path_to_node (old)));
+
+          /* Send deletions for all the files/dirs underneath old */
+          recursive_diff (old, NULL, changes_p);
+          
+          old_iter = old_iter->next;
+        }
+      else if (c > 0)
+        {
+          /* old item comes after the new item;
+           * thus the old item may still be present
+           * somewhere ahead in new_list.
+           * However, the new item is definitely not
+           * in the list of old items since we would
+           * have gotten to it already.
+           */
+          g_assert (new != NULL);
+
+          *changes_p =
+            g_slist_prepend (*changes_p,
+                             change_new_adopting_path (DESKTOP_ENTRY_TREE_DIR_CREATED,
+                                                       path_to_node (new)));
+
+          /* Send creations for all files/dirs underneath new */
+          recursive_diff (NULL, new, changes_p);
+          
+          new_iter = new_iter->next;
+        }
+    }
+      
+  g_slist_free (old_list);
+  g_slist_free (new_list);  
 }
 
 GSList*

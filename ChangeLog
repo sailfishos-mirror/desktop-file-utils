@@ -1,3 +1,14 @@
+2003-06-11  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-tree-cache.c (reload_entry): diff old vs. new tree and
+	store the list of changes
+
+	* src/menu-method.c (do_monitor_add, do_monitor_cancel):
+	monitoring using the tree diff stuff.
+
+	* src/menu-process.c (desktop_entry_tree_diff): finish
+	implementing this	
+
 2003-06-11  Havoc Pennington  <hp@pobox.com>
 
 	* src/menu-process.c (desktop_entry_tree_diff): add but 

@@ -42,6 +42,7 @@ typedef struct
   DesktopEntryTree *tree;
   GError           *load_failure_reason;
   MenuOverrideDir  *overrides;
+  GSList           *changes;
   unsigned int      needs_reload : 1;
 } CacheEntry;
 
@@ -65,6 +66,11 @@ free_cache_entry (void *data)
   if (entry->load_failure_reason)
     g_error_free (entry->load_failure_reason);
 
+  g_slist_foreach (entry->changes,
+                   (GFunc) desktop_entry_tree_change_free,
+                   NULL);
+  g_slist_free (entry->changes);
+  
 #if 1
   memset (entry, 0xff, sizeof (*entry));
 #endif
@@ -134,7 +140,19 @@ reload_entry (DesktopEntryTreeCache *cache,
                                           &tmp_error);
 
       if (entry->tree)
-        desktop_entry_tree_unref (entry->tree);
+        {
+          if (reloaded != NULL)
+            {
+              GSList *changes;
+              
+              changes = desktop_entry_tree_diff (entry->tree,
+                                                 reloaded);
+              entry->changes = g_slist_concat (entry->changes, changes);
+            }
+          
+          desktop_entry_tree_unref (entry->tree);
+        }
+      
       if (entry->load_failure_reason)
         g_error_free (entry->load_failure_reason);
       
@@ -709,4 +727,26 @@ desktop_entry_tree_cache_rmdir (DesktopEntryTreeCache *cache,
   desktop_entry_tree_unref (tree);
   
   return retval;
+}
+
+GSList*
+desktop_entry_tree_cache_get_changes (DesktopEntryTreeCache *cache,
+                                      const char            *menu_file)
+{
+  CacheEntry *entry;
+  
+  menu_verbose ("Getting changes for \"%s\"\n",
+                menu_file);
+  
+  entry = cache_lookup (cache, menu_file, FALSE, NULL);
+
+  if (entry == NULL)
+    return NULL;
+  else
+    {
+      GSList *retval = entry->changes;
+      entry->changes = NULL;
+
+      return retval;
+    }
 }

@@ -1,4 +1,19 @@
 ===========
+Version 0.8
+===========
+
+ o Fix various leaks (Kjartan Maraas)
+ o Update with latest libegg code (Ray Strode)
+
+ o Menu method work (Mark McLoughlin, Dan Williams)
+     + Reload the menu when .desktop/.directory files change
+     + Respect NoDisplay in .desktop/.directory files
+     + Remove empty submenus
+     + Report the last modification time of the tree
+     + Support setting the OnlyShowIn name
+     + Add a reasonable default set of schemes
+
+===========
 Version 0.7
 ===========
 

@@ -470,10 +470,11 @@ main (int    argc,
     }
   poptFreeContext (popt_context);
 
-  if (!found_processable_dir && !quiet)
+  if (!found_processable_dir)
     {
-      g_printerr (_("No directories in update-desktop-database search path "
-                    "could processed and updated.\n"));
+      if (!quiet)
+        g_printerr (_("No directories in update-desktop-database search path "
+                      "could processed and updated.\n"));
       return 1;
     }
 

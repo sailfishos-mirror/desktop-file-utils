@@ -27,6 +27,8 @@ desktop_menu_tool_SOURCES=			\
 	menu-entries.h				\
 	menu-layout.c				\
 	menu-layout.h				\
+	menu-parser.c				\
+	menu-parser.h				\
 	menu-process.c				\
 	menu-process.h				\
 	validate.c				\

@@ -22,6 +22,9 @@
 #ifndef MENU_PARSER_H
 #define MENU_PARSER_H
 
+#include <glib.h>
+#include "menu-layout.h"
+
 MenuNode* menu_load (const char *filename,
                      GError    **err);
 

@@ -32,6 +32,7 @@
 
 typedef struct _MenuFile MenuFile;
 typedef struct _MenuNodeMenu MenuNodeMenu;
+typedef struct _MenuNodeLegacyDir MenuNodeLegacyDir;
 
 struct _MenuFile
 {
@@ -47,13 +48,13 @@ struct _MenuNode
   MenuNode *prev;
   MenuNode *next;
   MenuNode *parent;
-  MenuNode *children;
-  
-  MenuNodeType type;
+  MenuNode *children;  
+
   char *content;
 
   guint is_file_root : 1;
-  guint refcount : 24;
+  guint refcount : 20;
+  guint type : 7;
 };
 
 struct _MenuNodeMenu
@@ -62,6 +63,12 @@ struct _MenuNodeMenu
   MenuNode *name_node; /* cache of the <Name> node */
   EntryDirectoryList *app_dirs;
   EntryDirectoryList *dir_dirs;
+};
+
+struct _MenuNodeLegacyDir
+{
+  MenuNode node;
+  char *prefix;
 };
 
 /* root nodes (no parent) never have siblings */
@@ -124,6 +131,12 @@ menu_node_unref (MenuNode *node)
           if (nm->dir_dirs)
             entry_directory_list_unref (nm->dir_dirs);
         }
+      else if (node->type == MENU_NODE_LEGACY_DIR)
+        {
+          MenuNodeLegacyDir *nld = (MenuNodeLegacyDir*) node;
+
+          g_free (nld->prefix);
+        }
       
       /* free ourselves */
       g_free (node->content);
@@ -138,6 +151,8 @@ menu_node_new (MenuNodeType type)
 
   if (type == MENU_NODE_MENU)
     node = (MenuNode*) g_new0 (MenuNodeMenu, 1);
+  else if (type == MENU_NODE_LEGACY_DIR)
+    node = (MenuNode*) g_new0 (MenuNodeLegacyDir, 1);
   else
     node = g_new0 (MenuNode, 1);
 
@@ -425,8 +440,18 @@ menu_node_get_type (MenuNode *node)
 const char*
 menu_node_get_content (MenuNode *node)
 {
-  g_return_val_if_fail (node->content != NULL, NULL); /* should not ask for nul content */
   return node->content;
+}
+
+void
+menu_node_set_content   (MenuNode   *node,
+                         const char *content)
+{
+  if (node->content == content)
+    return;
+  
+  g_free (node->content);
+  node->content = g_strdup (content);
 }
 
 const char*
@@ -476,6 +501,35 @@ menu_node_menu_get_name (MenuNode *node)
     return menu_node_get_content (nm->name_node);
   else
     return NULL;
+}
+
+const char*
+menu_node_legacy_dir_get_prefix (MenuNode   *node)
+{
+  MenuNodeLegacyDir *nld;
+  
+  g_return_val_if_fail (node->type == MENU_NODE_LEGACY_DIR, NULL);
+
+  nld = (MenuNodeLegacyDir*) node;
+  
+  return nld->prefix;
+}
+
+void
+menu_node_legacy_dir_set_prefix (MenuNode   *node,
+                                 const char *prefix)
+{
+  MenuNodeLegacyDir *nld;
+  
+  g_return_if_fail (node->type == MENU_NODE_LEGACY_DIR);
+
+  nld = (MenuNodeLegacyDir*) node;
+
+  if (nld->prefix == prefix)
+    return;
+  
+  g_free (nld->prefix);
+  nld->prefix = g_strdup (prefix);
 }
 
 static void
@@ -709,6 +763,7 @@ find_file_by_node (MenuNode *node)
   MenuNode *root;
 
   root = menu_node_get_root (node);
+  g_assert (root->type == MENU_NODE_ROOT);
   
   tmp = menu_files;
   while (tmp != NULL)

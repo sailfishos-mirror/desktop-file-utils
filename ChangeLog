@@ -1,3 +1,8 @@
+2003-05-01  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-parser.c: got it compiling, most code should be there,
+	untested
+
 2003-04-30  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-parser.c: more random hacking, syncing between computers

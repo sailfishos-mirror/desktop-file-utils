@@ -61,12 +61,18 @@ static void text_handler          (GMarkupParseContext  *context,
                                    gsize                 text_len,
                                    gpointer              user_data,
                                    GError              **error);
+static void passthrough_handler   (GMarkupParseContext  *context,
+                                   const gchar          *passthrough_text,
+                                   gsize                 text_len,
+                                   gpointer              user_data,
+                                   GError              **error);
+
 
 static GMarkupParser menu_funcs = {
   start_element_handler,
   end_element_handler,
   text_handler,
-  NULL,
+  passthrough_handler,
   NULL
 };
 
@@ -245,6 +251,28 @@ check_no_attributes (GMarkupParseContext *context,
   return TRUE;
 }
 
+static gboolean
+has_menu_child (MenuNode *node)
+{
+  MenuNode *child;
+
+  child = menu_node_get_children (node);
+  while (child && menu_node_get_type (child) != MENU_NODE_MENU)
+    child = menu_node_get_next (child);
+
+  return child != NULL;
+}
+
+static void
+push_node (MenuParser  *parser,
+           MenuNodeType type)
+{
+  MenuNode *node = menu_node_new (type);
+  menu_node_append_child (parser->stack_top, node);
+  parser->stack_top = node;
+  menu_node_unref (node);
+}
+
 static void
 start_menu_element (MenuParser          *parser,
                     GMarkupParseContext *context,
@@ -253,36 +281,207 @@ start_menu_element (MenuParser          *parser,
                     const gchar        **attribute_values,
                     GError             **error)
 {
-  MenuNode *node;
-
   if (!check_no_attributes (context, element_name,
                             attribute_names, attribute_values,
                             error))
     return;
-  
-  node = menu_node_new (MENU_NODE_MENU);
 
-  if (parser->stack_top == NULL)
+  if (!(menu_node_get_type (parser->stack_top) == MENU_NODE_ROOT ||
+        menu_node_get_type (parser->stack_top) == MENU_NODE_MENU))
     {
-      g_assert (parser->root == NULL);
-      
-      parser->root = node;
-      parser->stack_top = node;
+      set_error (error, context,
+                 G_MARKUP_ERROR,
+                 G_MARKUP_ERROR_PARSE,
+                 _("<Menu> element can only appear below other <Menu> elements or at toplevel\n"));
     }
   else
     {
-      if (menu_node_get_type (parser->stack_top != MENU_NODE_MENU))
-        {
-          set_error (error, context,
-                     G_MARKUP_ERROR,
-                     G_MARKUP_ERROR_PARSE,
-                     _("<Menu> element can only appear below other <Menu> elements\n"));
-          menu_node_unref (node);
-          return;
-        }
+      push_node (parser, MENU_NODE_MENU);
+    }
+}
 
-      menu_node_append_child (parser->stack_top, node);
-      menu_node_unref (node);
+static void
+start_menu_child_element (MenuParser          *parser,
+                          GMarkupParseContext *context,
+                          const gchar         *element_name,
+                          const gchar        **attribute_names,
+                          const gchar        **attribute_values,
+                          GError             **error)
+{
+  if (ELEMENT_IS ("LegacyDir"))
+    {
+      const char *prefix;
+      
+      push_node (parser, MENU_NODE_LEGACY_DIR);
+
+      if (!locate_attributes (context, element_name,
+                              attribute_names, attribute_values,
+                              error, "prefix", &prefix,
+                              NULL))
+        return;
+
+      if (prefix != NULL)
+        {
+          menu_node_legacy_dir_set_prefix (parser->stack_top,
+                                           prefix);
+        }
+    }
+  else
+    {
+      if (!check_no_attributes (context, element_name,
+                                attribute_names, attribute_values,
+                                error))
+        return;
+
+      if (ELEMENT_IS ("AppDir"))
+        {
+          push_node (parser, MENU_NODE_APP_DIR);
+        }
+      else if (ELEMENT_IS ("DefaultAppDirs"))
+        {
+          push_node (parser, MENU_NODE_DEFAULT_APP_DIRS);
+        }
+      else if (ELEMENT_IS ("DirectoryDir"))
+        {
+          push_node (parser, MENU_NODE_DIRECTORY_DIR);
+        }
+      else if (ELEMENT_IS ("DefaultDirectoryDirs"))
+        {
+          push_node (parser, MENU_NODE_DEFAULT_DIRECTORY_DIRS);
+        }
+      else if (ELEMENT_IS ("Name"))
+        {
+          push_node (parser, MENU_NODE_NAME);
+        }
+      else if (ELEMENT_IS ("Directory"))
+        {
+          push_node (parser, MENU_NODE_DIRECTORY);
+        }
+      else if (ELEMENT_IS ("OnlyUnallocated"))
+        {
+          push_node (parser, MENU_NODE_ONLY_UNALLOCATED);
+        }
+      else if (ELEMENT_IS ("NotOnlyUnallocated"))
+        {
+          push_node (parser, MENU_NODE_NOT_ONLY_UNALLOCATED);
+        }
+      else if (ELEMENT_IS ("Include"))
+        {
+          push_node (parser, MENU_NODE_INCLUDE);
+        }
+      else if (ELEMENT_IS ("Exclude"))
+        {
+          push_node (parser, MENU_NODE_EXCLUDE);
+        }
+      else if (ELEMENT_IS ("MergeFile"))
+        {
+          push_node (parser, MENU_NODE_MERGE_FILE);
+        }
+      else if (ELEMENT_IS ("MergeDir"))
+        {
+          push_node (parser, MENU_NODE_MERGE_DIR);
+        }
+      else if (ELEMENT_IS ("KDELegacyDirs"))
+        {
+          push_node (parser, MENU_NODE_KDE_LEGACY_DIRS);
+        }
+      else if (ELEMENT_IS ("Move"))
+        {
+          push_node (parser, MENU_NODE_MOVE);
+        }
+      else if (ELEMENT_IS ("Deleted"))
+        {
+          push_node (parser, MENU_NODE_DELETED);
+
+        }
+      else if (ELEMENT_IS ("NotDeleted"))
+        {
+          push_node (parser, MENU_NODE_NOT_DELETED);
+        }
+      else
+        {
+          set_error (error, context, G_MARKUP_ERROR,
+                     G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                     _("Element <%s> may not appear in this context\n"),
+                     element_name);
+        }
+    }
+}
+
+static void
+start_matching_rule_element (MenuParser          *parser,
+                             GMarkupParseContext *context,
+                             const gchar         *element_name,
+                             const gchar        **attribute_names,
+                             const gchar        **attribute_values,
+                             GError             **error)
+{
+  if (!check_no_attributes (context, element_name,
+                            attribute_names, attribute_values,
+                            error))
+    return;
+
+
+  if (ELEMENT_IS ("Filename"))
+    {
+      push_node (parser, MENU_NODE_FILENAME);
+    }
+  else if (ELEMENT_IS ("Category"))
+    {
+      push_node (parser, MENU_NODE_CATEGORY); 
+    }
+  else if (ELEMENT_IS ("All"))
+    {
+      push_node (parser, MENU_NODE_ALL);
+    }
+  else if (ELEMENT_IS ("And"))
+    {
+      push_node (parser, MENU_NODE_AND);
+    }
+  else if (ELEMENT_IS ("Or"))
+    {
+      push_node (parser, MENU_NODE_OR);
+    }
+  else if (ELEMENT_IS ("Not"))
+    {
+      push_node (parser, MENU_NODE_NOT);
+    }
+  else
+    {
+      set_error (error, context, G_MARKUP_ERROR,
+                 G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                 _("Element <%s> may not appear in this context\n"),
+                 element_name);
+    }
+}
+
+static void
+start_move_child_element (MenuParser          *parser,
+                          GMarkupParseContext *context,
+                          const gchar         *element_name,
+                          const gchar        **attribute_names,
+                          const gchar        **attribute_values,
+                          GError             **error)
+{
+  if (!check_no_attributes (context, element_name,
+                            attribute_names, attribute_values,
+                            error))
+    return;
+
+  if (ELEMENT_IS ("Old"))
+    {
+      push_node (parser, MENU_NODE_OLD); 
+    }
+  else if (ELEMENT_IS ("New"))
+    {
+      push_node (parser, MENU_NODE_NEW); 
+    }
+  else
+    {
+      set_error (error, context, G_MARKUP_ERROR,
+                 G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                 _("Element <%s> may not appear in this context\n"),
+                 element_name);
     }
 }
 
@@ -296,10 +495,10 @@ start_element_handler (GMarkupParseContext *context,
 {
   MenuParser *parser = user_data;
 
-  if (ELEMENT_IS ("menu"))
+  if (ELEMENT_IS ("Menu"))
     {
-      if (parser->root != NULL &&
-          parser->stack_top == NULL)
+      if (parser->stack_top == parser->root &&
+          has_menu_child (parser->root))
         {
           set_error (error, context, G_MARKUP_ERROR,
                      G_MARKUP_ERROR_PARSE,
@@ -307,18 +506,48 @@ start_element_handler (GMarkupParseContext *context,
           return;
         }
       
-      start_menu_element (parser, element_name,
+      start_menu_element (parser, context, element_name,
                           attribute_names, attribute_values,
                           error);
     }
-  else if (parser->stack_top == NULL)
+  else if (parser->stack_top == parser->root)
     {
       set_error (error, context, G_MARKUP_ERROR,
                  G_MARKUP_ERROR_PARSE,
                  _("Root element in a menu file must be <Menu>, not <%s>\n"),
                  element_name);
     }
-  
+  else if (menu_node_get_type (parser->stack_top) == MENU_NODE_MENU)
+    {
+      start_menu_child_element (parser, context, element_name,
+                                attribute_names, attribute_values,
+                                error);      
+    }
+  else if (menu_node_get_type (parser->stack_top) == MENU_NODE_INCLUDE ||
+           menu_node_get_type (parser->stack_top) == MENU_NODE_EXCLUDE ||
+           menu_node_get_type (parser->stack_top) == MENU_NODE_AND ||
+           menu_node_get_type (parser->stack_top) == MENU_NODE_OR ||
+           menu_node_get_type (parser->stack_top) == MENU_NODE_NOT)
+    {
+      start_matching_rule_element (parser, context, element_name,
+                                   attribute_names, attribute_values,
+                                   error);
+    }
+  else if (menu_node_get_type (parser->stack_top) == MENU_NODE_MOVE)
+    {
+      start_move_child_element (parser, context, element_name,
+                                attribute_names, attribute_values,
+                                error);
+    }
+  else
+    {
+      set_error (error, context, G_MARKUP_ERROR,
+                 G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                 _("Element <%s> may not appear in this context\n"),
+                 element_name);
+    }
+
+  add_context_to_error (error, context);
 }
 
 static void
@@ -331,10 +560,52 @@ end_element_handler (GMarkupParseContext *context,
 
   g_assert (parser->stack_top != NULL);
 
+  switch (menu_node_get_type (parser->stack_top))
+    {
+    case MENU_NODE_APP_DIR:
+    case MENU_NODE_DIRECTORY_DIR:
+    case MENU_NODE_NAME:
+    case MENU_NODE_DIRECTORY:
+    case MENU_NODE_FILENAME:
+    case MENU_NODE_CATEGORY:
+    case MENU_NODE_MERGE_FILE:
+    case MENU_NODE_MERGE_DIR:
+    case MENU_NODE_LEGACY_DIR:
+    case MENU_NODE_OLD:
+    case MENU_NODE_NEW:
+      if (menu_node_get_content (parser->stack_top) == NULL)
+        {
+          set_error (error, context, G_MARKUP_ERROR,
+                     G_MARKUP_ERROR_INVALID_CONTENT,
+                     _("Element <%s> is required to contain text and was empty\n"),
+                     element_name);
+        }
+      break;
+      
+    case MENU_NODE_ROOT:
+    case MENU_NODE_PASSTHROUGH:
+    case MENU_NODE_MENU:
+    case MENU_NODE_DEFAULT_APP_DIRS:
+    case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
+    case MENU_NODE_ONLY_UNALLOCATED:
+    case MENU_NODE_NOT_ONLY_UNALLOCATED:
+    case MENU_NODE_INCLUDE:
+    case MENU_NODE_EXCLUDE:
+    case MENU_NODE_ALL:
+    case MENU_NODE_AND:
+    case MENU_NODE_OR:
+    case MENU_NODE_NOT:
+    case MENU_NODE_KDE_LEGACY_DIRS:
+    case MENU_NODE_MOVE:
+    case MENU_NODE_DELETED:
+    case MENU_NODE_NOT_DELETED:
+      break;
+    }
+  
   parser->stack_top = menu_node_get_parent (parser->stack_top);
-}
 
-#define NO_TEXT(element_name) set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE, _("No text is allowed inside element <%s>"), element_name)
+  add_context_to_error (error, context);
+}
 
 static gboolean
 all_whitespace (const char *text,
@@ -365,25 +636,87 @@ text_handler (GMarkupParseContext *context,
               GError             **error)
 {
   MenuParser *parser = user_data;
-  
-  if (all_whitespace (text, text_len))
-    return;
 
-  g_assert (parser->stack_top != NULL);  
+  switch (menu_node_get_type (parser->stack_top))
+    {
+    case MENU_NODE_APP_DIR:
+    case MENU_NODE_DIRECTORY_DIR:
+    case MENU_NODE_NAME:
+    case MENU_NODE_DIRECTORY:
+    case MENU_NODE_FILENAME:
+    case MENU_NODE_CATEGORY:
+    case MENU_NODE_MERGE_FILE:
+    case MENU_NODE_MERGE_DIR:
+    case MENU_NODE_LEGACY_DIR:
+    case MENU_NODE_OLD:
+    case MENU_NODE_NEW:
+      g_assert (menu_node_get_content (parser->stack_top) == NULL);
+      
+      menu_node_set_content (parser->stack_top, text);
+      break;
+
+    case MENU_NODE_ROOT:
+    case MENU_NODE_PASSTHROUGH:
+    case MENU_NODE_MENU:
+    case MENU_NODE_DEFAULT_APP_DIRS:
+    case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
+    case MENU_NODE_ONLY_UNALLOCATED:
+    case MENU_NODE_NOT_ONLY_UNALLOCATED:
+    case MENU_NODE_INCLUDE:
+    case MENU_NODE_EXCLUDE:
+    case MENU_NODE_ALL:
+    case MENU_NODE_AND:
+    case MENU_NODE_OR:
+    case MENU_NODE_NOT:
+    case MENU_NODE_KDE_LEGACY_DIRS:
+    case MENU_NODE_MOVE:
+    case MENU_NODE_DELETED:
+    case MENU_NODE_NOT_DELETED:
+      if (!all_whitespace (text, text_len))
+        {
+          set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                     _("No text is allowed inside element <%s>"),
+                     g_markup_parse_context_get_element (context));
+        }
+      break;
+    }
+
+  add_context_to_error (error, context);
+}
+
+static void
+passthrough_handler (GMarkupParseContext  *context,
+                     const gchar          *passthrough_text,
+                     gsize                 text_len,
+                     gpointer              user_data,
+                     GError              **error)
+{
+  MenuParser *parser = user_data;
+  MenuNode *node;
+  
+  node = menu_node_new (MENU_NODE_PASSTHROUGH);
+
+  menu_node_set_content (node, passthrough_text);
+
+  menu_node_append_child (parser->stack_top, node);
+  /* don't push passthrough on the stack, it's not an element */
+
+  menu_node_unref (node);
+
+  add_context_to_error (error, context);
 }
 
 static void
 menu_parser_init (MenuParser *parser)
 {
-  parser->root = NULL;
-  parser->stack_top = NULL;
+  parser->root = menu_node_new (MENU_NODE_ROOT);
+  parser->stack_top = parser->root;
 }
 
 static void
 menu_parser_free (MenuParser *parser)
 {
-  if (parser->root)
-    menu_node_unref (parser->root);
+  menu_node_unref (parser->root);
 }
 
 MenuNode*
@@ -437,7 +770,7 @@ menu_load (const char *filename,
     {
       g_propagate_error (err, error);
     }
-  else if (parser.root)
+  else if (has_menu_child (parser.root))
     {
       retval = parser.root;
       parser.root = NULL;
@@ -445,7 +778,7 @@ menu_load (const char *filename,
   else
     {
       g_set_error (err, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
-                   _("Menu file %s did not contain a root <VFolderInfo> element"),
+                   _("Menu file %s did not contain a root <Menu> element"),
                    filename);
     }
 

@@ -32,6 +32,7 @@ typedef struct _EntrySet EntrySet;
 
 typedef enum
 {
+  MENU_NODE_ROOT,
   MENU_NODE_PASSTHROUGH,
   MENU_NODE_MENU,
   MENU_NODE_APP_DIR,
@@ -86,7 +87,15 @@ void menu_node_steal  (MenuNode *node);
 MenuNodeType menu_node_get_type      (MenuNode *node);
 const char*  menu_node_get_content   (MenuNode *node);
 const char*  menu_node_get_filename  (MenuNode *node);
-const char*  menu_node_menu_get_name (MenuNode *node);
+
+void         menu_node_set_content   (MenuNode   *node,
+                                      const char *content);
+
+const char* menu_node_menu_get_name         (MenuNode   *node);
+const char* menu_node_legacy_dir_get_prefix (MenuNode   *node);
+void        menu_node_legacy_dir_set_prefix (MenuNode   *node,
+                                             const char *prefix);
+
 
 EntryDirectoryList* menu_node_menu_get_app_entries (MenuNode *node);
 EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);

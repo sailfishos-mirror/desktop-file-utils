@@ -131,7 +131,57 @@ static GnomeVFSResult file_handle_truncate (FileHandle               *handle,
 static GnomeVFSResult file_handle_get_info (FileHandle               *handle,
 					    GnomeVFSFileInfo         *file_info,
 					    GnomeVFSFileInfoOptions   options);
-     
+
+static const char*
+scheme_to_menu (const char *scheme)
+{
+        if (strcmp (scheme, "menu-test") == 0) {
+		return "applications.menu";
+	} else {
+		return NULL;
+	}
+}
+
+static gboolean
+is_menu_scheme (GnomeVFSURI *uri)
+{
+	return scheme_to_menu (gnome_vfs_uri_get_scheme (uri)) != NULL;
+}
+
+static GnomeVFSResult
+unpack_uri (GnomeVFSURI  *uri,
+	    const char  **menu_file_p,
+	    char        **menu_path_p)
+{
+	if (menu_file_p)
+		*menu_file_p = NULL;
+	if (menu_path_p)
+		*menu_path_p = NULL;
+	
+	if (menu_file_p) {
+		const char *scheme;
+		
+		scheme = gnome_vfs_uri_get_scheme (uri);
+		g_assert (scheme != NULL);
+
+		*menu_file_p = scheme_to_menu (scheme);
+
+		if (*menu_file_p == NULL) {
+			menu_verbose ("Unknown protocol %s\n", scheme);
+			return GNOME_VFS_ERROR_INVALID_URI;
+		}
+	}
+
+	if (menu_path_p) {
+		char *unescaped;
+		
+		unescaped = gnome_vfs_unescape_string (uri->text, "");
+		
+		*menu_path_p = unescaped;
+	}
+
+	return GNOME_VFS_OK;
+}
 
 static GnomeVFSResult
 do_open (GnomeVFSMethod        *vtable,
@@ -539,8 +589,12 @@ do_check_same_fs (GnomeVFSMethod  *vtable,
 {
 	menu_verbose ("method: Check same fs %s and %s\n",source_uri->text,
 		      target_uri->text);
+
+	*same_fs_return =
+		is_menu_scheme (source_uri) &&
+		is_menu_scheme (target_uri);
 	
-	return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	return GNOME_VFS_OK;
 }
 
 static GnomeVFSResult
@@ -551,8 +605,12 @@ do_set_file_info (GnomeVFSMethod          *vtable,
                   GnomeVFSContext         *context)
 {
 	menu_verbose ("method: Set file info %s\n", uri->text);
-	
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+
+	/* This is the only error code nautilus can handle here;
+	 * if you change it, you have to go fix nautilus or it will
+	 * spew g_warning()
+	 */
+	return GNOME_VFS_ERROR_READ_ONLY_FILE_SYSTEM;
 }
 
 static GnomeVFSResult
@@ -671,49 +729,15 @@ menu_method_unref (MenuMethod *method)
         }
 }
 
-static const char*
-scheme_to_menu (const char *scheme)
+static char *
+get_base_from_uri (GnomeVFSURI const *uri)
 {
-        if (strcmp (scheme, "menu-test") == 0) {
-		return "applications.menu";
-	} else {
-		return NULL;
-	}
-}
-
-static GnomeVFSResult
-unpack_uri (GnomeVFSURI  *uri,
-	    const char  **menu_file_p,
-	    char        **menu_path_p)
-{
-	if (menu_file_p)
-		*menu_file_p = NULL;
-	if (menu_path_p)
-		*menu_path_p = NULL;
+	char *escaped_base, *base;
 	
-	if (menu_file_p) {
-		const char *scheme;
-		
-		scheme = gnome_vfs_uri_get_scheme (uri);
-		g_assert (scheme != NULL);
-
-		*menu_file_p = scheme_to_menu (scheme);
-
-		if (*menu_file_p == NULL) {
-			menu_verbose ("Unknown protocol %s\n", scheme);
-			return GNOME_VFS_ERROR_INVALID_URI;
-		}
-	}
-
-	if (menu_path_p) {
-		char *unescaped;
-		
-		unescaped = gnome_vfs_unescape_string (uri->text, "");
-		
-		*menu_path_p = unescaped;
-	}
-
-	return GNOME_VFS_OK;
+	escaped_base = gnome_vfs_uri_extract_short_path_name (uri);
+	base = gnome_vfs_unescape_string (escaped_base, G_DIR_SEPARATOR_S);
+	g_free (escaped_base);
+	return base;
 }
 
 static GnomeVFSResult
@@ -909,7 +933,7 @@ fill_in_generic_dir_info (GnomeVFSFileInfo         *info,
 			  GnomeVFSFileInfoOptions   options)
 {
 	info->type = GNOME_VFS_FILE_TYPE_DIRECTORY;
-		
+	
 	if (options & GNOME_VFS_FILE_INFO_GET_MIME_TYPE) {
 		info->mime_type = g_strdup ("x-directory/normal");
 		info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
@@ -922,11 +946,14 @@ fill_in_generic_dir_info (GnomeVFSFileInfo         *info,
 		GNOME_VFS_PERM_GROUP_EXEC |
 		GNOME_VFS_PERM_OTHER_READ |
 		GNOME_VFS_PERM_OTHER_EXEC;
-		
+
+	/* We always own it */
+	info->uid = getuid ();
+	info->gid = getgid ();
+	
 	info->valid_fields |=
 		GNOME_VFS_FILE_INFO_FIELDS_TYPE |
 		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS;
-
 }
 
 static void
@@ -948,7 +975,7 @@ fill_in_generic_file_info (GnomeVFSFileInfo         *info,
 			   GnomeVFSFileInfoOptions   options)
 {
 	info->type = GNOME_VFS_FILE_TYPE_REGULAR;
-		
+	
 	if (options & GNOME_VFS_FILE_INFO_GET_MIME_TYPE) {
 		info->mime_type = g_strdup ("application/x-gnome-app-info");
 		info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
@@ -963,6 +990,10 @@ fill_in_generic_file_info (GnomeVFSFileInfo         *info,
 		GNOME_VFS_PERM_USER_WRITE |
 		GNOME_VFS_PERM_GROUP_READ |
 		GNOME_VFS_PERM_OTHER_READ;
+
+	/* We always own it */
+	info->uid = getuid ();
+	info->gid = getgid ();
 	
 	info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_TYPE |
 		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS;
@@ -979,7 +1010,7 @@ fill_in_file_info (DesktopEntryTree         *tree,
 	g_assert (node != NULL);	
 	g_assert (path != NULL);
 	g_assert (file_info != NULL);
-
+	
 	fill_in_generic_file_info (file_info, options);
 }
 
@@ -1013,6 +1044,9 @@ menu_method_get_info (MenuMethod               *method,
 		fill_in_file_info (tree, node, path,
 				   file_info, options);
 	}
+
+	g_assert (file_info->name == NULL);
+	file_info->name = get_base_from_uri (uri);
 
 	desktop_entry_tree_unref (tree);
 	
@@ -1318,18 +1352,6 @@ struct FileHandle
 	int   fd;
 	char *name;
 };
-
-static char *
-get_base_from_uri (GnomeVFSURI const *uri)
-{
-	char *escaped_base, *base;
-	
-	escaped_base = gnome_vfs_uri_extract_short_path_name (uri);
-	base = gnome_vfs_unescape_string (escaped_base, G_DIR_SEPARATOR_S);
-	g_free (escaped_base);
-	return base;
-}
-
 
 static gboolean
 unix_flags_from_vfs_mode (GnomeVFSOpenMode mode,

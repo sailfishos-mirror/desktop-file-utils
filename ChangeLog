@@ -1,5 +1,14 @@
 2003-06-06  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-method.c (do_set_file_info): make this return
+	NOT_PERMITTED rather than NOT_SUPPORTED
+	(fill_in_generic_dir_info): fill in the uid/gid fields
+	(fill_in_generic_file_info): ditto
+	(menu_method_get_info): fill in file_info->name
+	(do_check_same_fs): implement
+
+2003-06-06  Havoc Pennington  <hp@redhat.com>
+
 	* src/menu-tree-cache.c (reload_entry): mark cache valid again
 	after reloading stuff, makes things a whole lot faster.
 

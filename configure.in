@@ -2,7 +2,7 @@ AC_INIT(src/desktop_file.h)
 
 AM_CONFIG_HEADER(config.h)
 
-AM_INIT_AUTOMAKE(desktop-file-utils, 0.6)
+AM_INIT_AUTOMAKE(desktop-file-utils, 0.7)
 
 # Honor aclocal flags
 ACLOCAL="$ACLOCAL $ACLOCAL_FLAGS"

@@ -708,8 +708,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
               char *path;
 
               path = menu_node_get_content_as_path (iter);
-              
-              if (nm->app_dirs == NULL)
+
+              if (nm->app_dirs == NULL) /* if we haven't already loaded app dirs */
                 {
                   ed = entry_directory_load (path,
                                              ENTRY_LOAD_DESKTOPS | ENTRY_LOAD_LEGACY,
@@ -717,17 +717,17 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
                   if (ed != NULL)
                     app_dirs = g_slist_prepend (app_dirs, ed);
                 }
-              
-              if (nm->dir_dirs == NULL)
+
+              if (nm->dir_dirs == NULL) /* if we haven't already loaded dir dirs */
                 {
                   ed = entry_directory_load (path,
                                              ENTRY_LOAD_DIRECTORIES | ENTRY_LOAD_LEGACY,
                                              NULL);
                   if (ed != NULL)
                     dir_dirs = g_slist_prepend (dir_dirs, ed);
+                  
+                  g_free (path);
                 }
-
-              g_free (path);
             }
         }
           
@@ -756,6 +756,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
           /* The app_dirs are currently in the same order they
            * should be for the directory list
            */
+          nm->app_dirs = entry_directory_list_new ();
+          
           tmp = app_dirs;
           while (tmp != NULL)
             {
@@ -764,11 +766,11 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
               tmp = tmp->next;
             }
 
-          g_slist_free (tmp->data);
+          g_slist_free (app_dirs);
           
           /* Get all the EntryDirectory from parent nodes */
           parent = node->parent;
-          while (parent != NULL)
+          while (parent != NULL && parent->type != MENU_NODE_ROOT)
             {
               EntryDirectoryList *plist;
               
@@ -809,6 +811,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
           /* The dir_dirs are currently in the same order they
            * should be for the directory list
            */
+          nm->dir_dirs = entry_directory_list_new ();
+          
           tmp = dir_dirs;
           while (tmp != NULL)
             {
@@ -817,11 +821,11 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
               tmp = tmp->next;
             }
 
-          g_slist_free (tmp->data);
+          g_slist_free (dir_dirs);
           
           /* Get all the EntryDirectory from parent nodes */
           parent = node->parent;
-          while (parent != NULL)
+          while (parent != NULL && parent->type != MENU_NODE_ROOT)
             {
               EntryDirectoryList *plist;
               

@@ -1,5 +1,11 @@
 2003-05-02  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-layout.c (menu_node_menu_ensure_entry_lists): create
+	the node->app_dirs node->dir_dirs objects and account for
+	MENU_NODE_ROOT node type
+
+2003-05-02  Havoc Pennington  <hp@redhat.com>
+
 	* src/menu-process.c: use basedir stuff stored on root node 
 	instead of dealing with it in this file
 

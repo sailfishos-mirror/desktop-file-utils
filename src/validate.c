@@ -120,6 +120,65 @@ validate_strings (const char *value, const char *key, const char *locale, const 
       print_fatal ("Error in file %s, Invalid characters in value of key %s. Keys of type strings may contain ASCII characters except control characters\n", filename, k);
       g_free (k);
     }
+
+  /* Check that we end in a semicolon */
+  if (p != value)
+    {
+      --p;
+      if (*p != ';')
+        {
+          if (locale)
+            k = g_strdup_printf ("%s[%s]", key, locale);
+          else
+            k = g_strdup_printf ("%s", key);
+
+          print_fatal ("Error in file %s, key %s is a list of strings and must end in a semicolon.\n", filename, k);
+          g_free (k);
+        }
+    }
+}
+
+void
+validate_only_show_in (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
+{
+  char **vals;
+  int i;
+
+  validate_strings (value, key, locale, filename, df);
+
+  vals = g_strsplit (value, ";", G_MAXINT);
+
+  i = 0;
+  while (vals[i])
+    ++i;
+
+  if (i == 0)
+    {
+      g_strfreev (vals);
+      return;
+    }
+  
+  /* Drop the empty string g_strsplit leaves in the vector since
+   * our list of strings ends in ";"
+   */
+  --i;
+  g_free (vals[i]);
+  vals[i] = NULL;
+
+  i = 0;
+  while (vals[i])
+    {
+      if (strcmp (vals[i], "KDE") != 0 &&
+          g_ascii_strcasecmp (vals[i], "KDE") == 0)
+        print_fatal ("Error in file %s, OnlyShowIn value for KDE should be all caps KDE, not %s.\n", vals[i]);
+      else if (strcmp (vals[i], "GNOME") != 0 &&
+               g_ascii_strcasecmp (vals[i], "GNOME") == 0)
+        print_fatal ("Error in file %s, OnlyShowIn value for GNOME should be all caps GNOME, not %s.\n", vals[i]);
+      
+      ++i;
+    }
+
+  g_strfreev (vals);
 }
 
 void
@@ -287,7 +346,7 @@ struct {
   { "SortOrder", validate_strings /* FIXME: Also comma-separated */},
   { "URL", validate_string },
   { "Categories", validate_strings }, /* FIXME: should check that each category is known */
-  { "OnlyShowIn", validate_strings }
+  { "OnlyShowIn", validate_only_show_in }
 };
 
 void

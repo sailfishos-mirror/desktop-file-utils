@@ -26,6 +26,7 @@ static GSList *added_categories = NULL;
 static GSList *removed_categories = NULL;
 static GSList *added_only_show_in = NULL;
 static GSList *removed_only_show_in = NULL;
+static GSList *removed_keys = NULL;
 static mode_t permissions = 0644;
 
 static gboolean
@@ -167,6 +168,15 @@ process_one_file (const char *filename,
 
       tmp = tmp->next;
     }
+
+  /* Remove keys */
+  tmp = removed_keys;
+  while (tmp != NULL)
+    {
+      gnome_desktop_file_unset (df, NULL, tmp->data);
+      
+      tmp = tmp->next;
+    }
   
   if (!gnome_desktop_file_save (df, new_filename,
                                 permissions, err))
@@ -217,6 +227,7 @@ enum {
   OPTION_MODE,
   OPTION_COPY_NAME_TO_GENERIC_NAME,
   OPTION_COPY_GENERIC_NAME_TO_NAME,
+  OPTION_REMOVE_KEY,
   OPTION_LAST
 };
 
@@ -330,6 +341,15 @@ struct poptOption options[] = {
     NULL
   },
   {
+    "remove-key",
+    '\0',
+    POPT_ARG_STRING,
+    NULL,
+    OPTION_REMOVE_KEY,
+    N_("Specify a field to be removed from the desktop file."),
+    NULL
+  },
+  {
     NULL,
     '\0',
     0,
@@ -419,6 +439,12 @@ parse_options_callback (poptContext              ctx,
             exit (1);
           }
       }
+      break;
+
+    case OPTION_REMOVE_KEY:
+      str = poptGetOptArg (ctx);
+      removed_keys = g_slist_prepend (removed_keys,
+                                      g_strdup (str));
       break;
       
     default:

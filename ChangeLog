@@ -1,5 +1,15 @@
 2002-06-21  Havoc Pennington  <hp@redhat.com>
 
+	* src/validate.c: validate that KDE/GNOME are spelled all-caps in 
+	OnlyShowIn
+
+	* src/install.c: add a --remove-key option to remove bogus keys
+
+	* src/validate.c (validate_strings): check that string list keys
+	end in a semicolon
+
+2002-06-21  Havoc Pennington  <hp@redhat.com>
+
 	* src/install.c (process_one_file): implement
 	--copy-name-to-generic-name, --copy-generic-name-to-name
 

@@ -1,3 +1,18 @@
+2004-07-15  Ray Strode  <rstrode@redhat.com>
+
+	* src/Makefile.am: add update-desktop-database
+
+	* src/eggdesktopentries.[ch]
+	  src/eggdirfuncs.[ch]
+	  src/eggintl.h: new desktop file parser
+
+	* src/gen-compat-tree.c 
+	  src/install.c:  #include <locale.h>
+
+	* src/update-desktop-database.c: creates 
+	  cache of mime type / desktop-file-id 
+	  associations.
+
 2004-04-19  Mark McLoughlin  <mark@skynet.ie>
 
 	* configure.in,

@@ -22,7 +22,7 @@ endif
 ## even when not doing "make check"
 noinst_PROGRAMS=$(TESTS)
 
-bin_PROGRAMS=desktop-file-validate desktop-file-install desktop-menu-tool
+bin_PROGRAMS=desktop-file-validate desktop-file-install desktop-menu-tool update-desktop-database
 noinst_LTLIBRARIES = libmenu_sources.la
 
 menu_sources=					\
@@ -76,10 +76,19 @@ dfu_test_SOURCES=				\
 	dfu-test.h				\
 	dfu-test.c
 
+update_desktop_database_SOURCES=				\
+	update-desktop-database.c				\
+	eggdesktopentries.c				\
+	eggdesktopentries.h				\
+	eggdirfuncs.c				\
+	eggdirfuncs.h
+
 desktop_file_validate_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
 desktop_file_install_LDADD= $(DESKTOP_FILE_UTILS_LIBS)
 desktop_menu_tool_LDADD=$(DESKTOP_FILE_UTILS_LIBS) libmenu_sources.la
 dfu_test_LDADD=$(DESKTOP_FILE_UTILS_LIBS) libmenu_sources.la
+update_desktop_database_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
+
 
 EXTRA_DIST =			\
 	$(dfu_test_SOURCES)	\

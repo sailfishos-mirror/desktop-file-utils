@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <locale.h>
 
 #define _(x) gettext ((x))
 #define N_(x) x

@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <stdio.h>
+#include <locale.h>
 
 #define _(x) gettext ((x))
 #define N_(x) x

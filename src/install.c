@@ -29,6 +29,8 @@ static GSList *removed_categories = NULL;
 static GSList *added_only_show_in = NULL;
 static GSList *removed_only_show_in = NULL;
 static GSList *removed_keys = NULL;
+static GSList *added_mime_types = NULL;
+static GSList *removed_mime_types = NULL;
 static mode_t permissions = 0644;
 
 static gboolean
@@ -184,6 +186,28 @@ process_one_file (const char *filename,
       
       tmp = tmp->next;
     }
+
+  /* Add mime-types */
+  tmp = added_mime_types;
+  while (tmp != NULL)
+    {
+      gnome_desktop_file_merge_string_into_list (df, NULL, "MimeType",
+                                                 NULL, tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Remove mime-types */
+  tmp = removed_mime_types;
+  while (tmp != NULL)
+    {
+      gnome_desktop_file_remove_string_from_list (df, NULL, "MimeType",
+                                                  NULL, tmp->data);
+
+      tmp = tmp->next;
+    }
+
+
   
   if (!gnome_desktop_file_save (df, new_filename,
                                 permissions, err))
@@ -244,6 +268,8 @@ enum {
   OPTION_COPY_NAME_TO_GENERIC_NAME,
   OPTION_COPY_GENERIC_NAME_TO_NAME,
   OPTION_REMOVE_KEY,
+  OPTION_ADD_MIME_TYPE,
+  OPTION_REMOVE_MIME_TYPE,
   OPTION_REBUILD_MIME_INFO_CACHE,
   OPTION_LAST
 };
@@ -367,6 +393,24 @@ struct poptOption options[] = {
     NULL
   },
   {
+    "add-mime-type",
+    '\0',
+    POPT_ARG_STRING,
+    NULL,
+    OPTION_ADD_MIME_TYPE,
+    N_("Specify a mime-type to be added to the MimeType field."),
+    NULL
+  },
+  {
+    "remove-mime-type",
+    '\0',
+    POPT_ARG_STRING,
+    NULL,
+    OPTION_REMOVE_MIME_TYPE,
+    N_("Specify a mime-type to be removed from the MimeType field."),
+    NULL
+  },
+  {
     "rebuild-mime-info-cache",
     '\0',
     POPT_ARG_NONE,
@@ -471,6 +515,18 @@ parse_options_callback (poptContext              ctx,
       str = poptGetOptArg (ctx);
       removed_keys = g_slist_prepend (removed_keys,
                                       g_strdup (str));
+      break;
+
+    case OPTION_ADD_MIME_TYPE:
+      str = poptGetOptArg (ctx);
+      added_mime_types = g_slist_prepend (added_mime_types,
+                                          g_strdup (str));
+      break;
+
+    case OPTION_REMOVE_MIME_TYPE:
+      str = poptGetOptArg (ctx);
+      removed_mime_types = g_slist_prepend (removed_mime_types,
+                                            g_strdup (str));
       break;
       
     default:

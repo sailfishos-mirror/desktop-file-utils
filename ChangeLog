@@ -1,6 +1,15 @@
 2004-07-21  Ray Strode  <rstrode@redhat.com>
 
 	* src/install.c: (main)
+	(process_one_file):
+	(parse_options_callback): 
+	add new --add-mime-type and --remove-mime-type options
+	to make it easy to dynamically add and remove mime
+	types from a desktop file.
+
+2004-07-21  Ray Strode  <rstrode@redhat.com>
+
+	* src/install.c: (main)
 	(rebuild_cache),
 	(process_one_file):
 	add new --rebuild-mime-info-cache option

@@ -703,11 +703,14 @@ struct DesktopEntryTree
   TreeNode   *root;
 };
 
-static void  build_tree     (DesktopEntryTree *tree);
-static void  tree_node_free (TreeNode         *node);
-static char* path_to_node   (TreeNode         *node);
-static char* path_to_entry  (TreeNode         *parent,
-                             Entry            *entry);
+static void  build_tree               (DesktopEntryTree *tree);
+static void  tree_node_free           (TreeNode         *node);
+static char* path_for_node            (TreeNode         *node);
+static char* path_for_entry           (TreeNode         *parent,
+                                       Entry            *entry);
+static char* localized_path_for_entry (TreeNode         *parent,
+                                       Entry            *entry);
+static char* localized_path_for_node  (TreeNode         *node);
 
 DesktopEntryTree*
 desktop_entry_tree_load (const char  *filename,
@@ -1187,15 +1190,19 @@ foreach_dir (DesktopEntryTree            *tree,
 {
   GSList *tmp;
   char *p;
+  DesktopEntryForeachInfo info;
 
-  p = path_to_node (dir);
+  p = path_for_node (dir);
+
+  info.is_dir = TRUE;
+  info.depth = depth;
+  info.menu_id = dir->name; /* FIXME ! */
+  info.menu_basename = dir->name;
+  info.menu_fullpath = p;
+  info.filesystem_path_to_entry = dir->dir_entry ? entry_get_absolute_path (dir->dir_entry) : NULL;
+  info.menu_fullpath_localized = localized_path_for_node (dir);
   
-  if (! (* func) (tree,
-                  TRUE,
-                  depth,
-                  dir->name,
-                  p,
-                  dir->dir_entry ? entry_get_absolute_path (dir->dir_entry) : NULL,
+  if (! (* func) (tree, &info,
                   user_data))
     {
       g_free (p);
@@ -1208,14 +1215,17 @@ foreach_dir (DesktopEntryTree            *tree,
     {
       Entry *e = tmp->data;
 
-      p = path_to_entry (dir, e);
+      p = path_for_entry (dir, e);
+
+      info.is_dir = FALSE;
+      info.depth = depth + 1;
+      info.menu_id = entry_get_relative_path (e); /* FIXME */
+      info.menu_basename = entry_get_name (e);
+      info.menu_fullpath = p;
+      info.filesystem_path_to_entry = entry_get_absolute_path (e);
+      info.menu_fullpath_localized = localized_path_for_entry (dir, e);
       
-      if (! (* func) (tree,
-                      FALSE,
-                      depth + 1,
-                      entry_get_name (e),
-                      p,
-                      entry_get_absolute_path (e),
+      if (! (* func) (tree, &info,
                       user_data))
         {
           g_free (p);
@@ -1635,13 +1645,9 @@ typedef struct
 } PrintData;
 
 static gboolean
-foreach_print (DesktopEntryTree *tree,
-               gboolean          is_dir,
-               int               depth,
-               const char       *menu_basename,
-               const char       *menu_fullpath,
-               const char       *filesystem_path_to_entry,
-               void             *data)
+foreach_print (DesktopEntryTree        *tree,
+               DesktopEntryForeachInfo *info,
+               void                    *data)
 {
 #define MAX_FIELDS 3
   PrintData *pd = data;
@@ -1653,7 +1659,7 @@ foreach_print (DesktopEntryTree *tree,
   char *generic_name;
   char *comment;
 
-  g_assert (menu_basename != NULL);
+  g_assert (info->menu_basename != NULL);
   
   pd = data;
 
@@ -1663,13 +1669,13 @@ foreach_print (DesktopEntryTree *tree,
   
   df = NULL;
   error = NULL;
-  if (filesystem_path_to_entry != NULL)
+  if (info->filesystem_path_to_entry != NULL)
     {
-      df = gnome_desktop_file_load (filesystem_path_to_entry, &error);
+      df = gnome_desktop_file_load (info->filesystem_path_to_entry, &error);
       if (df == NULL)
         {
           g_printerr ("Warning: failed to load desktop file \"%s\": %s\n",
-                      filesystem_path_to_entry, error->message);
+                      info->filesystem_path_to_entry, error->message);
           g_error_free (error);
         }
       g_assert (error == NULL);
@@ -1694,7 +1700,7 @@ foreach_print (DesktopEntryTree *tree,
     }
 
   if (name == NULL)
-    name = g_strdup (menu_basename);
+    name = g_strdup (info->menu_basename);
 
   if (generic_name == NULL)
     generic_name = g_strdup (_("<missing GenericName>"));    
@@ -1704,7 +1710,7 @@ foreach_print (DesktopEntryTree *tree,
 
   if (!(pd->flags & DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS))
     {
-      i = depth;
+      i = info->depth;
       while (i > 0)
         {
           fputc (' ', stdout);
@@ -1755,13 +1761,13 @@ foreach_print (DesktopEntryTree *tree,
 
   if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS)
     {
-      if (!is_dir)
+      if (!info->is_dir)
         {
           char *dirname;
           char *p;
           char *s;
           
-          dirname = g_path_get_dirname (menu_fullpath);
+          dirname = g_path_get_dirname (info->menu_fullpath_localized);
 
           /* We have to kill the root name, since the test suite
            * doesn't want to see the root name
@@ -1778,8 +1784,8 @@ foreach_print (DesktopEntryTree *tree,
           
           g_print ("%s\t%s\t%s\n",
                    s,
-                   menu_basename,
-                   filesystem_path_to_entry);
+                   info->menu_basename,
+                   info->filesystem_path_to_entry);
 
           g_free (s);
         }
@@ -2237,8 +2243,8 @@ compare_node_names_func (const void *a,
 }
 
 static char*
-path_to_entry (TreeNode *parent,
-               Entry    *entry)
+path_for_entry (TreeNode *parent,
+                Entry    *entry)
 {
   GString *str;
   TreeNode *iter;
@@ -2258,7 +2264,7 @@ path_to_entry (TreeNode *parent,
 }
 
 static char*
-path_to_node (TreeNode *node)
+path_for_node (TreeNode *node)
 {
   GString *str;
   TreeNode *iter;
@@ -2269,6 +2275,102 @@ path_to_node (TreeNode *node)
   while (iter != NULL)
     {
       g_string_prepend (str, iter->name);
+      g_string_prepend (str, "/");
+      iter = iter->parent;
+    }
+
+  return g_string_free (str, FALSE);
+}
+
+static char*
+inefficient_get_localized_name (const char *desktop_file)
+{
+  GnomeDesktopFile *df;
+  GError *error;
+  char *name;
+  
+  df = NULL;
+  error = NULL;
+
+  df = gnome_desktop_file_load (desktop_file, &error);
+  if (df == NULL)
+    {
+      g_printerr ("Warning: failed to load desktop file \"%s\": %s\n",
+                  desktop_file, error->message);
+      g_error_free (error);
+      return NULL;
+    }
+
+  g_assert (error == NULL);
+  g_assert (df != NULL);
+
+  gnome_desktop_file_get_locale_string (df,
+                                        NULL,
+                                        "Name",
+                                        &name);
+#if 0
+  gnome_desktop_file_get_locale_string (df,
+                                        NULL,
+                                        "GenericName",
+                                        &generic_name);
+  gnome_desktop_file_get_locale_string (df,
+                                        NULL,
+                                        "Comment",
+                                        &comment);
+#endif
+  gnome_desktop_file_free (df);
+  df = NULL;
+
+  return name;
+}
+
+static char*
+localized_path_for_entry (TreeNode         *parent,
+                          Entry            *entry)
+{
+  GString *str;
+  char *n;
+  char *p;
+
+  n = inefficient_get_localized_name (entry_get_absolute_path (entry));
+  if (n == NULL)
+    str = g_string_new (entry_get_name (entry));
+  else
+    str = g_string_new (n);
+  g_string_prepend (str, "/");
+
+  g_free (n);
+
+  p = localized_path_for_node (parent);
+  g_string_prepend (str, p);
+  g_free (p);
+
+  return g_string_free (str, FALSE);
+}
+
+static char*
+localized_path_for_node (TreeNode         *node)
+{
+  GString *str;
+  TreeNode *iter;
+  
+  str = g_string_new (NULL);
+  
+  iter = node;
+  while (iter != NULL)
+    {
+      char *n;
+      
+      n = NULL;
+      if (iter->dir_entry != NULL)
+        n = inefficient_get_localized_name (entry_get_absolute_path (iter->dir_entry));
+      if (n == NULL)
+        g_string_prepend (str, iter->name);
+      else
+        g_string_prepend (str, n);
+
+      g_free (n);
+
       g_string_prepend (str, "/");
       iter = iter->parent;
     }
@@ -2337,7 +2439,7 @@ recursive_diff (TreeNode  *old_node,
           *changes_p =
             g_slist_prepend (*changes_p,
                              change_new_adopting_path (DESKTOP_ENTRY_TREE_FILE_DELETED,
-                                                       path_to_entry (old_node, old)));
+                                                       path_for_entry (old_node, old)));
           old_iter = old_iter->next;
         }
       else if (c > 0)
@@ -2354,7 +2456,7 @@ recursive_diff (TreeNode  *old_node,
           *changes_p =
             g_slist_prepend (*changes_p,
                              change_new_adopting_path (DESKTOP_ENTRY_TREE_FILE_CREATED,
-                                                       path_to_entry (new_node, new)));          
+                                                       path_for_entry (new_node, new)));          
 
           new_iter = new_iter->next;
         }
@@ -2413,7 +2515,7 @@ recursive_diff (TreeNode  *old_node,
           *changes_p =
             g_slist_prepend (*changes_p,
                              change_new_adopting_path (DESKTOP_ENTRY_TREE_DIR_DELETED,
-                                                       path_to_node (old)));
+                                                       path_for_node (old)));
 
           /* Send deletions for all the files/dirs underneath old */
           recursive_diff (old, NULL, changes_p);
@@ -2434,7 +2536,7 @@ recursive_diff (TreeNode  *old_node,
           *changes_p =
             g_slist_prepend (*changes_p,
                              change_new_adopting_path (DESKTOP_ENTRY_TREE_DIR_CREATED,
-                                                       path_to_node (new)));
+                                                       path_for_node (new)));
 
           /* Send creations for all files/dirs underneath new */
           recursive_diff (NULL, new, changes_p);

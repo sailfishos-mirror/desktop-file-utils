@@ -1,3 +1,17 @@
+2003-10-23  Havoc Pennington  <hp@redhat.com>
+
+        Localizing the menu paths gets us another 2 passes with the test
+	suite.
+	
+	* src/menu-process.c (localized_path_for_entry): new function
+	(foreach_print): localize the paths that are outputted with
+	--test-results as the test suite wants that.
+
+2003-10-21  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.h (struct DesktopEntryForeachInfo): consolidate
+	all the args to the foreach function into a struct
+
 2003-10-20  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-process.c (tree_node_from_menu_node): change to alloc

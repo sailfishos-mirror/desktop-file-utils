@@ -23,6 +23,7 @@
 #define MENU_PROCESS_H
 
 #include <glib.h>
+#include "desktop_file.h"
 
 typedef struct DesktopEntryTree     DesktopEntryTree;
 typedef struct DesktopEntryTreeNode DesktopEntryTreeNode;
@@ -34,13 +35,20 @@ typedef enum
   PATH_RESOLUTION_IS_ENTRY
 } PathResolution;
 
-typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree *tree,
-                                                  gboolean          is_dir,
-                                                  int               depth,
-                                                  const char       *menu_basename,
-                                                  const char       *menu_fullpath,
-                                                  const char       *filesystem_path_to_entry,
-                                                  void             *data);
+typedef struct
+{
+  gboolean is_dir;
+  int depth;
+  const char *menu_id;
+  const char *menu_basename;
+  const char *menu_fullpath;
+  const char *menu_fullpath_localized;
+  const char *filesystem_path_to_entry;
+} DesktopEntryForeachInfo;
+
+typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree        *tree,
+                                                  DesktopEntryForeachInfo *info,
+                                                  void                    *data);
 
 typedef enum
 {

@@ -1,5 +1,10 @@
 2002-08-06  Havoc Pennington  <hp@redhat.com>
 
+	* src/vfolder-query.c (symlink_recurse_nodes): add another
+	unlink() for .directory files
+
+2002-08-06  Havoc Pennington  <hp@redhat.com>
+
 	* src/vfolder-query.c (symlink_recurse_nodes): unlink symlink
 	before trying to create it again, to avoid errors and be sure 
 	we replace the old link.

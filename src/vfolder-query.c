@@ -345,6 +345,8 @@ symlink_recurse_nodes (GNode      *node,
             g_assert (origin);
 
             l = g_build_filename (full_dirname, ".directory", NULL);
+
+            unlink (l);
             
             if (symlink (origin, l) < 0)
               {

@@ -1728,7 +1728,7 @@ entry_new_desktop_from_file (EntryCache *cache,
   str = NULL;
   len = 0;
   err = NULL;
-  if (!g_file_get_contents (filename, &str, &len, NULL))
+  if (!g_file_get_contents (filename, &str, &len, &err))
     {
       menu_verbose ("Could not get contents of \"%s\": %s\n",
                     filename, err->message);

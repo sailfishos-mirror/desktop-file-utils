@@ -1,3 +1,8 @@
+2004-03-21  Dan Williams  <dcbw@redhat.com>
+
+	* src/menu-entries.c: Don't crash when a .desktop
+	file is a symlink pointing to a nonexistent file.
+	
 2004-03-01  Mark McLoughlin  <mark@skynet.ie>
 
 	* configure.in: Version 0.5.

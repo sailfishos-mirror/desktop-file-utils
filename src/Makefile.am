@@ -51,6 +51,8 @@ desktop_menu_tool_SOURCES=			\
 	menu-parser.h				\
 	menu-process.c				\
 	menu-process.h				\
+	menu-tree-cache.c			\
+	menu-tree-cache.h			\
 	validate.c				\
 	validate.h				\
 	vfolder-parser.c			\

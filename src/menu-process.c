@@ -478,6 +478,15 @@ desktop_entry_tree_load (const char  *filename,
 }
 
 void
+desktop_entry_tree_ref (DesktopEntryTree *tree)
+{
+  g_return_if_fail (tree != NULL);
+  g_return_if_fail (tree->refcount > 0);
+
+  tree->refcount += 1;
+}
+
+void
 desktop_entry_tree_unref (DesktopEntryTree *tree)
 {
   g_return_if_fail (tree != NULL);

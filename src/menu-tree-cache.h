@@ -29,6 +29,7 @@ DesktopEntryTreeCache* desktop_entry_tree_cache_new    (void);
 void                   desktop_entry_tree_cache_ref    (DesktopEntryTreeCache *cache);
 void                   desktop_entry_tree_cache_unref  (DesktopEntryTreeCache *cache);
 DesktopEntryTree*      desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
-                                                        const char            *menu_file);
+                                                        const char            *menu_file,
+                                                        GError               **error);
 
 #endif /* MENU_TREE_CACHE_H */

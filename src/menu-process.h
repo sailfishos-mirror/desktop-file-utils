@@ -46,6 +46,7 @@ typedef enum
 DesktopEntryTree* desktop_entry_tree_load  (const char  *filename,
                                             const char  *only_show_in_desktop,
                                             GError     **error);
+void              desktop_entry_tree_ref   (DesktopEntryTree *tree);
 void              desktop_entry_tree_unref (DesktopEntryTree *tree);
 
 /* These don't return references; the DesktopEntryTree is just immutable. */

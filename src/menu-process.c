@@ -1,7 +1,7 @@
 /* Tree of desktop entries */
 
 /*
- * Copyright (C) 2002 Red Hat, Inc.
+ * Copyright (C) 2002, 2003 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -392,13 +392,16 @@ menu_node_strip_duplicate_children (MenuNode *node)
     }
 }
 
-typedef struct
+struct DesktopEntryTreeNode
 {
   char   *name;
   Entry  *dir_entry; /* may be NULL, name should be used as user-visible dirname */
   GSList *entries;
   GSList *subdirs;
-} TreeNode;
+};
+
+/* make a shorter name */
+typedef struct DesktopEntryTreeNode TreeNode;
 
 struct DesktopEntryTree
 {
@@ -539,11 +542,99 @@ tree_node_find_subdir (TreeNode   *node,
   return iter;
 }
 
+gboolean
+desktop_entry_tree_get_node (DesktopEntryTree      *tree,
+                             const char            *path,
+                             DesktopEntryTreeNode **node)
+{
+  *node = NULL;
+  
+  build_tree (tree);
+  if (tree->root == NULL)
+    return FALSE;
+
+  *node = tree_node_find_subdir (tree->root, path);
+  return *node != NULL;
+}
+
 void
-desktop_entry_tree_list_subdirs (DesktopEntryTree *tree,
-                                 const char       *parent_dir,
-                                 char           ***subdirs,
-                                 int              *n_subdirs)
+desktop_entry_tree_list_subdirs (DesktopEntryTree       *tree,
+                                 DesktopEntryTreeNode   *parent_node,
+                                 DesktopEntryTreeNode ***subdirs,
+                                 int                    *n_subdirs)
+{
+  int len;
+  GSList *tmp;
+  int i;
+
+  g_return_if_fail (parent_node != NULL);
+  g_return_if_fail (subdirs != NULL);
+  
+  *subdirs = NULL;
+  if (n_subdirs)
+    *n_subdirs = 0;
+  
+  build_tree (tree);
+  if (tree->root == NULL)
+    return;
+  
+  len = g_slist_length (parent_node->subdirs);
+  *subdirs = g_new0 (DesktopEntryTreeNode*, len + 1);
+
+  i = 0;
+  tmp = parent_node->subdirs;
+  while (tmp != NULL)
+    {
+      TreeNode *sub = tmp->data;
+
+      (*subdirs)[i] = sub;
+
+      ++i;
+      tmp = tmp->next;
+    }
+
+  if (n_subdirs)
+    *n_subdirs = len;
+}
+
+void
+desktop_entry_tree_list_entries (DesktopEntryTree     *tree,
+                                 DesktopEntryTreeNode *parent_node,
+                                 char               ***entries,
+                                 int                  *n_entries)
+{
+  int len;
+  int i;
+  GSList *tmp;
+  
+  *entries = NULL;
+  if (n_entries)
+    *n_entries = 0;
+
+  len = g_slist_length (parent_node->entries);
+  *entries = g_new0 (char*, len + 1);
+
+  i = 0;
+  tmp = parent_node->entries;
+  while (tmp != NULL)
+    {
+      Entry *e = tmp->data;
+
+      (*entries)[i] = g_strdup (entry_get_absolute_path (e));
+
+      ++i;
+      tmp = tmp->next;
+    }
+
+  if (n_entries)
+    *n_entries = len;
+}
+
+void
+desktop_entry_tree_list_subdirs_by_name (DesktopEntryTree *tree,
+                                         const char       *parent_dir,
+                                         char           ***subdirs,
+                                         int              *n_subdirs)
 {
   TreeNode *dir;
   int len;
@@ -582,10 +673,10 @@ desktop_entry_tree_list_subdirs (DesktopEntryTree *tree,
 }
 
 void
-desktop_entry_tree_list_entries (DesktopEntryTree *tree,
-                                 const char       *parent_dir,
-                                 char           ***entries,
-                                 int              *n_entries)
+desktop_entry_tree_list_entries_by_name (DesktopEntryTree *tree,
+                                         const char       *parent_dir,
+                                         char           ***entries,
+                                         int              *n_entries)
 {
   TreeNode *dir;
   int len;
@@ -624,23 +715,22 @@ desktop_entry_tree_list_entries (DesktopEntryTree *tree,
 }
 
 char*
-desktop_entry_tree_get_directory (DesktopEntryTree *tree,
-                                  const char       *dirname)
+desktop_entry_tree_node_get_directory (DesktopEntryTreeNode *node)
 {
-  TreeNode *dir;
-  
-  build_tree (tree);
-  if (tree->root == NULL)
-    return NULL;
+  g_return_val_if_fail (node != NULL, NULL);
 
-  dir = tree_node_find_subdir (tree->root, dirname);
-  if (dir == NULL)
-    return NULL;
-
-  if (dir->dir_entry)
-    return g_strdup (entry_get_absolute_path (dir->dir_entry));
+  if (node->dir_entry)
+    return g_strdup (entry_get_absolute_path (node->dir_entry));
   else
     return NULL;
+}
+
+const char*
+desktop_entry_tree_node_get_name (DesktopEntryTreeNode *node)
+{
+  g_return_val_if_fail (node != NULL, NULL);
+  
+  return node->name;
 }
 
 static gboolean

@@ -24,7 +24,8 @@
 
 #include <glib.h>
 
-typedef struct DesktopEntryTree DesktopEntryTree;
+typedef struct DesktopEntryTree     DesktopEntryTree;
+typedef struct DesktopEntryTreeNode DesktopEntryTreeNode;
 
 typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree *tree,
                                                   gboolean          is_dir,
@@ -47,18 +48,24 @@ DesktopEntryTree* desktop_entry_tree_load  (const char  *filename,
                                             GError     **error);
 void              desktop_entry_tree_unref (DesktopEntryTree *tree);
 
-void desktop_entry_tree_list_subdirs (DesktopEntryTree *tree,
-                                      const char       *parent_dir,
-                                      char           ***subdirs,
-                                      int              *n_subdirs);
-void desktop_entry_tree_list_entries (DesktopEntryTree *tree,
-                                      const char       *parent_dir,
-                                      char           ***entries,
-                                      int              *n_entries);
+/* These don't return references; the DesktopEntryTree is just immutable. */
+gboolean desktop_entry_tree_get_node     (DesktopEntryTree       *tree,
+                                          const char             *path,
+                                          DesktopEntryTreeNode  **node);
+void     desktop_entry_tree_list_subdirs (DesktopEntryTree       *tree,
+                                          DesktopEntryTreeNode   *parent_node,
+                                          DesktopEntryTreeNode ***subdirs,
+                                          int                    *n_subdirs);
+void     desktop_entry_tree_list_entries (DesktopEntryTree       *tree,
+                                          DesktopEntryTreeNode   *parent_node,
+                                          char                 ***entries,
+                                          int                    *n_entries);
 
 /* returns a copy of .directory file absolute path */
-char* desktop_entry_tree_get_directory (DesktopEntryTree            *tree,
-                                        const char                  *dirname);
+char*       desktop_entry_tree_node_get_directory (DesktopEntryTreeNode *node);
+/* returns relative name of the subdir */
+const char* desktop_entry_tree_node_get_name      (DesktopEntryTreeNode *node);
+
 
 void desktop_entry_tree_foreach           (DesktopEntryTree            *tree,
                                            const char                  *parent_dir,

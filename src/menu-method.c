@@ -20,12 +20,46 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#include <string.h>
+
 #include <config.h>
 
 #include <libgnomevfs/gnome-vfs-method.h>
 #include <libgnomevfs/gnome-vfs-module-shared.h>
 #include <libgnomevfs/gnome-vfs-module.h>
 #include <libgnomevfs/gnome-vfs-utils.h>
+
+#include "menu-tree-cache.h"
+
+static DesktopEntryTree*
+find_menu_file (const char *name)
+{
+        
+
+        
+
+}
+
+static GnomeVFSResult
+convert_uri (GnomeVFSURI       *uri,
+             DesktopEntryTree **entry_tree,
+             char             **path)
+{
+        const char *scheme;
+        char *unescaped;
+        const char *menu_file;
+        
+        scheme = gnome_vfs_uri_get_scheme (uri);
+        
+        if (strcmp (scheme, "applications") == 0) {
+
+
+        }
+
+        unescaped = gnome_vfs_unescape_string (uri->text, "");
+        
+        g_free (unescaped);
+}
 
 static GnomeVFSResult
 do_open (GnomeVFSMethod        *method,
@@ -35,7 +69,7 @@ do_open (GnomeVFSMethod        *method,
          GnomeVFSContext       *context)
 {
         
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -48,7 +82,7 @@ do_create (GnomeVFSMethod        *method,
            GnomeVFSContext       *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -57,7 +91,7 @@ do_close (GnomeVFSMethod       *method,
           GnomeVFSContext      *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -69,7 +103,7 @@ do_read (GnomeVFSMethod       *method,
          GnomeVFSContext      *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -81,7 +115,7 @@ do_write (GnomeVFSMethod       *method,
           GnomeVFSContext      *context)
 {
 
-        return GNOME_VFS_OK;
+        return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -92,7 +126,7 @@ do_seek (GnomeVFSMethod       *method,
          GnomeVFSContext      *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -101,7 +135,7 @@ do_tell (GnomeVFSMethod       *method,
          GnomeVFSFileOffset   *offset_return)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 
@@ -112,7 +146,7 @@ do_truncate_handle (GnomeVFSMethod       *method,
                     GnomeVFSContext      *context)
 {
 
-        return GNOME_VFS_OK;
+        return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -122,7 +156,7 @@ do_truncate (GnomeVFSMethod   *method,
              GnomeVFSContext  *context)
 {
 
-        return GNOME_VFS_OK;
+        return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -133,7 +167,7 @@ do_open_directory (GnomeVFSMethod           *method,
                    GnomeVFSContext          *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -142,7 +176,7 @@ do_close_directory (GnomeVFSMethod       *method,
 		    GnomeVFSContext      *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -152,7 +186,7 @@ do_read_directory (GnomeVFSMethod       *method,
 		   GnomeVFSContext      *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -163,7 +197,7 @@ do_get_file_info (GnomeVFSMethod         *method,
 		  GnomeVFSContext        *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -173,7 +207,7 @@ do_get_file_info_from_handle (GnomeVFSMethod         *method,
 			      GnomeVFSFileInfoOptions options,
 			      GnomeVFSContext        *context)
 {
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static gboolean
@@ -192,7 +226,7 @@ do_make_directory (GnomeVFSMethod  *method,
 		   GnomeVFSContext *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -201,7 +235,7 @@ do_remove_directory (GnomeVFSMethod  *method,
 		     GnomeVFSContext *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -215,7 +249,7 @@ do_find_directory (GnomeVFSMethod           *method,
 		   GnomeVFSContext          *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -226,7 +260,7 @@ do_move (GnomeVFSMethod  *method,
 	 GnomeVFSContext *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -235,7 +269,7 @@ do_unlink (GnomeVFSMethod  *method,
 	   GnomeVFSContext *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -245,7 +279,7 @@ do_create_symbolic_link (GnomeVFSMethod  *method,
 			 GnomeVFSContext *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -256,7 +290,7 @@ do_check_same_fs (GnomeVFSMethod  *method,
                   GnomeVFSContext *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -267,7 +301,7 @@ do_set_file_info (GnomeVFSMethod          *method,
                   GnomeVFSContext         *context)
 {
 
-	return GNOME_VFS_OK;
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult

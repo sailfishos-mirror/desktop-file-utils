@@ -1,5 +1,6 @@
 
 INCLUDES=$(DESKTOP_FILE_UTILS_CFLAGS) -DDATADIR="\"$(datadir)\"" $(VFS_CFLAGS)	\
+	-DSYSCONFDIR="\"$(sysconfdir)\""					\
 	-D_FILE_OFFSET_BITS=64							\
 	-D_GNU_SOURCE								\
 	-D_LARGEFILE64_SOURCE							\

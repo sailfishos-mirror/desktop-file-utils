@@ -1,3 +1,8 @@
+2003-05-13  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-tree-cache.c: new file to store cache of
+	DesktopEntryTree
+
 2003-05-12  Havoc Pennington  <hp@redhat.com>
 
 	* src/validate.c: fix a bunch of compiler warnings

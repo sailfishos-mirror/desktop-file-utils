@@ -24,7 +24,7 @@
 
 #include <glib.h>
 
-typedef struct _DesktopEntryTree DesktopEntryTree;
+typedef struct DesktopEntryTree DesktopEntryTree;
 
 typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree *tree,
                                                   gboolean          is_dir,
@@ -43,6 +43,7 @@ typedef enum
 } DesktopEntryTreePrintFlags;
 
 DesktopEntryTree* desktop_entry_tree_load  (const char  *filename,
+                                            const char  *only_show_in_desktop,
                                             GError     **error);
 void              desktop_entry_tree_unref (DesktopEntryTree *tree);
 
@@ -58,18 +59,17 @@ void desktop_entry_tree_list_entries (DesktopEntryTree *tree,
 /* returns a copy of .directory file absolute path */
 char* desktop_entry_tree_get_directory (DesktopEntryTree            *tree,
                                         const char                  *dirname);
-void  desktop_entry_tree_foreach       (DesktopEntryTree            *tree,
-                                        const char                  *parent_dir,
-                                        DesktopEntryTreeForeachFunc  func,
-                                        void                        *user_data);
 
-void desktop_entry_tree_print             (DesktopEntryTree           *tree,
-                                           DesktopEntryTreePrintFlags  flags);
-void desktop_entry_tree_write_symlink_dir (DesktopEntryTree           *tree,
-                                           const char                 *dirname);
-void desktop_entry_tree_dump_desktop_list (DesktopEntryTree           *tree);
+void desktop_entry_tree_foreach           (DesktopEntryTree            *tree,
+                                           const char                  *parent_dir,
+                                           DesktopEntryTreeForeachFunc  func,
+                                           void                        *user_data);
+void desktop_entry_tree_print             (DesktopEntryTree            *tree,
+                                           DesktopEntryTreePrintFlags   flags);
+void desktop_entry_tree_write_symlink_dir (DesktopEntryTree            *tree,
+                                           const char                  *dirname);
+void desktop_entry_tree_dump_desktop_list (DesktopEntryTree            *tree);
 
 void menu_set_verbose_queries      (gboolean    value);
-void menu_set_only_show_in_desktop (const char *desktop_name);
 
 #endif /* MENU_PROCESS_H */

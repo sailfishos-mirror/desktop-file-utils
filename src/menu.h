@@ -22,8 +22,8 @@
 #ifndef MENU_H
 #define MENU_H
 
-typedef struct _MenuTree     MenuTree;
-typedef struct _MenuTreeNode MenuTreeNode;
+typedef struct MenuTree     MenuTree;
+typedef struct MenuTreeNode MenuTreeNode;
 
 typedef enum
 {

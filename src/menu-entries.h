@@ -25,6 +25,11 @@
 #include <glib.h>
 #include "menu-layout.h"
 
+/* This API is about actually loading directories full of .desktop
+ * files and the .desktop/.directory files themselves. It also has
+ * EntrySet for manipulating sets of these files.
+ */
+
 typedef enum
 {
   ENTRY_ERROR_BAD_PATH,
@@ -48,10 +53,19 @@ typedef enum
   ENTRY_LOAD_DIRECTORIES = 1 << 2
 } EntryLoadFlags;
 
-/* returns a new ref, never has Legacy category, relative path is entry basename */
-Entry* entry_get_by_absolute_path (const char *path);
+/* The EntryCache is sort of a global context containing all cached data etc. */
+EntryCache *entry_cache_new                   (void);
+void        entry_cache_ref                   (EntryCache *cache);
+void        entry_cache_unref                 (EntryCache *cache);
+void        entry_cache_set_only_show_in_name (EntryCache *cache,
+                                               const char *name);
 
-EntryDirectory* entry_directory_load  (const char     *path,
+/* returns a new ref, never has Legacy category, relative path is entry basename */
+Entry* entry_get_by_absolute_path (EntryCache *cache,
+                                   const char *path);
+
+EntryDirectory* entry_directory_load  (EntryCache     *cache,
+                                       const char     *path,
                                        EntryLoadFlags  flags,
                                        GError        **err);
 void            entry_directory_ref   (EntryDirectory *dir);
@@ -107,8 +121,6 @@ const char* entry_get_relative_path (Entry      *entry);
 const char* entry_get_name          (Entry      *entry);
 gboolean    entry_has_category      (Entry      *entry,
                                      const char *category);
-
-void entry_set_only_show_in_name (const char *name);
 
 EntrySet* entry_set_new          (void);
 void      entry_set_ref          (EntrySet *set);

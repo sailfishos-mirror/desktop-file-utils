@@ -1,3 +1,15 @@
+2003-05-09  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.c: refactor this to use MenuCache and
+	EntryCache and as a result make more sense.
+
+	* src/menu-layout.c: add MenuCache object; don't track
+	is_file_root; don't try to autodrop cache when a menu 
+	node is unref'd (didn't work anyway).
+
+	* src/menu-entries.c: invent an EntryCache object to get rid of
+	global variables
+	
 2003-05-09  Havoc Pennington  <hp@pobox.com>
 
 	* src/desktop_file.c: make @ a valid byte in locale names, patch

@@ -31,7 +31,9 @@
 #define _(x) gettext ((x))
 #define N_(x) x
 
-static void menu_node_resolve_files (MenuNode   *node);
+static void menu_node_resolve_files (MenuCache  *menu_cache,
+                                     EntryCache *entry_cache,
+                                     MenuNode   *node);
 
 static MenuNode*
 find_menu_child (MenuNode *node)
@@ -46,7 +48,9 @@ find_menu_child (MenuNode *node)
 }
 
 static void
-merge_resolved_copy_of_children (MenuNode   *where,
+merge_resolved_copy_of_children (MenuCache  *menu_cache,
+                                 EntryCache *entry_cache,
+                                 MenuNode   *where,
                                  MenuNode   *from)
 {
   MenuNode *from_child;
@@ -56,7 +60,7 @@ merge_resolved_copy_of_children (MenuNode   *where,
   
   /* Copy and file-resolve the node */
   from_copy = menu_node_deep_copy (from);
-  menu_node_resolve_files (from_copy);
+  menu_node_resolve_files (menu_cache, entry_cache, from_copy);
   
   insert_after = where;
 
@@ -102,7 +106,9 @@ merge_resolved_copy_of_children (MenuNode   *where,
 }
 
 static void
-menu_node_resolve_files (MenuNode   *node)
+menu_node_resolve_files (MenuCache  *menu_cache,
+                         EntryCache *entry_cache,
+                         MenuNode   *node)
 {
   MenuNode *child;
 
@@ -112,6 +118,7 @@ menu_node_resolve_files (MenuNode   *node)
    * files, we'll just get really hosed and eat all the RAM
    * we can find
    */
+  menu_node_root_set_entry_cache (node, entry_cache);
   
   child = menu_node_get_children (node);
 
@@ -137,11 +144,14 @@ menu_node_resolve_files (MenuNode   *node)
 
             menu_verbose ("Merging file \"%s\"\n", filename);
             
-            to_merge = menu_node_get_for_file (filename, NULL); /* missing files ignored */
+            to_merge = menu_cache_get_menu_for_file (menu_cache,
+                                                     filename,
+                                                     NULL); /* missing files ignored */
             if (to_merge == NULL)
               goto done;
             
-            merge_resolved_copy_of_children (child, to_merge);
+            merge_resolved_copy_of_children (menu_cache, entry_cache,
+                                             child, to_merge);
 
             menu_node_unref (to_merge);
 
@@ -390,14 +400,16 @@ typedef struct
   GSList *subdirs;
 } TreeNode;
 
-struct _DesktopEntryTree
+struct DesktopEntryTree
 {
+  int refcount;
   char *menu_file;
   char *menu_file_dir;
-  MenuNode *orig_node;
-  MenuNode *resolved_node;
-  TreeNode *root;
-  int refcount;
+  EntryCache *entry_cache;
+  MenuCache  *menu_cache;
+  MenuNode   *orig_node;
+  MenuNode   *resolved_node;
+  TreeNode   *root;
 };
 
 static void build_tree     (DesktopEntryTree *tree);
@@ -405,13 +417,16 @@ static void tree_node_free (TreeNode *node);
 
 DesktopEntryTree*
 desktop_entry_tree_load (const char  *filename,
+                         const char  *only_show_in_desktop,
                          GError     **error)
 {
   DesktopEntryTree *tree;
   MenuNode *orig_node;
   MenuNode *resolved_node;
   char *canonical;
-
+  EntryCache *entry_cache;
+  MenuCache *menu_cache;
+  
   canonical = g_canonicalize_file_name (filename);
   if (canonical == NULL)
     {
@@ -421,27 +436,38 @@ desktop_entry_tree_load (const char  *filename,
                    filename);
       return NULL;
     }
+
+  menu_cache = menu_cache_new ();
   
-  orig_node = menu_node_get_for_canonical_file (canonical,
-                                                error);
-  if (orig_node == NULL)
+  orig_node = menu_cache_get_menu_for_canonical_file (menu_cache,
+                                                      canonical,
+                                                      error);
+  if (orig_node == NULL)    
     {
+      menu_cache_unref (menu_cache);
       g_free (canonical);
       return NULL;
     }
 
+  entry_cache = entry_cache_new ();
+  if (only_show_in_desktop)
+    entry_cache_set_only_show_in_name (entry_cache,
+                                       only_show_in_desktop);
+  
   resolved_node = menu_node_deep_copy (orig_node);
-  menu_node_resolve_files (resolved_node);
+  menu_node_resolve_files (menu_cache, entry_cache, resolved_node);
 
   menu_node_strip_duplicate_children (resolved_node);
 
   tree = g_new0 (DesktopEntryTree, 1);
+  tree->refcount = 1;
+  tree->menu_cache = menu_cache;
+  tree->entry_cache = entry_cache;
   tree->menu_file = canonical;
   tree->menu_file_dir = g_path_get_dirname (canonical);
   tree->orig_node = orig_node;
   tree->resolved_node = resolved_node;
   tree->root = NULL;
-  tree->refcount = 1;
   
   return tree;
 }
@@ -462,6 +488,8 @@ desktop_entry_tree_unref (DesktopEntryTree *tree)
       menu_node_unref (tree->resolved_node);
       if (tree->root)
         tree_node_free (tree->root);
+      entry_cache_unref (tree->entry_cache);
+      menu_cache_unref (tree->menu_cache);
       g_free (tree);
     }
 }
@@ -1187,15 +1215,6 @@ desktop_entry_tree_dump_desktop_list (DesktopEntryTree *tree)
 {
 
 
-}
-
-static char *only_show_in_desktop = NULL;
-void
-menu_set_only_show_in_desktop (const char *desktop_name)
-{
-  g_free (only_show_in_desktop);
-  only_show_in_desktop = g_strdup (desktop_name);
-  entry_set_only_show_in_name (desktop_name);
 }
 
 void

@@ -24,11 +24,12 @@
 
 #include <glib.h>
 
-typedef struct _MenuNode MenuNode;
-typedef struct _Entry Entry;
-typedef struct _EntryDirectory EntryDirectory;
-typedef struct _EntryDirectoryList EntryDirectoryList;
-typedef struct _EntrySet EntrySet;
+typedef struct MenuNode MenuNode;
+typedef struct Entry Entry;
+typedef struct EntryDirectory EntryDirectory;
+typedef struct EntryDirectoryList EntryDirectoryList;
+typedef struct EntrySet EntrySet;
+typedef struct EntryCache EntryCache;
 
 typedef enum
 {
@@ -86,7 +87,6 @@ void menu_node_steal  (MenuNode *node);
 
 MenuNodeType menu_node_get_type            (MenuNode *node);
 const char*  menu_node_get_content         (MenuNode *node);
-const char*  menu_node_get_filename        (MenuNode *node);
 const char*  menu_node_get_basedir         (MenuNode *node);
 char*        menu_node_get_content_as_path (MenuNode *node);
 
@@ -100,9 +100,20 @@ void        menu_node_legacy_dir_set_prefix (MenuNode   *node,
 const char* menu_node_root_get_basedir      (MenuNode   *node);
 void        menu_node_root_set_basedir      (MenuNode   *node,
                                              const char *dirname);
+void        menu_node_root_set_entry_cache  (MenuNode   *node,
+                                             EntryCache *entry_cache);
 
-EntryDirectoryList* menu_node_menu_get_app_entries (MenuNode *node);
+EntryDirectoryList* menu_node_menu_get_app_entries       (MenuNode *node);
 EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
+
+typedef struct MenuCache MenuCache;
+
+MenuCache* menu_cache_new   (void);
+void       menu_cache_ref   (MenuCache *cache);
+void       menu_cache_unref (MenuCache *cache);
+
+const char* menu_cache_get_filename_for_node (MenuCache *cache,
+                                              MenuNode  *node);
 
 /* Return the pristine menu node for the file.
  * Changing this node will change what gets written
@@ -111,12 +122,15 @@ EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
  * the menu node for each file is cached while references
  * are outstanding.
  */
-MenuNode* menu_node_get_for_file           (const char  *filename,
-                                            GError     **error);
-MenuNode* menu_node_get_for_canonical_file (const char  *filename,
-                                            GError     **error);
-gboolean  menu_node_sync_for_file          (const char  *filename,
-                                            GError     **error);
+MenuNode* menu_cache_get_menu_for_file           (MenuCache   *cache,
+                                                  const char  *filename,
+                                                  GError     **error);
+MenuNode* menu_cache_get_menu_for_canonical_file (MenuCache   *cache,
+                                                  const char  *filename,
+                                                  GError     **error);
+gboolean  menu_cache_sync_for_file               (MenuCache   *cache,
+                                                  const char  *filename,
+                                                  GError     **error);
 
 /* random utility function */
 #ifdef DFU_MENU_DISABLE_VERBOSE

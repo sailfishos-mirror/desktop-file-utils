@@ -32,18 +32,18 @@
 #define _(x) gettext ((x))
 #define N_(x) x
 
-typedef struct _MenuFile MenuFile;
-typedef struct _MenuNodeMenu MenuNodeMenu;
-typedef struct _MenuNodeRoot MenuNodeRoot;
-typedef struct _MenuNodeLegacyDir MenuNodeLegacyDir;
+typedef struct MenuFile MenuFile;
+typedef struct MenuNodeMenu MenuNodeMenu;
+typedef struct MenuNodeRoot MenuNodeRoot;
+typedef struct MenuNodeLegacyDir MenuNodeLegacyDir;
 
-struct _MenuFile
+struct MenuFile
 {
   char *filename;
   MenuNode *root;
 };
 
-struct _MenuNode
+struct MenuNode
 {
   /* Node lists are circular, for length-one lists
    * prev/next point back to the node itself.
@@ -55,18 +55,18 @@ struct _MenuNode
 
   char *content;
 
-  guint is_file_root : 1;
   guint refcount : 20;
   guint type : 7;
 };
 
-struct _MenuNodeRoot
+struct MenuNodeRoot
 {
-  MenuNode node;
-  char    *basedir;
+  MenuNode    node;
+  char       *basedir;
+  EntryCache *entry_cache;
 };
 
-struct _MenuNodeMenu
+struct MenuNodeMenu
 {
   MenuNode node;
   MenuNode *name_node; /* cache of the <Name> node */
@@ -74,7 +74,7 @@ struct _MenuNodeMenu
   EntryDirectoryList *dir_dirs;
 };
 
-struct _MenuNodeLegacyDir
+struct MenuNodeLegacyDir
 {
   MenuNode node;
   char *prefix;
@@ -85,10 +85,6 @@ struct _MenuNodeLegacyDir
 ((node)->parent == NULL) ?                              \
   NULL : (((node)->next == (node)->parent->children) ?  \
           NULL : (node)->next)
-
-static MenuFile* find_file_by_name (const char *filename);
-static MenuFile* find_file_by_node (MenuNode *node);
-static void      drop_menu_file    (MenuFile *file);
 
 void
 menu_node_ref (MenuNode *node)
@@ -108,15 +104,6 @@ menu_node_unref (MenuNode *node)
     {
       MenuNode *iter;
       MenuNode *next;
-
-      if (node->is_file_root)
-        {
-          MenuFile *f;
-
-          f = find_file_by_node (node);
-          if (f != NULL)
-            drop_menu_file (f);
-        }
       
       /* unref children */
       iter = node->children;
@@ -150,6 +137,8 @@ menu_node_unref (MenuNode *node)
         {
           MenuNodeRoot *nr = (MenuNodeRoot*) node;
 
+          if (nr->entry_cache)
+            entry_cache_unref (nr->entry_cache); 
           g_free (nr->basedir);
         }
       
@@ -219,8 +208,6 @@ menu_node_copy_one (MenuNode *node)
   copy = menu_node_new (node->type);
 
   copy->content = g_strdup (node->content);
-
-  /* don't copy is_file_root */
 
   if (copy->type == MENU_NODE_ROOT)
     ((MenuNodeRoot*)copy)->basedir =
@@ -536,18 +523,6 @@ menu_node_set_content   (MenuNode   *node,
 }
 
 const char*
-menu_node_get_filename (MenuNode *node)
-{
-  MenuFile *file;
-
-  file = find_file_by_node (node);
-  if (file)
-    return file->filename;
-  else
-    return NULL;
-}
-
-const char*
 menu_node_menu_get_name (MenuNode *node)
 {
   MenuNodeMenu *nm;
@@ -644,6 +619,26 @@ menu_node_root_set_basedir (MenuNode   *node,
   menu_verbose ("Set basedir \"%s\"\n", nr->basedir ? nr->basedir : "(none)");
 }
 
+void
+menu_node_root_set_entry_cache (MenuNode   *node,
+                                EntryCache *entry_cache)
+{
+  MenuNodeRoot *nr;
+  
+  g_return_if_fail (node->type == MENU_NODE_ROOT);
+
+  nr = (MenuNodeRoot*) node;
+
+  if (nr->entry_cache == entry_cache)
+    return;
+
+  if (nr->entry_cache)
+    entry_cache_unref (nr->entry_cache);
+  nr->entry_cache = entry_cache;
+  if (nr->entry_cache)
+    entry_cache_ref (nr->entry_cache);
+}
+
 static void
 menu_node_menu_ensure_entry_lists (MenuNode *node)
 {
@@ -653,6 +648,7 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
   GSList *app_dirs;
   GSList *dir_dirs;
   GSList *tmp;
+  MenuNodeRoot *root;
   
   g_return_if_fail (node->type == MENU_NODE_MENU);
 
@@ -660,6 +656,13 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
 
   if (nm->app_dirs && nm->dir_dirs)
     return;
+
+  root = (MenuNodeRoot*) menu_node_get_root (node);
+  g_assert (root->node.type == MENU_NODE_ROOT);
+  g_assert (root->entry_cache != NULL); /* can't get entry lists
+                                         * unless an entry cache has been
+                                         * set.
+                                         */
   
   app_dirs = NULL;
   dir_dirs = NULL;
@@ -683,7 +686,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
 
               path = menu_node_get_content_as_path (iter);
               
-              ed = entry_directory_load (path,
+              ed = entry_directory_load (root->entry_cache,
+                                         path,
                                          ENTRY_LOAD_DESKTOPS, NULL);
               if (ed != NULL)
                 app_dirs = g_slist_prepend (app_dirs, ed);
@@ -696,7 +700,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
 
               path = menu_node_get_content_as_path (iter);
               
-              ed = entry_directory_load (path,
+              ed = entry_directory_load (root->entry_cache,
+                                         path,
                                          ENTRY_LOAD_DIRECTORIES, NULL);
               if (ed != NULL)
                 dir_dirs = g_slist_prepend (dir_dirs, ed);
@@ -711,7 +716,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
 
               if (nm->app_dirs == NULL) /* if we haven't already loaded app dirs */
                 {
-                  ed = entry_directory_load (path,
+                  ed = entry_directory_load (root->entry_cache,
+                                             path,
                                              ENTRY_LOAD_DESKTOPS | ENTRY_LOAD_LEGACY,
                                              NULL);
                   if (ed != NULL)
@@ -720,7 +726,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
 
               if (nm->dir_dirs == NULL) /* if we haven't already loaded dir dirs */
                 {
-                  ed = entry_directory_load (path,
+                  ed = entry_directory_load (root->entry_cache,
+                                             path,
                                              ENTRY_LOAD_DIRECTORIES | ENTRY_LOAD_LEGACY,
                                              NULL);
                   if (ed != NULL)
@@ -873,14 +880,59 @@ menu_node_menu_get_directory_entries (MenuNode *node)
   return nm->dir_dirs;
 }
 
-static GSList *menu_files = NULL;
+/*
+ * The menu cache
+ */
+struct MenuCache
+{
+  int         refcount;
+  GSList     *menu_files;
+};
+
+MenuCache*
+menu_cache_new (void)
+{
+  MenuCache *cache;
+
+  cache = g_new0 (MenuCache, 1);
+
+  cache->refcount = 1;
+  
+  return cache;
+}
+
+void
+menu_cache_ref (MenuCache *cache)
+{
+  g_return_if_fail (cache != NULL);
+  g_return_if_fail (cache->refcount > 0);
+
+  cache->refcount += 1;
+}
+
+void
+menu_cache_unref (MenuCache *cache)
+{
+  g_return_if_fail (cache != NULL);
+  g_return_if_fail (cache->refcount > 0);
+
+  cache->refcount -= 1;
+
+  if (cache->refcount == 0)
+    {
+      /* FIXME free cache->menu_files */
+
+      g_free (cache);
+    }
+}
 
 static MenuFile*
-find_file_by_name (const char *filename)
+find_file_by_name (MenuCache  *cache,
+                   const char *filename)
 {
   GSList *tmp;
 
-  tmp = menu_files;
+  tmp = cache->menu_files;
   while (tmp != NULL)
     {
       MenuFile *f = tmp->data;
@@ -893,7 +945,8 @@ find_file_by_name (const char *filename)
 }
 
 static MenuFile*
-find_file_by_node (MenuNode *node)
+find_file_by_node (MenuCache *cache,
+                   MenuNode  *node)
 {
   GSList *tmp;
   MenuNode *root;
@@ -901,7 +954,7 @@ find_file_by_node (MenuNode *node)
   root = menu_node_get_root (node);
   g_assert (root->type == MENU_NODE_ROOT);
   
-  tmp = menu_files;
+  tmp = cache->menu_files;
   while (tmp != NULL)
     {
       MenuFile *f = tmp->data;
@@ -913,31 +966,43 @@ find_file_by_node (MenuNode *node)
   return NULL;
 }
 
-static void
-drop_menu_file (MenuFile *file)
+const char*
+menu_cache_get_filename_for_node (MenuCache *cache,
+                                  MenuNode  *node)
 {
-  menu_files = g_slist_remove (menu_files, file);
+  MenuFile *file;
 
-  /* we should be called from the unref() of the root node */
-  g_assert (file->root->refcount == 0);
+  file = find_file_by_node (cache, node);
+  if (file)
+    return file->filename;
+  else
+    return NULL;
+}
+
+static void
+drop_menu_file (MenuCache *cache,
+                MenuFile  *file)
+{
+  cache->menu_files = g_slist_remove (cache->menu_files, file);
+
+  menu_node_unref (file->root);
   
   g_free (file->filename);
   g_free (file);
 }
 
 MenuNode*
-menu_node_get_for_canonical_file  (const char *canonical,
-                                   GError    **error)
+menu_cache_get_menu_for_canonical_file (MenuCache  *cache,
+                                        const char *canonical,
+                                        GError    **error)
 {
   MenuFile *file;
   MenuNode *node;
   
-  file = find_file_by_name (canonical);
+  file = find_file_by_name (cache, canonical);
   
   if (file)
     {
-      g_assert (file->root->is_file_root);
-      
       menu_node_ref (file->root);
       return file->root;
     }
@@ -945,13 +1010,15 @@ menu_node_get_for_canonical_file  (const char *canonical,
   node = menu_load (canonical, error);
   if (node == NULL)
     return NULL; /* FIXME - cache failures? */
+
+  g_assert (node->type == MENU_NODE_ROOT);
   
   file = g_new0 (MenuFile, 1);
 
   file->filename = g_strdup (canonical);
   file->root = node;
 
-  menu_files = g_slist_prepend (menu_files, file);
+  cache->menu_files = g_slist_prepend (cache->menu_files, file);
 
   menu_node_ref (file->root);
   
@@ -959,8 +1026,9 @@ menu_node_get_for_canonical_file  (const char *canonical,
 }
 
 MenuNode*
-menu_node_get_for_file  (const char *filename,
-                         GError    **error)
+menu_cache_get_menu_for_file (MenuCache  *cache,
+                              const char *filename,
+                              GError    **error)
 {
   char *canonical;
   MenuNode *node;
@@ -975,8 +1043,9 @@ menu_node_get_for_file  (const char *filename,
       return NULL;
     }
   
-  node = menu_node_get_for_canonical_file (canonical,
-                                           error);
+  node = menu_cache_get_menu_for_canonical_file (cache,
+                                                 canonical,
+                                                 error);
 
   g_free (canonical);
 
@@ -984,8 +1053,9 @@ menu_node_get_for_file  (const char *filename,
 }
 
 gboolean
-menu_node_sync_for_file (const char  *filename,
-                         GError     **error)
+menu_cache_sync_for_file (MenuCache   *cache,
+                          const char  *filename,
+                          GError     **error)
 {
   MenuFile *file;
   char *canonical;
@@ -1000,7 +1070,7 @@ menu_node_sync_for_file (const char  *filename,
       return FALSE;
     }
   
-  file = find_file_by_name (canonical);
+  file = find_file_by_name (cache, canonical);
 
   g_free (canonical);
   

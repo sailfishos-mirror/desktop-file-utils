@@ -244,10 +244,7 @@ main (int argc, char **argv)
     }
 
   if (only_show_in_desktop)
-    {
-      vfolder_set_only_show_in_desktop (only_show_in_desktop);
-      menu_set_only_show_in_desktop (only_show_in_desktop);
-    }
+    vfolder_set_only_show_in_desktop (only_show_in_desktop);
   
   args = poptGetArgs (ctx);
 
@@ -434,7 +431,7 @@ process_one_file (const char *filename)
       DesktopEntryTree *tree;
 
       err = NULL;
-      tree = desktop_entry_tree_load (filename, &err);
+      tree = desktop_entry_tree_load (filename, only_show_in_desktop, &err);
       if (err)
         {
           g_printerr (_("Failed to load %s: %s\n"),
@@ -458,6 +455,11 @@ process_one_file (const char *filename)
       
       if (target_dir)
         desktop_entry_tree_write_symlink_dir (tree, target_dir);
+
+#if 0
+      /* for memprof */
+      sleep (30);
+#endif
       
       desktop_entry_tree_unref (tree);      
     }
@@ -469,4 +471,9 @@ process_one_file (const char *filename)
     }
 
   g_free (root_element);
+
+#if 0
+  /* for memprof */
+  sleep (30);
+#endif
 }

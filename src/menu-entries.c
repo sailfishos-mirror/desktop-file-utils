@@ -34,9 +34,9 @@
 #define N_(x) x
 
 
-typedef struct _CachedDir CachedDir;
+typedef struct CachedDir CachedDir;
 
-struct _Entry
+struct Entry
 {
   char *relative_path;
   char *absolute_path;
@@ -47,7 +47,7 @@ struct _Entry
   guint refcount : 24;
 };
 
-struct _EntryDirectory
+struct EntryDirectory
 {
   char *absolute_path;
   CachedDir *root;
@@ -55,26 +55,19 @@ struct _EntryDirectory
   guint refcount : 24;
 };
 
-static char *only_show_in_name = NULL;
+static void        entry_cache_clear_unused (EntryCache  *cache);
 
-static CachedDir*  cached_dir_load          (const char  *canonical_path,
+static CachedDir*  cached_dir_load          (EntryCache  *cache,
+                                             const char  *canonical_path,
                                              GError     **err);
 static void        cached_dir_mark_used     (CachedDir   *dir);
 static void        cached_dir_mark_unused   (CachedDir   *dir);
 static GSList*     cached_dir_get_subdirs   (CachedDir   *dir);
 static GSList*     cached_dir_get_entries   (CachedDir   *dir);
 static const char* cached_dir_get_name      (CachedDir   *dir);
-static void        cache_clear_unused       (void);
 static Entry*      cached_dir_find_entry    (CachedDir   *dir,
                                              const char  *name);
 static int         cached_dir_count_entries (CachedDir   *dir);
-
-void
-entry_set_only_show_in_name (const char *name)
-{
-  g_free (only_show_in_name);
-  only_show_in_name = g_strdup (name);
-}
 
 static Entry*
 entry_new (EntryType   type,
@@ -179,7 +172,8 @@ entry_has_category (Entry      *entry,
 }
 
 Entry*
-entry_get_by_absolute_path (const char *path)
+entry_get_by_absolute_path (EntryCache *cache,
+                            const char *path)
 {
   CachedDir* dir;
   char *dirname;
@@ -201,7 +195,7 @@ entry_get_by_absolute_path (const char *path)
 
   basename = g_path_get_dirname (path);
   
-  dir = cached_dir_load (dirname, NULL);
+  dir = cached_dir_load (cache, dirname, NULL);
 
   if (dir != NULL)
     retval = cached_dir_find_entry (dir, basename);
@@ -215,7 +209,8 @@ entry_get_by_absolute_path (const char *path)
 }
 
 EntryDirectory*
-entry_directory_load  (const char     *path,
+entry_directory_load  (EntryCache     *cache,
+                       const char     *path,
                        EntryLoadFlags  flags,
                        GError        **err)
 {
@@ -237,7 +232,7 @@ entry_directory_load  (const char     *path,
       return NULL;
     }
 
-  cd = cached_dir_load (canonical, err);
+  cd = cached_dir_load (cache, canonical, err);
   if (cd == NULL)
     {
       g_free (canonical);
@@ -536,7 +531,7 @@ entry_directory_get_by_category (EntryDirectory *ed,
                            (char*) category);
 }
 
-struct _EntryDirectoryList
+struct EntryDirectoryList
 {
   int refcount;
   GSList *dirs;
@@ -828,7 +823,7 @@ entry_directory_list_invert_set (EntryDirectoryList *list,
   entry_set_unref (inverse);
 }
 
-struct _EntrySet
+struct EntrySet
 {
   int refcount;
   GHashTable *hash;
@@ -1114,8 +1109,9 @@ entry_set_swap_contents (EntrySet *a,
  * Big global cache of desktop entries
  */
 
-struct _CachedDir
+struct CachedDir
 {
+  EntryCache *cache;
   CachedDir *parent;
   char *name;
   GSList *entries;
@@ -1124,21 +1120,29 @@ struct _CachedDir
   guint use_count : 27;
 };
 
-static CachedDir *root_dir = NULL;
+struct EntryCache
+{
+  int refcount;
+  CachedDir *root_dir;
+  char *only_show_in_name;
+};
 
-static CachedDir* cached_dir_ensure         (const char  *canonical);
+static CachedDir* cached_dir_ensure         (EntryCache  *cache,
+                                             const char  *canonical);
 static void       cached_dir_scan_recursive (CachedDir   *dir,
                                              const char  *path);
 static void       cached_dir_free           (CachedDir *dir);
 
 
 static CachedDir*
-cached_dir_new (const char *name)
+cached_dir_new (EntryCache *cache,
+                const char *name)
 {
   CachedDir *dir;
 
   dir = g_new0 (CachedDir, 1);
 
+  dir->cache = cache;
   dir->name = g_strdup (name);
 
   menu_verbose ("New cached dir \"%s\"\n", name);
@@ -1193,12 +1197,10 @@ cached_dir_free (CachedDir *dir)
 }
 
 static void
-ensure_root_dir (void)
+ensure_root_dir (EntryCache *cache)
 {
-  if (root_dir == NULL)
-    {
-      root_dir = cached_dir_new ("/");
-    }
+  if (cache->root_dir == NULL)
+    cache->root_dir = cached_dir_new (cache, "/");
 }
 
 static CachedDir*
@@ -1276,12 +1278,16 @@ cached_dir_find_entry (CachedDir   *dir,
 }
 
 static CachedDir*
-cached_dir_ensure (const char *canonical)
+cached_dir_ensure (EntryCache *cache,
+                   const char *canonical)
 {
   char **split;
   int i;
   CachedDir *dir;
 
+  g_return_val_if_fail (cache != NULL, NULL);
+  g_return_val_if_fail (canonical != NULL, NULL);
+  
   menu_verbose ("Ensuring cached dir \"%s\"\n", canonical);
   
   /* canonicalize_file_name doesn't allow empty strings */
@@ -1289,9 +1295,9 @@ cached_dir_ensure (const char *canonical)
   
   split = g_strsplit (canonical + 1, "/", -1);
 
-  ensure_root_dir ();
+  ensure_root_dir (cache);
   
-  dir = root_dir;
+  dir = cache->root_dir;
 
   /* empty strings probably mean a trailing '/' */
   i = 0;
@@ -1303,7 +1309,7 @@ cached_dir_ensure (const char *canonical)
 
       if (cd == NULL)
         {
-          cd = cached_dir_new (split[i]);
+          cd = cached_dir_new (cache, split[i]);
           dir->subdirs = g_slist_prepend (dir->subdirs, cd);
           cd->parent = dir;
         }
@@ -1319,7 +1325,8 @@ cached_dir_ensure (const char *canonical)
 }
 
 static CachedDir*
-cached_dir_load (const char *canonical_path,
+cached_dir_load (EntryCache *cache,
+                 const char *canonical_path,
                  GError    **err)
 {
   CachedDir *retval;
@@ -1328,7 +1335,8 @@ cached_dir_load (const char *canonical_path,
 
   retval = NULL;
 
-  retval = cached_dir_ensure (canonical_path);
+  retval = cached_dir_ensure (cache,
+                              canonical_path);
   g_assert (retval != NULL);
 
   cached_dir_scan_recursive (retval, canonical_path);
@@ -1524,7 +1532,8 @@ string_list_from_desktop_value (const char *raw)
 }
 
 static Entry*
-entry_new_desktop_from_file (const char *filename,
+entry_new_desktop_from_file (EntryCache *cache,
+                             const char *filename,
                              const char *basename)
 {
   char *str;
@@ -1544,7 +1553,7 @@ entry_new_desktop_from_file (const char *filename,
       return NULL;
     }
 
-  if (only_show_in_name)
+  if (cache->only_show_in_name)
     {
       char *onlyshowin;
       gboolean show;
@@ -1564,7 +1573,7 @@ entry_new_desktop_from_file (const char *filename,
           i = 0;
           while (split[i] != NULL)
             {
-              if (strcmp (split[i], only_show_in_name) == 0)
+              if (strcmp (split[i], cache->only_show_in_name) == 0)
                 {
                   show = TRUE;
                   break;
@@ -1622,6 +1631,12 @@ load_entries_recursive (CachedDir  *dir,
   guint len;
   guint subdir_len;
 
+  /* dir non-NULL means we have a dir but haven't loaded
+   * entries for it, parent non-NULL means create the dir
+   * below this parent
+   */
+  g_return_if_fail (parent != NULL || dir != NULL);
+  
   if (dir && dir->have_read_entries)
     return;
 
@@ -1638,11 +1653,15 @@ load_entries_recursive (CachedDir  *dir,
 
   if (dir == NULL)
     {
-      dir = cached_dir_new (basename);
+      g_assert (parent != NULL);
+      
+      dir = cached_dir_new (parent->cache, basename);
       dir->parent = parent;
       parent->subdirs = g_slist_prepend (parent->subdirs,
                                          dir);
     }
+
+  g_assert (dir != NULL);
   
   /* Blow away all current entries */  
   cached_dir_clear_all_children (dir);
@@ -1682,7 +1701,8 @@ load_entries_recursive (CachedDir  *dir,
         {
           Entry *e;
 
-          e = entry_new_desktop_from_file (fullpath, dent->d_name);
+          e = entry_new_desktop_from_file (dir->cache,
+                                           fullpath, dent->d_name);
 
           menu_verbose ("Tried loading \"%s\": %s\n",
                         fullpath, e ? "ok" : "failed");
@@ -1870,15 +1890,15 @@ recursive_free_unused (CachedDir *dir)
 }
 
 static void
-cache_clear_unused (void)
+entry_cache_clear_unused (EntryCache *cache)
 {
-  if (root_dir != NULL)
+  if (cache->root_dir != NULL)
     {
-      recursive_free_unused (root_dir);
-      if (root_dir->use_count == 0)
+      recursive_free_unused (cache->root_dir);
+      if (cache->root_dir->use_count == 0)
         {
-          cached_dir_free (root_dir);
-          root_dir = NULL;
+          cached_dir_free (cache->root_dir);
+          cache->root_dir = NULL;
         }
     }
 }
@@ -1944,3 +1964,52 @@ cached_dir_count_entries (CachedDir *dir)
 
   return count;
 }
+
+EntryCache*
+entry_cache_new (void)
+{
+  EntryCache *cache;
+
+  cache = g_new0 (EntryCache, 1);
+  cache->refcount = 1;
+  
+  return cache;
+}
+
+void
+entry_cache_ref (EntryCache *cache)
+{
+  g_return_if_fail (cache != NULL);
+  g_return_if_fail (cache->refcount > 0);
+
+  cache->refcount += 1;
+}
+
+void
+entry_cache_unref (EntryCache *cache)
+{
+  g_return_if_fail (cache != NULL);
+  g_return_if_fail (cache->refcount > 0);
+
+  cache->refcount -= 1;
+  if (cache->refcount == 0)
+    {
+      g_free (cache->only_show_in_name);
+      g_free (cache);
+    }
+}
+
+void
+entry_cache_set_only_show_in_name (EntryCache *cache,
+                                   const char *name)
+{
+  g_return_if_fail (cache != NULL);
+
+  /* Really you're screwed if you do this after stuff has
+   * already been loaded...
+   */
+  
+  g_free (cache->only_show_in_name);
+  cache->only_show_in_name = g_strdup (name);
+}
+

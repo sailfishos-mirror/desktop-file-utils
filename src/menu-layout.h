@@ -55,7 +55,9 @@ typedef enum
   MENU_NODE_LEGACY_DIR,
   MENU_NODE_MOVE,
   MENU_NODE_OLD,
-  MENU_NODE_NEW
+  MENU_NODE_NEW,
+  MENU_NODE_DELETED,
+  MENU_NODE_NOT_DELETED
 } MenuNodeType;
 
 void         menu_node_ref          (MenuNode *node);

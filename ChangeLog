@@ -1,3 +1,9 @@
+2002-12-21  Havoc Pennington  <hp@pobox.com>
+
+	* test/run-test.c (main): allow specifying expected name of
+	directory nodes, and allow quoting names and entry filenames so we
+	can test for handling of whitespace etc.
+
 2002-12-15  Havoc Pennington  <hp@pobox.com>
 
 	* src/vfolder-query.c (my_str_has_suffix): rename since glib 2.2

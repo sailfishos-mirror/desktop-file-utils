@@ -99,6 +99,42 @@ skip_spaces (const char *str,
   return (char*) p;
 }
 
+static char*
+dup_quoted_string (const char *str, 
+                   char      **end)
+{
+  const char *p = str;
+  GString *gstr = g_string_new (NULL);
+  gboolean in_quotes = FALSE;
+
+  while (*p)
+    {
+      if (in_quotes)
+        {
+          if (*p == '\'')
+            in_quotes = FALSE;
+          else
+            g_string_append_c (gstr, *p);
+        }
+      else
+        {
+          if (*p == '\'')
+            in_quotes = TRUE;
+          else if (*p == ' ' || *p == '\n' || *p == '\t')
+            break; /* end on whitespace if not quoted */
+          else
+            g_string_append_c (gstr, *p);
+        }
+      
+      ++p;
+    }
+
+  if (end)
+    *end = (char*) p;
+
+  return g_string_free (gstr, FALSE);
+}
+
 typedef enum
 {
   NODE_DIRECTORY,
@@ -110,6 +146,7 @@ typedef struct
   NodeType type;
   char *filename;
   int depth;
+  char *name; /* directories only */
 } Node;
 
 static Node*
@@ -121,8 +158,12 @@ node_new (NodeType    type,
 
   n = g_new0 (Node, 1);
   n->type = type;
-  n->filename = g_strdup (filename);
+  if (filename)
+    n->filename = dup_quoted_string (filename, NULL);
+  else
+    n->filename = NULL;
   n->depth = depth;
+  n->name = NULL;
   
   return n;
 }
@@ -154,9 +195,20 @@ create_node (char       *line,
           eol = find_eol (p);
           if (*p && eol)
             {
+              char *name;
+
+              /* DIRECTORY Applications /usr/share/blah/Applications.directory */
+              
               *eol = '\0';
+              
+              name = dup_quoted_string (p, &p); 
+              p = skip_spaces (p, NULL);
+              
               *node = node_new (NODE_DIRECTORY,
-                                p, depth);
+                                *p != '\0' ? p : NULL,
+                                depth);
+              (*node)->name = name;
+              
               p = eol + 1;
             }
           else
@@ -200,7 +252,7 @@ create_node (char       *line,
         }
     }
 
-  if (*node)
+  if (*node && (*node)->filename)
     {
       char *f = g_build_filename (pwd, (*node)->filename, NULL);
       g_free ((*node)->filename);
@@ -348,10 +400,10 @@ parse_test (const char *test_file,
 
 
 static GNode *
-g_node_sort_merge (GNode     *l1, 
-		   GNode     *l2,
-		   GFunc     compare_func,
-		   gpointer  user_data)
+g_node_sort_merge (GNode           *l1, 
+		   GNode           *l2,
+                   GCompareDataFunc compare_func,
+		   gpointer         user_data)
 {
   GNode list, *l, *lprev;
   gint cmp;
@@ -387,9 +439,9 @@ g_node_sort_merge (GNode     *l1,
 }
 
 static GNode* 
-g_node_sort_children (GNode    *children,
-                      GFunc     compare_func,
-                      gpointer  user_data)
+g_node_sort_children (GNode            *children,
+                      GCompareDataFunc  compare_func,
+                      gpointer          user_data)
 {
   GNode *l1, *l2;
   
@@ -417,12 +469,31 @@ g_node_sort_children (GNode    *children,
 }
 
 static int
-filename_cmp (gconstpointer a, gconstpointer b, gpointer data)
+node_cmp (const void* a, const void* b, void* data)
 {
   const Node *node_a = a;
   const Node *node_b = b;
 
-  return strcmp (node_a->filename, node_b->filename);
+  if (node_a->type != node_b->type)
+    {
+      if (node_a->type == NODE_DIRECTORY)
+        return -1;
+      else
+        return 1;
+    }
+  else if (node_a->type == NODE_DIRECTORY)
+    {
+      return strcmp (node_a->name, node_b->name);
+    }
+  else if (node_a->type == NODE_ENTRY)
+    {
+      return strcmp (node_a->filename, node_b->filename);
+    }  
+  else
+    {
+      g_assert_not_reached ();
+      return 0;
+    }
 }
 
 static gboolean
@@ -430,7 +501,7 @@ traverse_and_sort_func (GNode    *node,
                         gpointer  data)
 {
   node->children = g_node_sort_children (node->children,
-                                         filename_cmp,
+                                         node_cmp,
                                          NULL);
 
   return FALSE;
@@ -450,10 +521,18 @@ traverse_and_print_func (GNode    *node,
       g_print ("  ");
       --depth;
     }
-  
-  g_print ("%s %s\n",
-           n->type == NODE_DIRECTORY ? "DIRECTORY" : "ENTRY",
-           n->filename);
+
+  if (n->type == NODE_DIRECTORY)
+    {
+      g_print ("DIRECTORY %s %s\n",
+               n->name,
+               n->filename ? n->filename : "");
+    }
+  else
+    {
+      g_print ("ENTRY %s\n",
+               n->filename);
+    }
   
   return FALSE;
 }

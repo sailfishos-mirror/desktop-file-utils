@@ -1,3 +1,8 @@
+2003-05-09  Havoc Pennington  <hp@pobox.com>
+
+	* src/desktop_file.c: make @ a valid byte in locale names, patch
+	from Richi Plana
+
 2003-05-08  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-process.c (fill_tree_node_from_menu_node): sort entries

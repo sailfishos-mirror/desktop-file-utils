@@ -112,10 +112,11 @@ gboolean gnome_desktop_file_get_regexps        (GnomeDesktopFile   *df,
 						char             ***vals,
 						int                *len);
 
-gboolean gnome_desktop_file_set_raw           (GnomeDesktopFile  *df,
-					       const char        *section,
-					       const char        *keyname,
-					       const char        *value);
+void gnome_desktop_file_set_raw                (GnomeDesktopFile  *df,
+                                                const char        *section,
+                                                const char        *keyname,
+                                                const char        *locale,
+                                                const char        *value);
 gboolean gnome_desktop_file_set_string        (GnomeDesktopFile  *df,
 					       const char        *section,
 					       const char        *keyname,
@@ -128,10 +129,12 @@ gboolean gnome_desktop_file_set_strings       (GnomeDesktopFile  *df,
 void gnome_desktop_file_merge_string_into_list  (GnomeDesktopFile *df,
                                                  const char        *section,
                                                  const char        *keyname,
+                                                 const char        *locale,
                                                  const char        *value);
 void gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
                                                  const char        *section,
                                                  const char        *keyname,
+                                                 const char        *locale,
                                                  const char        *value);
 
 

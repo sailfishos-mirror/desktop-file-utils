@@ -22,6 +22,7 @@ struct _GnomeDesktopFileSection {
   GQuark section_name; /* 0 means just a comment block (before any section) */
   gint n_lines;
   GnomeDesktopFileLine *lines;
+  gint n_allocated_lines;
 };
 
 struct _GnomeDesktopFileLine {
@@ -33,6 +34,7 @@ struct _GnomeDesktopFileLine {
 struct _GnomeDesktopFile {
   gint n_sections;
   GnomeDesktopFileSection *sections;
+  gint n_allocated_sections;
   gint main_section;
   GnomeDesktopFileEncoding encoding;
 };
@@ -40,8 +42,6 @@ struct _GnomeDesktopFile {
 struct _GnomeDesktopFileParser {
   GnomeDesktopFile *df;
   gint current_section;
-  gint n_allocated_lines;
-  gint n_allocated_sections;
   gint line_nr;
   char *line;
 };
@@ -128,36 +128,33 @@ gnome_desktop_file_free (GnomeDesktopFile *df)
 }
 
 static void
-grow_lines (GnomeDesktopFileParser *parser)
+grow_lines_in_section (GnomeDesktopFileSection *section)
 {
   int new_n_lines;
-  GnomeDesktopFileSection *section;
 
-  if (parser->n_allocated_lines == 0)
+  if (section->n_allocated_lines == 0)
     new_n_lines = 1;
   else
-    new_n_lines = parser->n_allocated_lines*2;
-
-  section = &parser->df->sections[parser->current_section];
+    new_n_lines = section->n_allocated_lines*2;
 
   section->lines = g_realloc (section->lines,
 			      sizeof (GnomeDesktopFileLine) * new_n_lines);
-  parser->n_allocated_lines = new_n_lines;
+  section->n_allocated_lines = new_n_lines;
 }
 
 static void
-grow_sections (GnomeDesktopFileParser *parser)
+grow_sections (GnomeDesktopFile *df)
 {
   int new_n_sections;
 
-  if (parser->n_allocated_sections == 0)
+  if (df->n_allocated_sections == 0)
     new_n_sections = 1;
   else
-    new_n_sections = parser->n_allocated_sections*2;
+    new_n_sections = df->n_allocated_sections*2;
 
-  parser->df->sections = g_realloc (parser->df->sections,
-				    sizeof (GnomeDesktopFileSection) * new_n_sections);
-  parser->n_allocated_sections = new_n_sections;
+  df->sections = g_realloc (df->sections,
+                            sizeof (GnomeDesktopFileSection) * new_n_sections);
+  df->n_allocated_sections = new_n_sections;
 }
 
 static gchar *
@@ -282,9 +279,10 @@ escape_string (const gchar *str, gboolean escape_first_space)
 }
 
 
-static void 
-open_section (GnomeDesktopFileParser *parser,
-	      char                   *name)
+static GnomeDesktopFileSection* 
+new_section (GnomeDesktopFile       *df,
+             const char             *name,
+             GError                **error)
 {
   int n;
   gboolean is_main = FALSE;
@@ -293,59 +291,96 @@ open_section (GnomeDesktopFileParser *parser,
       (strcmp (name, "Desktop Entry") == 0 ||
        strcmp (name, "KDE Desktop Entry") == 0))
     is_main = TRUE;
-  
-  if (parser->n_allocated_sections == parser->df->n_sections)
-    grow_sections (parser);
 
-  if (parser->current_section == 0 &&
-      parser->df->sections[0].section_name == 0 &&
-      parser->df->sections[0].n_lines == 0)
+  if (is_main &&
+      df->main_section >= 0)
+    {
+      g_set_error (error,
+                   GNOME_DESKTOP_PARSE_ERROR,
+                   GNOME_DESKTOP_PARSE_ERROR_INVALID_SYNTAX,                   
+                   "Two [Desktop Entry] or [KDE Desktop Entry] sections seen");
+
+      return NULL;
+    }
+  
+  if (df->n_allocated_sections == df->n_sections)
+    grow_sections (df);
+
+  if (df->n_sections == 1 &&
+      df->sections[0].section_name == 0 &&
+      df->sections[0].n_lines == 0)
     {
       if (!name)
 	g_warning ("non-initial NULL section\n");
       
       /* The initial section was empty. Piggyback on it. */
-      parser->df->sections[0].section_name = g_quark_from_string (name);
+      df->sections[0].section_name = g_quark_from_string (name);
 
       if (is_main)
-	parser->df->main_section = 0;
+	df->main_section = 0;
       
-      return;
+      return &df->sections[0];
     }
   
-  n = parser->df->n_sections++;
+  n = df->n_sections++;
 
   if (is_main)
-    parser->df->main_section = n;
-
+    df->main_section = n;
+  
   if (name)
-    parser->df->sections[n].section_name = g_quark_from_string (name);
+    df->sections[n].section_name = g_quark_from_string (name);
   else
-    parser->df->sections[n].section_name = 0;
-  parser->df->sections[n].n_lines = 0;
-  parser->df->sections[n].lines = NULL;
+    df->sections[n].section_name = 0;
 
-  parser->current_section = n;
-  parser->n_allocated_lines = 0;
-  grow_lines (parser);
+  df->sections[n].n_lines = 0;
+  df->sections[n].lines = NULL;
+  df->sections[n].n_allocated_lines = 0;
+
+  grow_lines_in_section (&df->sections[n]);
+
+  return &df->sections[n];
 }
 
-static GnomeDesktopFileLine *
-new_line (GnomeDesktopFileParser *parser)
-{
+static GnomeDesktopFileSection* 
+open_section (GnomeDesktopFileParser *parser,
+              char                   *name,
+              GError                **error)
+{  
   GnomeDesktopFileSection *section;
-  GnomeDesktopFileLine *line;
 
-  section = &parser->df->sections[parser->current_section];
+  section = new_section (parser->df, name, error);
+  if (section == NULL)
+    return NULL;
   
-  if (parser->n_allocated_lines == section->n_lines)
-    grow_lines (parser);
+  parser->current_section = parser->df->n_sections - 1;
+  g_assert (&parser->df->sections[parser->current_section] == section);
+  
+  return section;
+}
+
+static GnomeDesktopFileLine*
+new_line_in_section (GnomeDesktopFileSection *section)
+{
+  GnomeDesktopFileLine *line;
+  
+  if (section->n_allocated_lines == section->n_lines)
+    grow_lines_in_section (section);
 
   line = &section->lines[section->n_lines++];
 
   memset (line, 0, sizeof (GnomeDesktopFileLine));
   
   return line;
+}
+
+static GnomeDesktopFileLine *
+new_line (GnomeDesktopFileParser *parser)
+{
+  GnomeDesktopFileSection *section;
+
+  section = &parser->df->sections[parser->current_section];
+
+  return new_line_in_section (section);
 }
 
 static gboolean
@@ -434,7 +469,11 @@ parse_section_start (GnomeDesktopFileParser *parser, GError **error)
       return FALSE;
     }
   
-  open_section (parser, section_name);
+  if (open_section (parser, section_name, error) == NULL)
+    {
+      g_free (section_name);
+      return FALSE;
+    }
   
   parser->line = (line_end) ? line_end + 1 : NULL;
   parser->line_nr++;
@@ -594,14 +633,12 @@ gnome_desktop_file_new_from_string (char                       *data,
   parser.df->main_section = -1;
   parser.current_section = -1;
 
-  parser.n_allocated_lines = 0;
-  parser.n_allocated_sections = 0;
   parser.line_nr = 1;
 
   parser.line = data;
 
   /* Put any initial comments in a NULL segment */
-  open_section (&parser, NULL);
+  open_section (&parser, NULL, NULL);
   
   while (parser.line && *parser.line)
     {
@@ -772,6 +809,10 @@ gnome_desktop_file_get_raw (GnomeDesktopFile  *df,
 
   *val = NULL;
 
+  if (section_name == NULL &&
+      df->main_section < 0)
+    return FALSE;
+  
   if (section_name == NULL)
     section = &df->sections[df->main_section];
   else
@@ -968,9 +1009,51 @@ gnome_desktop_file_get_strings (GnomeDesktopFile   *df,
 }
 
 void
+gnome_desktop_file_set_raw (GnomeDesktopFile  *df,
+                            const char        *section_name,
+                            const char        *keyname,
+                            const char        *locale,
+                            const char        *value)
+{
+  GnomeDesktopFileSection *section;
+  GnomeDesktopFileLine *line;
+
+  if (section_name == NULL &&
+      df->main_section < 0)
+    section_name = "Desktop Entry";
+  
+  if (section_name == NULL)
+    section = &df->sections[df->main_section];
+  else
+    {
+      section = lookup_section (df, section_name);
+      if (section == NULL)
+        {
+          section = new_section (df, section_name, NULL);
+          g_assert (section);
+        }
+    }
+
+  line = lookup_line (df,
+		      section,
+		      keyname,
+		      locale);
+
+  if (line == NULL)
+    line = new_line_in_section (section);
+
+  line->key = g_quark_from_string (keyname);
+  g_free (line->value);
+  g_free (line->locale);
+  line->value = g_strdup (value);
+  line->locale = g_strdup (locale);
+}
+
+void
 gnome_desktop_file_merge_string_into_list (GnomeDesktopFile *df,
                                            const char        *section,
                                            const char        *keyname,
+                                           const char        *locale,
                                            const char        *value)
 {
 
@@ -982,6 +1065,7 @@ void
 gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
                                             const char        *section,
                                             const char        *keyname,
+                                            const char        *locale,
                                             const char        *value)
 {
 

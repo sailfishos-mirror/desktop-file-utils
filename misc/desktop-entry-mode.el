@@ -27,6 +27,21 @@
 ;; This mode provides basic functionality, eg. syntax highlighting and
 ;; validation for freedesktop.org desktop entry files.
 ;;
+;; To install it:
+;;
+;;   In XEmacs:
+;;   Just install the XEmacs `text-modes' package, this mode is included.
+;;   See <http://www.xemacs.org/Documentation/packageGuide.html>.
+;;
+;;   In GNU Emacs:
+;;   Place this file in your load path somewhere (eg. site-lisp), and add
+;;   the following to your .emacs:
+;;
+;;   (autoload 'desktop-entry-mode "desktop-entry-mode" "Desktop Entry mode" t)
+;;   (add-to-list 'auto-mode-alist
+;;                '("\\.desktop\\(\\.in\\)?$" . desktop-entry-mode))
+;;   (add-hook 'desktop-entry-mode-hook 'turn-on-font-lock)
+;;
 ;; For more information about desktop entry files, see
 ;;   <http://www.freedesktop.org/Standards/desktop-entry-spec>
 ;;
@@ -34,7 +49,7 @@
 
 ;;; Code:
 
-(defconst desktop-entry-mode-version "0.93 (spec 0.9.4)"
+(defconst desktop-entry-mode-version "0.94 (spec 0.9.4)"
   "Version of `desktop-entry-mode'.")
 
 (defgroup desktop-entry nil
@@ -164,6 +179,9 @@ Turning on desktop entry mode calls the value of the variable
   (setq major-mode 'desktop-entry-mode mode-name "Desktop Entry")
   (set (make-local-variable 'imenu-generic-expression)
        desktop-entry-imenu-generic-expression)
+  (unless (featurep 'xemacs) ;; font-lock support for GNU Emacs
+    (set (make-local-variable 'font-lock-defaults)
+         '(desktop-entry-font-lock-keywords)))
   (run-hooks 'desktop-entry-mode-hook))
 
 (defun desktop-entry-validate ()

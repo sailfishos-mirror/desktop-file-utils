@@ -1,3 +1,10 @@
+2004-04-19  Mark McLoughlin  <mark@skynet.ie>
+
+	Patch from Ville Skyttä <ville.skytta@iki.fi>
+	
+	* misc/desktop-entry-mode.el: make it work a bit better
+	with GNU emacs.
+
 2004-04-18  Mark McLoughlin  <mark@skynet.ie>
 
 	Patch from Ville Skyttä <ville.skytta@iki.fi> with some

@@ -239,7 +239,7 @@ g_string_append_random_ascii (GString *str,
 {
   static const char letters[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz";
-  int i;
+  unsigned int i;
 
   g_string_append_random_bytes (str, n_bytes);
   
@@ -249,6 +249,123 @@ g_string_append_random_ascii (GString *str,
       str->str[i] = letters[str->str[i] % (sizeof (letters) - 1)];
       ++i;
     }
+}
 
-  return TRUE;
+static char**
+parse_search_path_and_prepend (const char *path,
+                               const char *prepend_this)
+{
+  char **retval;
+  int i;
+  int len;
+
+  if (path != NULL)
+    {
+      menu_verbose ("Parsing path \"%s\"\n", path);
+      
+      retval = g_strsplit (path, ":", -1);
+
+      for (len = 0; retval[len] != NULL; len++)
+        ;
+
+      menu_verbose ("%d elements after split\n", len);
+        
+      i = 0;
+      while (i < len) {
+        /* delete empty strings */
+        if (*(retval[i]) == '\0')
+          {
+            menu_verbose ("Deleting element %d\n", i);
+            
+            g_free (retval[i]);
+            g_memmove (&retval[i],
+                       &retval[i + 1],
+                       (len - i) * sizeof (retval[0]));
+            --len;
+          }
+        else
+          {
+            menu_verbose ("Keeping element %d\n", i);
+            ++i;
+          }
+      }
+
+      if (prepend_this != NULL)
+        {
+          menu_verbose ("Prepending \"%s\"\n", prepend_this);
+          
+          retval = g_renew (char*, retval, len + 2);
+          g_memmove (&retval[1],
+                     &retval[0],
+                     (len + 1) * sizeof (retval[0]));
+          retval[0] = g_strdup (prepend_this);
+        }
+    }
+  else
+    {
+      menu_verbose ("Using \"%s\" as only path element\n", prepend_this);
+      retval = g_new0 (char*, 2);
+      if (prepend_this)
+        retval[0] = g_strdup (prepend_this);
+    }
+        
+  return retval;
+}                        
+
+void
+init_xdg_paths (XdgPathInfo *info_p)
+{
+  static XdgPathInfo info = { NULL, NULL, NULL, NULL };
+
+  if (info.data_home == NULL)
+    {
+      const char *p;
+
+      p = g_getenv ("XDG_DATA_HOME");
+      if (p != NULL && *p != '\0')
+        info.data_home = g_strdup (p);
+      else
+        info.data_home = g_build_filename (g_get_home_dir (),
+                                           ".local", "share",
+                                           NULL);
+                
+      p = g_getenv ("XDG_CONFIG_HOME");
+      if (p != NULL && *p != '\0')
+        info.config_home = g_strdup (p);
+      else
+        info.config_home = g_build_filename (g_get_home_dir (),
+                                             ".config", NULL);
+                        
+      p = g_getenv ("XDG_DATA_DIRS");
+      if (p == NULL || *p == '\0')
+        p = PREFIX"/local/share:"DATADIR;
+      info.data_dirs = parse_search_path_and_prepend (p, info.data_home);
+      info.first_system_data = info.data_dirs[1];
+      
+      p = g_getenv ("XDG_CONFIG_DIRS");
+      if (p == NULL || *p == '\0')
+        p = SYSCONFDIR"/xdg";
+      info.config_dirs = parse_search_path_and_prepend (p, info.config_home);
+      info.first_system_config = info.config_dirs[1];
+      
+#ifndef DFU_MENU_DISABLE_VERBOSE
+      {
+        int q;
+        q = 0;
+        while (info.data_dirs[q])
+          {
+            menu_verbose ("Data Path Entry: %s\n", info.data_dirs[q]);
+            ++q;
+          }
+        q = 0;
+        while (info.config_dirs[q])
+          {
+            menu_verbose ("Conf Path Entry: %s\n", info.config_dirs[q]);
+            ++q;
+          }
+      }
+#endif /* Verbose */
+    }
+
+  *info_p = info;
 }

@@ -1,3 +1,22 @@
+2003-06-05  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-parser.c (menu_load): set name of the menu file on 
+	root node
+
+	* src/menu-entries.c (cached_dir_lookup): fix logic a bit
+
+	* src/menu-process.c (menu_node_resolve_files_recursive):
+	implement DefaultAppDirs, DefaultDirectoryDirs, DefaultMergeDirs
+
+	* src/menu-util.c (init_xdg_paths): move here
+
+	* src/menu-process.c (move_children): fix memleak and a crash
+	when moving children to an empty node
+
+	* src/menu-util.c (g_string_append_random_ascii): fix warnings
+
+	* src/menu-parser.c: add <DefaultMergeDirs/> support
+
 2003-06-02  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-tree-cache.c (try_create_overrides): put

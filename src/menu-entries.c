@@ -1363,7 +1363,8 @@ cached_dir_lookup (EntryCache *cache,
   g_return_val_if_fail (cache != NULL, NULL);
   g_return_val_if_fail (canonical != NULL, NULL);
   
-  menu_verbose ("Ensuring cached dir \"%s\"\n", canonical);
+  menu_verbose ("Looking up cached dir \"%s\", create_if_not_found = %d\n",
+                canonical, create_if_not_found);
   
   /* canonicalize_file_name doesn't allow empty strings */
   g_assert (*canonical != '\0');  
@@ -1371,6 +1372,7 @@ cached_dir_lookup (EntryCache *cache,
   split = g_strsplit (canonical + 1, "/", -1);
 
   ensure_root_dir (cache);
+  g_assert (cache->root_dir != NULL);
   
   dir = cache->root_dir;
 
@@ -1382,16 +1384,21 @@ cached_dir_lookup (EntryCache *cache,
 
       cd = find_subdir (dir, split[i]);
 
-      if (cd == NULL && create_if_not_found)
+      if (cd == NULL)
         {
-          cd = cached_dir_new (cache, split[i]);
-          dir->subdirs = g_slist_prepend (dir->subdirs, cd);
-          cd->parent = dir;
-        }
-      else
-        {
-          dir = NULL;
-          goto out;
+          if (create_if_not_found)
+            {
+              cd = cached_dir_new (cache, split[i]);
+              dir->subdirs = g_slist_prepend (dir->subdirs, cd);
+              cd->parent = dir;
+            }
+          else
+            {
+              menu_verbose ("No subdir \"%s\" found and not asked to create it\n",
+                            split[i]);
+              dir = NULL;
+              goto out;
+            }
         }
 
       dir = cd;
@@ -1402,6 +1409,8 @@ cached_dir_lookup (EntryCache *cache,
  out:
   g_strfreev (split);
 
+  g_assert (!create_if_not_found || dir != NULL);
+  
   return dir;
 }
 

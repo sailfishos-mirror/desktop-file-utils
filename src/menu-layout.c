@@ -66,6 +66,7 @@ struct MenuNodeRoot
 {
   MenuNode    node;
   char       *basedir;
+  char       *name;
   EntryCache *entry_cache;
 };
 
@@ -157,6 +158,7 @@ menu_node_unref (MenuNode *node)
           if (nr->entry_cache)
             entry_cache_unref (nr->entry_cache); 
           g_free (nr->basedir);
+          g_free (nr->name);
         }
       
       /* free ourselves */
@@ -227,8 +229,12 @@ menu_node_copy_one (MenuNode *node)
   copy->content = g_strdup (node->content);
 
   if (copy->type == MENU_NODE_ROOT)
-    ((MenuNodeRoot*)copy)->basedir =
-      g_strdup (((MenuNodeRoot*)node)->basedir);
+    {
+      ((MenuNodeRoot*)copy)->basedir =
+        g_strdup (((MenuNodeRoot*)node)->basedir);
+      ((MenuNodeRoot*)copy)->name =
+        g_strdup (((MenuNodeRoot*)node)->name);
+    }
   else if (copy->type == MENU_NODE_LEGACY_DIR)
     ((MenuNodeLegacyDir*)copy)->prefix =
       g_strdup (((MenuNodeLegacyDir*)node)->prefix);
@@ -281,6 +287,30 @@ menu_node_get_basedir (MenuNode *node)
         menu_verbose ("Menu node root has null basedir\n");
       
       return nr->basedir;
+    }
+  else
+    {
+      menu_verbose ("Menu node root has type %d not root\n",
+                    root->type);
+      return NULL;
+    }
+}
+
+const char*
+menu_node_get_menu_name (MenuNode *node)
+{
+  MenuNode *root;
+
+  root = menu_node_get_root (node);
+
+  if (root->type == MENU_NODE_ROOT)
+    {
+      MenuNodeRoot *nr = (MenuNodeRoot*) root;
+
+      if (nr->name == NULL)
+        menu_verbose ("Menu node root has null name\n");
+      
+      return nr->name;
     }
   else
     {
@@ -649,6 +679,37 @@ menu_node_root_set_basedir (MenuNode   *node,
   menu_verbose ("Set basedir \"%s\"\n", nr->basedir ? nr->basedir : "(none)");
 }
 
+const char*
+menu_node_root_get_name (MenuNode *node)
+{
+  MenuNodeRoot *nr;
+  
+  g_return_val_if_fail (node->type == MENU_NODE_ROOT, NULL);
+
+  nr = (MenuNodeRoot*) node;
+  
+  return nr->name;
+}
+
+void
+menu_node_root_set_name (MenuNode   *node,
+                         const char *menu_name)
+{
+  MenuNodeRoot *nr;
+  
+  g_return_if_fail (node->type == MENU_NODE_ROOT);
+
+  nr = (MenuNodeRoot*) node;
+
+  if (nr->name == menu_name)
+    return;
+  
+  g_free (nr->name);
+  nr->name = g_strdup (menu_name);
+
+  menu_verbose ("Set name \"%s\"\n", nr->name ? nr->name : "(none)");
+}
+
 void
 menu_node_root_set_entry_cache (MenuNode   *node,
                                 EntryCache *entry_cache)
@@ -927,7 +988,7 @@ nodes_have_same_content (MenuNode *a,
     return FALSE;
 }
 
-void
+static void
 remove_redundant_nodes (MenuNode    *node,
                         MenuNodeType type1,
                         gboolean     have_type2,
@@ -975,7 +1036,7 @@ remove_redundant_nodes (MenuNode    *node,
     }
 }
 
-void
+static void
 remove_redundant_match_rule (MenuNode    *node,
                              MenuNodeType type1)
 {
@@ -1021,6 +1082,9 @@ remove_redundant_match_rule (MenuNode    *node,
             case MENU_NODE_CATEGORY:
             case MENU_NODE_FILENAME:
               prev = NULL;
+              break;
+            default:
+              break;
             }
         }
 
@@ -1028,7 +1092,7 @@ remove_redundant_match_rule (MenuNode    *node,
     }
 }
 
-void
+static void
 remove_empty_containers (MenuNode    *node)
 {
   MenuNode *child;
@@ -1066,6 +1130,11 @@ remove_empty_containers (MenuNode    *node)
     }
 }
 
+
+/* Note to self: if we removed redundant LegacyDir (which we
+ * probably should) it needs to take into account the prefix=
+ * attribute
+ */
 void
 menu_node_remove_redundancy (MenuNode *node)
 {
@@ -1525,6 +1594,9 @@ menu_node_append_to_string (MenuNode *node,
     case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
       append_simple (node, depth, "DefaultDirectoryDirs", str);
       break;
+    case MENU_NODE_DEFAULT_MERGE_DIRS:
+      append_simple (node, depth, "DefaultMergeDirs", str);
+      break;
     case MENU_NODE_NAME:
       append_simple (node, depth, "Name", str);
       break;
@@ -1733,6 +1805,9 @@ nodes_equal (MenuNode *a,
       MenuNodeRoot *br = (MenuNodeRoot*) b;
 
       if (null_safe_strcmp (ar->basedir, br->basedir) != 0)
+        return FALSE;
+
+      if (null_safe_strcmp (ar->name, br->name) != 0)
         return FALSE;
     }
   else if (a->type == MENU_NODE_LEGACY_DIR)

@@ -350,6 +350,10 @@ start_menu_child_element (MenuParser          *parser,
         {
           push_node (parser, MENU_NODE_DEFAULT_DIRECTORY_DIRS);
         }
+      else if (ELEMENT_IS ("DefaultMergeDirs"))
+        {
+          push_node (parser, MENU_NODE_DEFAULT_MERGE_DIRS);
+        }
       else if (ELEMENT_IS ("Name"))
         {
           push_node (parser, MENU_NODE_NAME);
@@ -588,6 +592,7 @@ end_element_handler (GMarkupParseContext *context,
     case MENU_NODE_MENU:
     case MENU_NODE_DEFAULT_APP_DIRS:
     case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
+    case MENU_NODE_DEFAULT_MERGE_DIRS:
     case MENU_NODE_ONLY_UNALLOCATED:
     case MENU_NODE_NOT_ONLY_UNALLOCATED:
     case MENU_NODE_INCLUDE:
@@ -661,6 +666,7 @@ text_handler (GMarkupParseContext *context,
     case MENU_NODE_MENU:
     case MENU_NODE_DEFAULT_APP_DIRS:
     case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
+    case MENU_NODE_DEFAULT_MERGE_DIRS:
     case MENU_NODE_ONLY_UNALLOCATED:
     case MENU_NODE_NOT_ONLY_UNALLOCATED:
     case MENU_NODE_INCLUDE:
@@ -732,6 +738,8 @@ menu_load (const char *filename,
   gsize length;
   MenuNode *retval;
   char *basedir;
+  char *s;
+  GString *str;
   
   text = NULL;
   length = 0;
@@ -757,6 +765,16 @@ menu_load (const char *filename,
   basedir = g_path_get_dirname (filename);
   menu_node_root_set_basedir (parser.root, basedir);
   g_free (basedir);
+
+  s = g_path_get_basename (filename);
+  str = g_string_new (s);
+  if (g_str_has_suffix (str->str, ".menu"))
+    g_string_truncate (str, str->len - strlen (".menu"));
+  
+  menu_node_root_set_name (parser.root, str->str);
+
+  g_string_free (str, TRUE);
+  g_free (s);
   
   context = g_markup_parse_context_new (&menu_funcs,
                                         0, &parser, NULL);

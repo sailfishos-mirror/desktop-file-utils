@@ -120,6 +120,267 @@ merge_resolved_copy_of_children (MenuCache  *menu_cache,
 }
 
 static void
+load_merge_file (MenuCache  *menu_cache,
+                 EntryCache *entry_cache,
+                 const char *filename,
+                 MenuNode   *where)
+{
+  MenuNode *to_merge;
+
+  menu_verbose ("Merging file \"%s\"\n", filename);
+            
+  to_merge = menu_cache_get_menu_for_file (menu_cache,
+                                           filename,
+                                           NULL,
+                                           NULL); /* missing files ignored */
+  if (to_merge == NULL)
+    {
+      menu_verbose ("No menu for file \"%s\" found when merging\n",
+                    filename);
+      goto done;
+    }
+            
+  merge_resolved_copy_of_children (menu_cache, entry_cache,
+                                   where, to_merge);
+
+  menu_node_unref (to_merge);
+
+ done:
+  return;
+}
+
+static void
+resolve_merge_file (MenuCache  *menu_cache,
+                    EntryCache *entry_cache,
+                    MenuNode   *node)
+{
+  char *filename;
+
+  filename = menu_node_get_content_as_path (node);
+  if (filename == NULL)
+    {
+      menu_verbose ("No filename in MergeFile\n");
+      goto done;
+    }
+
+  load_merge_file (menu_cache, entry_cache,
+                   filename, node);
+
+ done:
+  g_free (filename);
+  menu_node_unlink (node); /* delete this child, replaced
+                            * by the merged content
+                            */
+}
+
+static void
+resolve_default_app_dirs (MenuNode *node)
+{
+  XdgPathInfo xdg;
+  int i;
+        
+  init_xdg_paths (&xdg);
+        
+  i = 0;
+  while (xdg.data_dirs[i])
+    {
+      MenuNode *n;
+      char *f;
+            
+      n = menu_node_new (MENU_NODE_APP_DIR);
+      f = g_build_filename (xdg.data_dirs[i],
+                            "applications",
+                            NULL);
+      menu_node_set_content (n, f);
+      menu_node_insert_before (node, n);
+
+      menu_verbose ("Adding <AppDir>%s</AppDir> in <DefaultAppDirs/>\n",
+                    f);
+            
+      g_free (f);
+      menu_node_unref (n);
+            
+      ++i;
+    }
+
+  /* remove the now-replaced node */
+  menu_node_unlink (node);
+}
+
+static void
+resolve_default_directory_dirs (MenuNode *node)
+{
+  XdgPathInfo xdg;
+  int i;
+        
+  init_xdg_paths (&xdg);
+        
+  i = 0;
+  while (xdg.data_dirs[i])
+    {
+      MenuNode *n;
+      char *f;
+            
+      n = menu_node_new (MENU_NODE_DIRECTORY_DIR);
+      f = g_build_filename (xdg.data_dirs[i],
+                            "desktop-directories",
+                            NULL);
+      menu_node_set_content (n, f);
+      menu_node_insert_before (node, n);
+
+      menu_verbose ("Adding <DirectoryDir>%s</DirectoryDir> in <DefaultDirectoryDirs/>\n",
+                    f);
+            
+      g_free (f);
+      menu_node_unref (n);
+            
+      ++i;
+    }
+
+  /* remove the now-replaced node */
+  menu_node_unlink (node);
+}
+
+static void
+resolve_kde_legacy_dirs (MenuNode *node)
+{
+  XdgPathInfo xdg;
+  int i;
+        
+  init_xdg_paths (&xdg);
+        
+  i = 0;
+  while (xdg.data_dirs[i])
+    {
+      MenuNode *n;
+      char *f;
+            
+      n = menu_node_new (MENU_NODE_LEGACY_DIR);
+      f = g_build_filename (xdg.data_dirs[i],
+                            "applnk",
+                            NULL);
+      menu_node_set_content (n, f);
+      menu_node_insert_before (node, n);
+
+      menu_verbose ("Adding <LegacyDir>%s</LegacyDir> in <KDELegacyDirs/>\n",
+                    f);
+            
+      g_free (f);
+      menu_node_unref (n);
+            
+      ++i;
+    }
+
+  /* remove the now-replaced node */
+  menu_node_unlink (node);
+}
+
+static void
+load_merge_dir (MenuCache  *menu_cache,
+                EntryCache *entry_cache,
+                const char *dirname,
+                MenuNode   *where)
+{
+  GDir *dir;
+  GError *error;
+  const char *sub;
+
+  menu_verbose ("Loading merge dir \"%s\"\n", dirname);
+  
+  error = NULL;
+  dir = g_dir_open (dirname, 0, &error);
+  if (dir == NULL)
+    {
+      g_printerr (_("Error: \"%s\": failed to open directory: %s\n"),
+                  dirname, error->message);
+      g_error_free (error);
+
+      return;      
+    }
+  
+  g_assert (error == NULL);
+
+  while ((sub = g_dir_read_name (dir)))
+    {
+      if (g_str_has_suffix (sub, ".menu"))
+        {
+          char *full_path;
+
+          full_path = g_build_filename (dirname, sub, NULL);
+          
+          load_merge_file (menu_cache, entry_cache, full_path, where);
+          
+          g_free (full_path);
+        }
+    }
+
+  g_dir_close (dir);  
+}       
+
+static void
+resolve_merge_dir (MenuCache  *menu_cache,
+                   EntryCache *entry_cache,
+                   MenuNode   *node)
+{
+  char *path;
+
+  path = menu_node_get_content_as_path (node);
+  if (path == NULL)
+    {
+      menu_verbose ("didn't get node content as a path, not merging dir\n");
+    }
+  else
+    {
+      load_merge_dir (menu_cache, entry_cache, path, node);
+      
+      g_free (path);
+    }
+
+  /* Now clear the node */
+  menu_node_unlink (node);
+}
+
+static void
+resolve_default_merge_dirs (MenuCache  *menu_cache,
+                            EntryCache *entry_cache,
+                            MenuNode   *node)
+{
+  XdgPathInfo xdg;
+  int i;
+  const char *menu_name;
+  char *merge_name;
+
+  menu_name = menu_node_get_menu_name (node);
+  merge_name = g_strconcat (menu_name, "-merged", NULL);
+  
+  init_xdg_paths (&xdg);
+        
+  i = 0;
+  while (xdg.config_dirs[i])
+    {
+      char *f;
+            
+      f = g_build_filename (xdg.config_dirs[i],
+                            "menus", merge_name,
+                            NULL);
+
+      menu_verbose ("Checking default merge dir \"%s\"\n",
+                    f);
+
+      load_merge_dir (menu_cache, entry_cache, f, node);
+            
+      g_free (f);
+            
+      ++i;
+    }
+
+  /* remove the now-handled node */
+  menu_node_unlink (node);
+
+  g_free (merge_name);
+}
+
+static void
 menu_node_resolve_files_recursive (MenuCache  *menu_cache,
                                    EntryCache *entry_cache,
                                    MenuNode   *node)
@@ -131,64 +392,23 @@ menu_node_resolve_files_recursive (MenuCache  *menu_cache,
   switch (menu_node_get_type (node))
     {
     case MENU_NODE_MERGE_FILE:
-      {
-        MenuNode *to_merge;
-        char *filename;
-
-        filename = menu_node_get_content_as_path (node);
-        if (filename == NULL)
-          {
-            menu_verbose ("No filename in MergeFile\n");
-            goto done;
-          }
-
-        menu_verbose ("Merging file \"%s\"\n", filename);
-            
-        to_merge = menu_cache_get_menu_for_file (menu_cache,
-                                                 filename,
-                                                 NULL,
-                                                 NULL); /* missing files ignored */
-        if (to_merge == NULL)
-          {
-            menu_verbose ("No menu for file \"%s\" found when merging\n",
-                          filename);
-            goto done;
-          }
-            
-        merge_resolved_copy_of_children (menu_cache, entry_cache,
-                                         node, to_merge);
-
-        menu_node_unref (to_merge);
-
-      done:
-        g_free (filename);
-        menu_node_unlink (node); /* delete this child, replaced
-                                   * by the merged content
-                                   */
-      }
+      resolve_merge_file (menu_cache, entry_cache, node);
       break;
     case MENU_NODE_MERGE_DIR:
-      {
-        /* FIXME don't just delete it ;-) */
-        
-        menu_node_unlink (node);
-      }
+      resolve_merge_dir (menu_cache, entry_cache, node);
       break;
-    case MENU_NODE_LEGACY_DIR:
-      {
-        /* FIXME don't just delete it ;-) */
-            
-        menu_node_unlink (node);
-      }
-      break;
-
-#if 0
-      /* FIXME may as well expand these here */
     case MENU_NODE_DEFAULT_APP_DIRS:
+      resolve_default_app_dirs (node);
       break;
     case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
+      resolve_default_directory_dirs (node);
       break;
-#endif
+    case MENU_NODE_KDE_LEGACY_DIRS:
+      resolve_kde_legacy_dirs (node);
+      break;
+    case MENU_NODE_DEFAULT_MERGE_DIRS:
+      resolve_default_merge_dirs (menu_cache, entry_cache, node);
+      break;
 
     case MENU_NODE_PASSTHROUGH:
       /* Just get rid of this, we don't need the memory usage */
@@ -302,7 +522,14 @@ move_children (MenuNode *from,
       next = menu_node_get_next (from_child);
 
       menu_node_steal (from_child);
-      menu_node_insert_before (insert_before, from_child);
+      if (insert_before)
+        menu_node_insert_before (insert_before, from_child);
+      else
+        {
+          menu_node_prepend_child (to, from_child);
+          insert_before = from_child;
+        }
+      menu_node_unref (from_child);
       
       from_child = next;
     }

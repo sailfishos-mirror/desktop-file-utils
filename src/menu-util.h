@@ -53,4 +53,19 @@ void g_string_append_random_ascii (GString *str,
                                    int      n_bytes);
 
 
+
+typedef struct XdgPathInfo XdgPathInfo;
+
+struct XdgPathInfo
+{
+  char  *data_home;
+  char  *config_home;
+  char **data_dirs;
+  char **config_dirs;
+  const char *first_system_data;
+  const char *first_system_config;
+};
+
+void init_xdg_paths (XdgPathInfo *info_p);
+     
 #endif /* MENU_UTIL_H */

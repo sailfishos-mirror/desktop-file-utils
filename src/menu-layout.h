@@ -40,6 +40,7 @@ typedef enum
   MENU_NODE_DEFAULT_APP_DIRS,
   MENU_NODE_DIRECTORY_DIR,
   MENU_NODE_DEFAULT_DIRECTORY_DIRS,
+  MENU_NODE_DEFAULT_MERGE_DIRS,
   MENU_NODE_NAME,
   MENU_NODE_DIRECTORY,
   MENU_NODE_ONLY_UNALLOCATED,
@@ -88,6 +89,7 @@ void menu_node_steal  (MenuNode *node);
 MenuNodeType menu_node_get_type            (MenuNode *node);
 const char*  menu_node_get_content         (MenuNode *node);
 const char*  menu_node_get_basedir         (MenuNode *node);
+const char*  menu_node_get_menu_name       (MenuNode *node);
 char*        menu_node_get_content_as_path (MenuNode *node);
 
 void         menu_node_set_content   (MenuNode   *node,
@@ -99,6 +101,9 @@ void        menu_node_legacy_dir_set_prefix (MenuNode   *node,
 const char* menu_node_root_get_basedir      (MenuNode   *node);
 void        menu_node_root_set_basedir      (MenuNode   *node,
                                              const char *dirname);
+const char* menu_node_root_get_name         (MenuNode   *node);
+void        menu_node_root_set_name         (MenuNode   *node,
+                                             const char *menu_name);
 void        menu_node_root_set_entry_cache  (MenuNode   *node,
                                              EntryCache *entry_cache);
 

@@ -1123,9 +1123,14 @@ tree_node_find_subdir (TreeNode   *node,
                        const char *name)
 {
   TreeNode *ret;
+  PathResolution res;
+  
   ret = NULL;
-  tree_node_find_subdir_or_entry (node, name, &ret, NULL, NULL);
-  return ret;
+  res = tree_node_find_subdir_or_entry (node, name, &ret, NULL, NULL);
+  if (res == PATH_RESOLUTION_IS_DIR)
+    return ret;
+  else
+    return NULL;
 }
 
 gboolean
@@ -1351,6 +1356,9 @@ foreach_dir (DesktopEntryTree            *tree,
 
   p = path_for_node (dir);
 
+  menu_verbose ("Recursing \"%s\" (fullpath = \"%s\")\n",
+                dir->name, p);
+  
   info.is_dir = TRUE;
   info.depth = depth;
   info.menu_id = dir->name; /* FIXME ! */
@@ -1381,6 +1389,9 @@ foreach_dir (DesktopEntryTree            *tree,
       info.menu_fullpath = p;
       info.filesystem_path_to_entry = entry_get_absolute_path (e);
       info.menu_fullpath_localized = localized_path_for_entry (dir, e);
+
+      menu_verbose (" entry \"%s\"\n",
+                    info.menu_id);
       
       if (! (* func) (tree, &info,
                       user_data))
@@ -1417,11 +1428,18 @@ desktop_entry_tree_foreach (DesktopEntryTree            *tree,
   
   build_tree (tree);
   if (tree->root == NULL)
-    return;
+    {
+      menu_verbose ("No root node for tree, foreach doing nothing\n");
+      return;
+    }
   
   dir = tree_node_find_subdir (tree->root, parent_dir);
   if (dir == NULL)
-    return;
+    {
+      menu_verbose ("Subdir \"%s\" not found, no foreach to be done\n",
+                    parent_dir);
+      return;
+    }
 
   foreach_dir (tree, dir, 0, func, user_data);
 }

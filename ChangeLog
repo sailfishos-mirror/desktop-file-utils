@@ -1,5 +1,10 @@
 2003-10-23  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-process.c (tree_node_find_subdir): don't return an
+	entry's parent, only return a subdir at the exact path
+
+2003-10-23  Havoc Pennington  <hp@redhat.com>
+
 	* src/menu-process.c: implement <Move> operation
 	
 	* src/menu-process.c (menu_node_strip_duplicate_children): fix

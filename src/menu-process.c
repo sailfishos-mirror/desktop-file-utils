@@ -390,9 +390,10 @@ menu_node_strip_duplicate_children (MenuNode *node)
 
 typedef struct
 {
+  char   *name;
   Entry  *dir_entry;
   GSList *entries;
-  GSList *children;
+  GSList *subdirs;
 } TreeNode;
 
 struct _DesktopEntryTree
@@ -402,6 +403,7 @@ struct _DesktopEntryTree
   MenuNode *orig_node;
   MenuNode *resolved_node;
   TreeNode *root;
+  int refcount;
 };
 
 static void build_tree (DesktopEntryTree *tree);
@@ -439,8 +441,153 @@ desktop_entry_tree_load (const char *filename)
   tree->orig_node = orig_node;
   tree->resolved_node = resolved_node;
   tree->root = NULL;
+  tree->refcount = 1;
   
   return tree;
+}
+
+static TreeNode*
+find_subdir (TreeNode    *parent,
+             const char  *subdir)
+{
+  GSList *tmp;
+
+  tmp = parent->subdirs;
+  while (tmp != NULL)
+    {
+      TreeNode *sub = tmp->data;
+
+      if (strcmp (sub->name, subdir) == 0)
+        return sub;
+
+      tmp = tmp->next;
+    }
+
+  return NULL;
+}
+
+static TreeNode*
+tree_node_find_subdir (TreeNode   *node,
+                       const char *name)
+{
+  char **split;
+  int i;
+  TreeNode *iter;
+  
+  split = g_strsplit (name, "/", -1);
+
+  iter = dir;
+  i = 0;
+  while (iter != NULL && split[i] != NULL && *(split[i]) != '\0')
+    {
+      iter = find_subdir (iter, split[i]);
+
+      ++i;
+    }
+
+  g_strfreev (split);
+  return iter;
+}
+
+void
+desktop_entry_tree_list_subdirs (DesktopEntryTree *tree,
+                                 const char       *parent_dir,
+                                 char           ***subdirs,
+                                 int              *n_subdirs)
+{
+  TreeNode *dir;
+  int len;
+  GSList *tmp;
+  int i;
+  
+  *subdirs = NULL;
+  if (n_subdirs)
+    *n_subdirs = 0;
+  
+  build_tree (tree);
+  if (tree->root == NULL)
+    return;
+
+  dir = tree_node_find_subdir (tree->root, parent_dir);
+  if (dir == NULL)
+    return;
+
+  len = g_slist_length (dir->subdirs);
+  *subdirs = g_new0 (char*, len + 1);
+
+  i = 0;
+  tmp = dir->subdirs;
+  while (tmp != NULL)
+    {
+      TreeNode *sub = tmp->data;
+
+      (*subdirs)[i] = g_strdup (sub->name);
+
+      ++i;
+      tmp = tmp->next;
+    }
+
+  if (n_subdirs)
+    *n_subdirs = len;
+}
+
+void
+desktop_entry_tree_list_entries (DesktopEntryTree *tree,
+                                 const char       *parent_dir,
+                                 char           ***entries,
+                                 int              *n_entries)
+{
+  TreeNode *dir;
+  int len;
+  int i;
+  GSList *tmp;
+  
+  *entries = NULL;
+  if (n_entries)
+    *n_entries = 0;
+  
+  build_tree (tree);
+  if (tree->root == NULL)
+    return;
+
+  dir = tree_node_find_subdir (tree->root, parent_dir);
+  if (dir == NULL)
+    return;
+
+  len = g_slist_length (dir->entries);
+  *entries = g_new0 (char*, len + 1);
+
+  i = 0;
+  tmp = dir->entries;
+  while (tmp != NULL)
+    {
+      Entry *e = tmp->data;
+
+      (*entries)[i] = g_strdup (entry_get_absolute_path (e));
+
+      ++i;
+      tmp = tmp->next;
+    }
+
+  if (n_entries)
+    *n_entries = len;
+}
+
+char*
+desktop_entry_tree_get_directory (DesktopEntryTree *tree,
+                                  const char       *dirname)
+{
+  TreeNode *dir;
+  
+  build_tree (tree);
+  if (tree->root == NULL)
+    return NULL;
+
+  dir = tree_node_find_subdir (tree->root, dirname);
+  if (dir == NULL)
+    return;
+
+  return g_strdup (entry_get_absolute_path (dir->dir_entry));
 }
 
 static TreeNode*
@@ -449,9 +596,10 @@ tree_node_new (void)
   TreeNode *node;
 
   node = g_new (TreeNode, 1);
+  node->name = NULL;
   node->dir_entry = NULL;
   node->entries = NULL;
-  node->children = NULL;
+  node->subdirs = NULL;
 
   return node;
 }
@@ -461,13 +609,15 @@ tree_node_free (TreeNode *node)
 {
   GSList *tmp;
 
-  tmp = node->children;
+  g_free (node->name);
+  
+  tmp = node->subdirs;
   while (tmp != NULL)
     {
       tree_node_free (tmp->data);
       tmp = tmp->next;
     }
-  g_slist_free (node->children);
+  g_slist_free (node->subdirs);
 
   tmp = node->entries;
   while (tmp != NULL)
@@ -481,6 +631,21 @@ tree_node_free (TreeNode *node)
     entry_unref (node->dir_entry);
 
   g_free (node);
+}
+
+static gboolean
+tree_node_free_if_broken (TreeNode *node)
+{
+  if (node->name == NULL ||
+      node->dir_entry == NULL)
+    {
+      menu_verbose ("Broken node name = %p dir_entry = %p for <Menu>\n",
+                    node->name, node->dir_entry);
+      tree_node_free (node);
+      return TRUE;
+    }
+  else
+    return FALSE;
 }
 
 static EntrySet*
@@ -620,16 +785,10 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
   EntryDirectoryList *dir_dirs;
   EntrySet *entries;
   
-  if (menu_node_get_type (menu_node) == MENU_NODE_MENU)
-    {
-      app_dirs = menu_node_menu_get_app_entries (menu_node);
-      dir_dirs = menu_node_menu_get_directory_entries (menu_node);
-    }
-  else
-    {
-      app_dirs = NULL;
-      dir_dirs = NULL;
-    }
+  g_return_if_fail (menu_node_get_type (menu_node) == MENU_NODE_MENU);
+  
+  app_dirs = menu_node_menu_get_app_entries (menu_node);
+  dir_dirs = menu_node_menu_get_directory_entries (menu_node);
 
   entries = entry_set_new ();
   
@@ -644,11 +803,20 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
             TreeNode *child_tree;
             child_tree = tree_node_new ();
             fill_tree_node_from_menu_node (child_tree, child);
-            tree_node->children = g_slist_prepend (tree_node->children,
-                                                   child_tree);
+            if (!tree_node_free_if_broken (child_tree))
+              tree_node->subdirs = g_slist_prepend (tree_node->subdirs,
+                                                    child_tree);
           }
           break;
 
+        case MENU_NODE_NAME:
+          {
+            if (tree_node->name)
+              g_free (tree_node->name); /* should not happen */
+            tree_node->name = g_strdup (menu_node_get_content (child));
+          }
+          break;
+          
         case MENU_NODE_INCLUDE:
           {
             /* The match rule children of the <Include> are
@@ -735,4 +903,9 @@ build_tree (DesktopEntryTree *tree)
   tree->root = tree_node_new ();
   fill_tree_node_from_menu_node (tree->root,
                                  tree->resolved_node);
+  if (tree_node_free_if_broken (tree->root))
+    {
+      tree->root = NULL;
+      menu_verbose ("Broken root node!\n");
+    }
 }

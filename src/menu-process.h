@@ -29,6 +29,17 @@ typedef struct _DesktopEntryTree DesktopEntryTree;
 
 DesktopEntryTree* desktop_entry_tree_load (const char *filename);
 
+void desktop_entry_tree_list_subdirs (DesktopEntryTree *tree,
+                                      const char       *parent_dir,
+                                      char           ***subdirs,
+                                      int              *n_subdirs);
+void desktop_entry_tree_list_entries (DesktopEntryTree *tree,
+                                      const char       *parent_dir,
+                                      char           ***entries,
+                                      int              *n_entries);
 
+/* returns a copy of .directory file absolute path */
+char* desktop_entry_tree_get_directory (DesktopEntryTree *tree,
+                                        const char       *dirname);
 
 #endif /* MENU_PROCESS_H */

@@ -130,6 +130,20 @@ entry_get_relative_path (Entry *entry)
   return entry->relative_path;
 }
 
+const char*
+entry_get_name (Entry *entry)
+{
+  const char *base;
+
+  g_assert (entry->relative_path);
+  
+  base = strrchr (entry->relative_path, '/');
+  if (base)
+    return base + 1;
+  else
+    return entry->relative_path;
+}
+
 gboolean
 entry_has_category (Entry      *entry,
                     const char *category)
@@ -1163,7 +1177,7 @@ cached_dir_find_entry (CachedDir   *dir,
         }
       else
         {
-          iter = find_subdir (dir, split[i]);
+          iter = find_subdir (iter, split[i]);
         }
 
       ++i;

@@ -1,3 +1,11 @@
+2002-11-21  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-entries.c (cached_dir_find_entry): fix a bug
+	(find_subdir in iter not dir)
+
+	* src/menu-process.c (fill_tree_node_from_menu_node): fill in a
+	name for each TreeNode
+
 2002-08-06  Havoc Pennington  <hp@redhat.com>
 
 	* src/vfolder-query.c (symlink_recurse_nodes): add another

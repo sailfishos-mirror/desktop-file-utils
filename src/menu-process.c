@@ -686,6 +686,7 @@ struct DesktopEntryTreeNode
   Entry  *dir_entry; /* may be NULL, name should be used as user-visible dirname */
   GSList *entries;
   GSList *subdirs;
+  unsigned int only_unallocated : 1;
 };
 
 /* make a shorter name */
@@ -1280,6 +1281,7 @@ tree_node_new (TreeNode *parent)
   node->dir_entry = NULL;
   node->entries = NULL;
   node->subdirs = NULL;
+  node->only_unallocated = FALSE;
 
   return node;
 }
@@ -1454,6 +1456,7 @@ menu_node_to_entry_set (EntryDirectoryList *list,
   return set;
 }
 
+#if 0
 static int
 compare_entries_func (const void *a,
                       const void *b)
@@ -1464,17 +1467,21 @@ compare_entries_func (const void *a,
   return strcmp (entry_get_relative_path (ae),
                  entry_get_relative_path (be));
 }
+#endif
 
 static TreeNode*
-tree_node_from_menu_node (TreeNode *parent,
-                          MenuNode *menu_node)
+tree_node_from_menu_node (TreeNode   *parent,
+                          MenuNode   *menu_node,
+                          GHashTable *allocated)
 {
   MenuNode *child;
   EntryDirectoryList *app_dirs;
   EntryDirectoryList *dir_dirs;
   EntrySet *entries;
   gboolean deleted;
+  gboolean only_unallocated;
   TreeNode *tree_node;
+  GSList *tmp;
   
   g_return_val_if_fail (menu_node_get_type (menu_node) == MENU_NODE_MENU, NULL);
 
@@ -1485,6 +1492,7 @@ tree_node_from_menu_node (TreeNode *parent,
   tree_node = tree_node_new (parent);
   
   deleted = FALSE;
+  only_unallocated = FALSE;
   
   app_dirs = menu_node_menu_get_app_entries (menu_node);
   dir_dirs = menu_node_menu_get_directory_entries (menu_node);
@@ -1502,7 +1510,8 @@ tree_node_from_menu_node (TreeNode *parent,
             TreeNode *child_tree;
 
             child_tree = tree_node_from_menu_node (tree_node,
-                                                   child);
+                                                   child,
+                                                   allocated);
             if (child_tree)
               tree_node->subdirs = g_slist_prepend (tree_node->subdirs,
                                                     child_tree);
@@ -1594,6 +1603,12 @@ tree_node_from_menu_node (TreeNode *parent,
         case MENU_NODE_NOT_DELETED:
           deleted = FALSE;
           break;
+        case MENU_NODE_ONLY_UNALLOCATED:
+          only_unallocated = TRUE;
+          break;
+        case MENU_NODE_NOT_ONLY_UNALLOCATED:
+          only_unallocated = FALSE;
+          break;
         default:
           break;
         }
@@ -1603,15 +1618,25 @@ tree_node_from_menu_node (TreeNode *parent,
 
   if (deleted)
     goto out; /* skip computation of node's entries */
+
+  tree_node->only_unallocated = only_unallocated;
   
   tree_node->entries = entry_set_list_entries (entries);
   entry_set_unref (entries);
 
-  /* FIXME this is really only needed for the test suite, not
-   * for real menus
-   */
-  tree_node->entries = g_slist_sort (tree_node->entries,
-                                     compare_entries_func);
+  if (!tree_node->only_unallocated)
+    {
+      /* Record the entries we just assigned to a node */
+      tmp = tree_node->entries;
+      while (tmp != NULL)
+        {
+          Entry *e = tmp->data;
+          
+          g_hash_table_insert (allocated, e, e);
+          
+          tmp = tmp->next;
+        }
+    }
 
  out:
   if (deleted)
@@ -1626,13 +1651,73 @@ tree_node_from_menu_node (TreeNode *parent,
 }
 
 static void
+process_only_unallocated (TreeNode   *node,
+                          GHashTable *allocated)
+{
+  /* For any tree node marked only_unallocated, we have to remove any
+   * entries that were in fact allocated.
+   */
+  GSList *tmp;
+
+  if (node->only_unallocated)
+    {
+      tmp = node->entries;
+      while (tmp != NULL)
+        {
+          Entry *e = tmp->data;
+          GSList *next = tmp->next;
+          
+          if (g_hash_table_lookup (allocated, e) != NULL)
+            {
+              node->entries = g_slist_remove_link (node->entries,
+                                                   tmp);
+              entry_unref (e);
+            }
+          
+          tmp = next;
+        }
+    }
+
+  tmp = node->subdirs;
+  while (tmp != NULL)
+    {
+      TreeNode *n = tmp->data;
+      GSList *next = tmp->next;
+
+      process_only_unallocated (n, allocated);
+#if 0
+      /* FIXME I believe the spec says not to do this
+       * (don't delete empty menus) since it would
+       * make editing behave strangely
+       */
+      if (node->subdirs == NULL && node->entries == NULL)
+        {
+          node->subdirs = g_slist_remove_link (node->subdirs,
+                                               tmp);
+          tree_node_free (n);
+        }
+#endif      
+      tmp = next;
+    }
+}
+
+static void
 build_tree (DesktopEntryTree *tree)
 {
+  GHashTable *allocated;
+  
   if (tree->root != NULL)
     return;
+
+  allocated = g_hash_table_new (NULL, NULL);
   
   tree->root = tree_node_from_menu_node (NULL,
-                                         find_menu_child (tree->resolved_node));
+                                         find_menu_child (tree->resolved_node),
+                                         allocated);
+  if (tree->root)
+    process_only_unallocated (tree->root, allocated);
+
+  g_hash_table_destroy (allocated);
 
   if (tree->root == NULL)
     menu_verbose ("Broken root node!\n");

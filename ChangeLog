@@ -1,5 +1,11 @@
 2003-10-23  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-process.c (process_only_unallocated)
+	(tree_node_from_menu_node): add support for OnlyUnallocated
+	element, passes 1 more test
+
+2003-10-23  Havoc Pennington  <hp@redhat.com>
+
         Localizing the menu paths gets us another 2 passes with the test
 	suite.
 	

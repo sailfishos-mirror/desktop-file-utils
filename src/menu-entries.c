@@ -41,7 +41,7 @@ struct Entry
   char *relative_path;
   char *absolute_path;
   
-  char **categories;
+  unsigned int *categories; /* 0-terminated array of atoms */
   
   guint type : 4;
   guint refcount : 24;
@@ -54,6 +54,13 @@ struct EntryDirectory
   guint flags : 4;
   guint refcount : 24;
 };
+
+static unsigned int entry_cache_intern_atom (EntryCache   *cache,
+                                             const char   *str);
+static const char*  entry_cache_atom_name   (EntryCache   *cache,
+                                             unsigned int  atom);
+static unsigned int entry_cache_get_atom    (EntryCache   *cache,
+                                             const char   *str);
 
 static void        entry_cache_clear_unused (EntryCache  *cache);
 
@@ -68,6 +75,7 @@ static const char* cached_dir_get_name      (CachedDir   *dir);
 static Entry*      cached_dir_find_entry    (CachedDir   *dir,
                                              const char  *name);
 static int         cached_dir_count_entries (CachedDir   *dir);
+static EntryCache* cached_dir_get_cache     (CachedDir   *dir);
 
 static Entry*
 entry_new (EntryType   type,
@@ -105,8 +113,7 @@ entry_unref (Entry *entry)
   entry->refcount -= 1;
   if (entry->refcount == 0)
     {
-      if (entry->categories)
-        g_strfreev (entry->categories);
+      g_free (entry->categories);
 
       g_free (entry->relative_path);
       g_free (entry->absolute_path);
@@ -141,11 +148,13 @@ entry_get_name (Entry *entry)
     return entry->relative_path;
 }
 
-gboolean
+static gboolean
 entry_has_category (Entry      *entry,
+                    EntryCache *cache,
                     const char *category)
 {
   int i;
+  unsigned int a;
 
   menu_verbose ("  checking whether entry %s has category %s\n",
                 entry->relative_path, category);
@@ -155,18 +164,59 @@ entry_has_category (Entry      *entry,
       menu_verbose ("   entry has no categories\n");
       return FALSE;
     }
+
+  a = entry_cache_get_atom (cache, category);
+  if (a == 0)
+    {
+      menu_verbose ("   no entry has this category, category not interned\n");
+      return FALSE;
+    }
   
   i = 0;
-  while (entry->categories[i] != NULL)
+  while (entry->categories[i] != 0)
     {
-      menu_verbose ("   %s %s\n", category, entry->categories[i]);
-      if (strcmp (category, entry->categories[i]) == 0)
+      menu_verbose ("   %s %s\n",
+                    category, entry_cache_atom_name (cache,
+                                                     entry->categories[i]));
+      if (a == entry->categories[i])
         return TRUE;
       
       ++i;
     }
 
   menu_verbose ("   does not have category %s\n", category);
+  
+  return FALSE;
+}
+
+static gboolean
+entry_has_category_atom (Entry       *entry,
+                         unsigned int atom)
+{
+  int i;
+
+  menu_verbose ("  checking whether entry %s has category atom %u\n",
+                entry->relative_path, atom);
+  
+  if (entry->categories == NULL)
+    {
+      menu_verbose ("   entry has no categories\n");
+      return FALSE;
+    }
+  
+  i = 0;
+  while (entry->categories[i] != 0)
+    {
+      menu_verbose ("   %u %u\n",
+                    atom, entry->categories[i]);
+
+      if (atom == entry->categories[i])
+        return TRUE;
+      
+      ++i;
+    }
+
+  menu_verbose ("   does not have category atom %u\n", atom);
   
   return FALSE;
 }
@@ -279,7 +329,8 @@ entry_from_cached_entry (EntryDirectory *ed,
                          const char     *relative_path)
 {
   Entry *e;
-  int i;
+  int n_categories_to_copy;
+  int n_categories_total;
 
   if (src->type != ENTRY_DESKTOP)
     return NULL;
@@ -298,37 +349,36 @@ entry_from_cached_entry (EntryDirectory *ed,
   
   e = entry_new (src->type, relative_path, src->absolute_path);
   
-  i = 0;
+  n_categories_to_copy = 0;
   if (src->categories)
     {
-      while (src->categories[i] != NULL)
-        ++i;
+      while (src->categories[n_categories_to_copy] != 0)
+        ++n_categories_to_copy;
     }
-  
+
+  n_categories_total = n_categories_to_copy;
   if (ed->flags & ENTRY_LOAD_LEGACY)
-    ++i;
+    n_categories_total += 1;
   
-  if (i > 0)
+  if (n_categories_total > 0)
     {
-      e->categories = g_new (char*, i + 1);
+      e->categories = g_new (unsigned int, n_categories_total + 1);
       
-      i = 0;
       if (src->categories)
         {
-          while (src->categories[i] != NULL)
-            {
-              e->categories[i] = g_strdup (src->categories[i]);
-              ++i;
-            }
+          memcpy (e->categories,
+                  src->categories,
+                  n_categories_to_copy * sizeof (src->categories[0]));
         }
 
       if (ed->flags & ENTRY_LOAD_LEGACY)
         {
-          e->categories[i] = g_strdup ("Legacy");
-          ++i;
+          e->categories[n_categories_total - 1] =
+            entry_cache_intern_atom (cached_dir_get_cache (ed->root),
+                                     "Legacy");
         }
 
-      e->categories[i] = NULL;
+      e->categories[n_categories_total] = 0;
     }
 
   return e;
@@ -507,11 +557,12 @@ list_in_category_func (EntryDirectory *ed,
                        void           *data2)
 {
   EntrySet *set = data1;
-  const char *category = data2;
+  unsigned int category_atom = GPOINTER_TO_UINT (data2);
 
-  if (entry_has_category (src, category) ||
+  if (entry_has_category_atom (src, category_atom) ||
       ((ed->flags & ENTRY_LOAD_LEGACY) &&
-       strcmp (category, "Legacy") == 0))
+       entry_cache_get_atom (cached_dir_get_cache (ed->root),
+                             "Legacy") == category_atom))
     {
       Entry *e;
       e = entry_from_cached_entry (ed, src, relative_path);
@@ -527,8 +578,17 @@ entry_directory_get_by_category (EntryDirectory *ed,
                                  const char     *category,
                                  EntrySet       *set)
 {
-  entry_directory_foreach (ed, list_in_category_func, set,
-                           (char*) category);
+  unsigned int category_atom;
+
+  category_atom = entry_cache_get_atom (cached_dir_get_cache (ed->root),
+                                        category);
+  
+  menu_verbose (" Getting entries in dir with category %s (atom = %u)\n",
+                category, category_atom);
+
+  if (category_atom != 0)
+    entry_directory_foreach (ed, list_in_category_func, set,
+                             GUINT_TO_POINTER (category_atom));
 }
 
 struct EntryDirectoryList
@@ -759,7 +819,8 @@ get_by_category_func (EntryDirectory *ed,
   const char *category = data2;
   Entry *e;
   
-  if (entry_has_category (src, category) ||
+  if (entry_has_category (src, cached_dir_get_cache (ed->root),
+                          category) ||
       ((ed->flags & ENTRY_LOAD_LEGACY) &&
        strcmp (category, "Legacy") == 0))
     {
@@ -1125,6 +1186,9 @@ struct EntryCache
   int refcount;
   CachedDir *root_dir;
   char *only_show_in_name;
+  GHashTable *atoms_by_name;
+  GHashTable *names_by_atom;
+  unsigned int next_atom;
 };
 
 static CachedDir* cached_dir_ensure         (EntryCache  *cache,
@@ -1531,6 +1595,73 @@ string_list_from_desktop_value (const char *raw)
   return retval;
 }
 
+static int
+count_bytes (const char *s,
+             char        byte)
+{
+  const char *p = s;
+  int count = 0;
+  while (*p)
+    {
+      if (*p == byte)
+        ++count;
+      ++p;
+    }
+  return count;
+}
+
+static unsigned int*
+atom_list_from_desktop_value (EntryCache  *cache,
+                              const char  *raw)
+{
+  unsigned int *retval;
+  int i;
+  int len;
+  char *s;
+  char *last;
+  char *copy;
+  
+  /* The string list is supposed to end in ';'
+   * but it may not if someone is a loser,
+   * so we don't know for sure from counting ';'
+   * how many we have.
+   */
+  len = count_bytes (raw, ';');
+  retval = g_new (unsigned int,
+                  len + 2); /* add 2 in case of missing ';' */
+
+  copy = g_strdup (raw);
+  i = 0;
+  s = copy;
+  last = s;
+  while ((s = strchr (s, ';')) != NULL)
+    {
+      g_assert (*s == ';');
+      *s = '\0';
+      ++s;
+
+      if (*last != '\0')
+        {
+          retval[i] = entry_cache_intern_atom (cache, last);
+          ++i;
+        }
+
+      last = s;
+    }
+
+  if (*last != '\0')
+    {
+      retval[i] = entry_cache_intern_atom (cache, last);
+      ++i;
+    }
+
+  retval[i] = 0; /* 0-terminate */  
+
+  g_free (copy);
+  
+  return retval;
+}
+
 static Entry*
 entry_new_desktop_from_file (EntryCache *cache,
                              const char *filename,
@@ -1602,7 +1733,8 @@ entry_new_desktop_from_file (EntryCache *cache,
   categories = find_value (str, "Categories");
   if (categories != NULL)
     {
-      e->categories = string_list_from_desktop_value (categories);
+      e->categories = atom_list_from_desktop_value (cache,
+                                                    categories);
       g_free (categories);
     }
   
@@ -1965,6 +2097,12 @@ cached_dir_count_entries (CachedDir *dir)
   return count;
 }
 
+static EntryCache*
+cached_dir_get_cache (CachedDir *dir)
+{
+  return dir->cache;
+}
+
 EntryCache*
 entry_cache_new (void)
 {
@@ -1972,6 +2110,16 @@ entry_cache_new (void)
 
   cache = g_new0 (EntryCache, 1);
   cache->refcount = 1;
+
+  cache->next_atom = 1;
+  cache->atoms_by_name = g_hash_table_new_full (g_str_hash,
+                                                g_str_equal,
+                                                g_free, NULL);
+  /* this points to same strings as atoms_by_name so must be freed
+   * first
+   */       
+  cache->names_by_atom = g_hash_table_new_full (NULL, NULL,
+                                                NULL, NULL);
   
   return cache;
 }
@@ -1994,6 +2142,11 @@ entry_cache_unref (EntryCache *cache)
   cache->refcount -= 1;
   if (cache->refcount == 0)
     {
+      g_hash_table_destroy (cache->names_by_atom); /* must free before atoms_by_name
+                                                    * as it uses same strings
+                                                    */
+      g_hash_table_destroy (cache->atoms_by_name);
+      
       g_free (cache->only_show_in_name);
       g_free (cache);
     }
@@ -2013,3 +2166,51 @@ entry_cache_set_only_show_in_name (EntryCache *cache,
   cache->only_show_in_name = g_strdup (name);
 }
 
+static unsigned int
+entry_cache_get_atom (EntryCache   *cache,
+                      const char   *str)
+{
+  unsigned int val;
+  
+  val = GPOINTER_TO_UINT (g_hash_table_lookup (cache->atoms_by_name,
+                                               str));
+  
+  return val;
+}
+
+
+static unsigned int
+entry_cache_intern_atom (EntryCache   *cache,
+                         const char   *str)
+{
+  unsigned int val;
+  
+  val = entry_cache_get_atom (cache, str);
+
+  if (val == 0)
+    {
+      char *s;
+
+      s = g_strdup (str);
+      val = cache->next_atom;
+      cache->next_atom += 1;
+      
+      g_hash_table_insert (cache->atoms_by_name,
+                           s,
+                           GUINT_TO_POINTER (val));
+      g_hash_table_insert (cache->names_by_atom,
+                           GUINT_TO_POINTER (val),
+                           s);
+    }
+
+  g_assert (val > 0);
+  return val;
+}
+
+static const char*
+entry_cache_atom_name (EntryCache   *cache,
+                       unsigned int  atom)
+{
+  return g_hash_table_lookup (cache->names_by_atom,
+                              GUINT_TO_POINTER (atom));                              
+}

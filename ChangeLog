@@ -1,5 +1,12 @@
 2003-05-09  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-entries.c: use a quark scheme for entry->categories
+	to save time/memory
+
+	* src/desktop_file.c (parse_key_value): fix a memory leak
+
+2003-05-09  Havoc Pennington  <hp@redhat.com>
+
 	* src/menu-process.c: refactor this to use MenuCache and
 	EntryCache and as a result make more sense.
 

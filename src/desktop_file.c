@@ -508,7 +508,8 @@ parse_key_value (GnomeDesktopFileParser *parser, GError **error)
   gchar *value_start;
   gchar *value;
   gchar *p;
-
+  char *key;
+  
   line_end = strchr (parser->line, '\n');
   if (line_end == NULL)
     line_end = parser->line + strlen (parser->line);
@@ -595,7 +596,12 @@ parse_key_value (GnomeDesktopFileParser *parser, GError **error)
     }
 
   line = new_line (parser);
-  line->key = g_quark_from_static_string (g_strndup (key_start, key_end - key_start));
+  key = g_strndup (key_start, key_end - key_start);
+  line->key = g_quark_try_string (key);
+  if (line->key == 0)
+    line->key = g_quark_from_static_string (key);
+  else
+    g_free (key);
   if (locale_start)
     line->locale = g_strndup (locale_start, locale_end - locale_start);
   line->value = value;

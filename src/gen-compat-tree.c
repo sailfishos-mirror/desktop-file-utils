@@ -474,6 +474,7 @@ process_one_file (const char *filename)
 
 #if 0
   /* for memprof */
+  g_print ("At end after freeing stuff\n");
   sleep (30);
 #endif
 }

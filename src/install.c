@@ -120,7 +120,8 @@ desktop_file_fixup (GnomeDesktopFile *df,
           gnome_desktop_file_set_raw (df, NULL, "Encoding", NULL, "UTF-8");
           break;          
         case GNOME_DESKTOP_FILE_ENCODING_UNKNOWN:
-          g_printerr (_("Not enough data to guess at file encoding\n"));
+          g_printerr (_("\nNot enough data to guess at encoding of \"%s\"!\n"),
+                      filename);
           exit (1);
           break;
         }

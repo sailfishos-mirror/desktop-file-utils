@@ -26,10 +26,12 @@
 
 typedef enum
 {
+  /* Internal parser use */
+  VFOLDER_QUERY_ROOT,
+  /* Exported */
   VFOLDER_QUERY_OR,
   VFOLDER_QUERY_AND,
-  VFOLDER_QUERY_CATEGORY,
-  VFOLDER_QUERY_FILENAME
+  VFOLDER_QUERY_CATEGORY
 } VfolderQueryType;
 
 typedef struct _VfolderQuery VfolderQuery;
@@ -51,12 +53,9 @@ GSList*       vfolder_get_desktop_dirs     (Vfolder *folder);
 VfolderQuery* vfolder_get_query            (Vfolder *folder);
 
 
-
 VfolderQueryType vfolder_query_get_type       (VfolderQuery *query);
 GSList*          vfolder_query_get_subqueries (VfolderQuery *query);
 const char*      vfolder_query_get_category   (VfolderQuery *query);
-const char*      vfolder_query_get_filename   (VfolderQuery *query);
-
-
+gboolean         vfolder_query_get_negated    (VfolderQuery *query);
 
 #endif

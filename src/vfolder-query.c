@@ -48,7 +48,9 @@ struct _DesktopFileTree
 
   GHashTable *apps;
   GHashTable *dirs;
-  
+
+  GHashTable *allocated_apps;
+
   guint loaded : 1;
 };
 
@@ -68,6 +70,8 @@ desktop_file_tree_new (Vfolder *folder)
   tree->dirs = g_hash_table_new_full (g_str_hash, g_str_equal,
                                       g_free,
                                       (GDestroyNotify) gnome_desktop_file_free);  
+
+  tree->allocated_apps = g_hash_table_new (g_str_hash, g_str_equal);
   
   return tree;
 }
@@ -98,6 +102,8 @@ desktop_file_tree_free (DesktopFileTree *tree)
 
   g_hash_table_destroy (tree->apps);
   g_hash_table_destroy (tree->dirs);
+
+  g_hash_table_destroy (tree->allocated_apps);
   
   g_free (tree);
 }
@@ -209,19 +215,56 @@ desktop_file_tree_print (DesktopFileTree          *tree,
 }
 
 static void
-add_or_free_desktop_file (GHashTable       *hash,
+add_or_free_desktop_file (GHashTable       *dirs_hash,
+                          GHashTable       *apps_hash,
                           const char       *full_path,
                           const char       *basename,
                           GnomeDesktopFile *df)
 {
+  gboolean is_dir;
+  char *type;
+  GHashTable *hash;
+  
   if (!desktop_file_fixup (df, full_path) ||
       !desktop_file_validate (df, full_path))
     {
       g_printerr (_("Warning: ignoring invalid desktop file %s\n"),
                   full_path);
       gnome_desktop_file_free (df);
+
+      return;
     }
-  else if (g_hash_table_lookup (hash, basename))
+
+  type = NULL;
+  if (!gnome_desktop_file_get_string (df, NULL,
+                                      "Type", &type))
+    {
+      g_warning ("Desktop file validated but it has no Type field!\n");
+      return;
+    }
+
+  g_assert (type != NULL);
+
+  is_dir = strcmp (type, "Directory") == 0;
+
+  if (!is_dir)
+    {
+      if (strcmp (type, "Application") != 0)
+        {
+          g_printerr (_("Warning: ignoring desktop file with type \"%s\" instead of \"Application\"\n"),
+                      type);
+
+          g_free (type);
+          return;
+        }
+    }
+
+  if (is_dir)
+    hash = dirs_hash;
+  else
+    hash = apps_hash;
+  
+  if (g_hash_table_lookup (hash, basename))
     {
       g_printerr (_("Warning: %s is a duplicate desktop file, ignoring\n"),
                   full_path);
@@ -233,6 +276,8 @@ add_or_free_desktop_file (GHashTable       *hash,
       g_hash_table_replace (hash, g_strdup (basename),
                             df);
     }
+
+  g_free (type);
 }
 
 static void
@@ -322,7 +367,8 @@ g_str_has_suffix (const gchar  *str,
 }
 
 static void
-read_desktop_dir (GHashTable *hash,
+read_desktop_dir (GHashTable *dirs_hash,
+                  GHashTable *apps_hash,
                   const char *dirname)
 {
   DIR* dp;
@@ -389,7 +435,8 @@ read_desktop_dir (GHashTable *hash,
 
       if (df)
         {
-          add_or_free_desktop_file (hash, fullpath, dent->d_name,
+          add_or_free_desktop_file (dirs_hash, apps_hash,
+                                    fullpath, dent->d_name,
                                     df);
         }
     }
@@ -413,13 +460,13 @@ load_tree (DesktopFileTree *tree)
 
   tree->loaded = TRUE;
 
-  read_desktop_dir (tree->apps, DATADIR"/applications");
+  read_desktop_dir (tree->dirs, tree->apps, DATADIR"/applications");
   
   list = vfolder_get_desktop_dirs (tree->folder);
   tmp = list;
   while (tmp != NULL)
     {
-      read_desktop_dir (tree->dirs, tmp->data);
+      read_desktop_dir (tree->dirs, tree->apps, tmp->data);
       tmp = tmp->next;
     }
   
@@ -434,6 +481,230 @@ load_tree (DesktopFileTree *tree)
   tree->node = node_from_vfolder (tree, tree->folder);
 }
 
+static gboolean is_verbose = TRUE;
+static void
+query_verbose (int depth, const char *format, ...)
+{
+  va_list args;
+  gchar *str;
+
+  g_return_if_fail (format != NULL);
+
+  if (!is_verbose)
+    return;
+  
+  va_start (args, format);
+  str = g_strdup_vprintf (format, args);
+  va_end (args);
+
+  {
+    int i;
+    i = depth;
+    while (i > 0)
+      {
+        fputc (' ', stdout);
+        fputc (' ', stdout);
+        --i;
+      }
+  }
+  
+  fputs (str, stdout);
+
+  g_free (str);
+}
+
+static gboolean
+query_matches_desktop_file (VfolderQuery     *query,
+                            const char       *basename,
+                            GnomeDesktopFile *df,
+                            int               depth_debug)
+{
+  gboolean retval;
+  
+  retval = FALSE;
+
+  if (vfolder_query_get_negated (query))
+    {
+      query_verbose (depth_debug, "NOT\n");
+      depth_debug += 1;
+    }
+  
+  switch (vfolder_query_get_type (query))
+    {
+    case VFOLDER_QUERY_ROOT:
+      g_assert_not_reached ();
+      break;
+
+    case VFOLDER_QUERY_AND:
+      {
+        GSList *tmp;
+
+        query_verbose (depth_debug, "AND\n");
+        
+        retval = TRUE;
+        tmp = vfolder_query_get_subqueries (query);
+        while (tmp != NULL)
+          {
+            if (!query_matches_desktop_file (tmp->data,
+                                             basename, df,
+                                             depth_debug + 1))
+              {
+                retval = FALSE;
+                break;
+              }
+
+            tmp = tmp->next;
+          }
+      }
+      break;
+      
+    case VFOLDER_QUERY_OR:
+      {
+        GSList *tmp;
+
+        query_verbose (depth_debug, "OR\n");
+        
+        retval = FALSE;
+        tmp = vfolder_query_get_subqueries (query);
+        while (tmp != NULL)
+          {
+            if (query_matches_desktop_file (tmp->data,
+                                            basename, df,
+                                            depth_debug + 1))
+              {
+                retval = TRUE;
+                break;
+              }
+
+            tmp = tmp->next;
+          }
+      }
+      break;
+
+    case VFOLDER_QUERY_CATEGORY:
+      {
+        char **categories;
+        int n_categories;
+        
+        categories = NULL;
+        n_categories = 0;
+
+        if (gnome_desktop_file_get_strings (df, NULL, "Categories", NULL,
+                                            &categories, &n_categories))
+          {
+            int i;
+            const char *search;
+
+            search = vfolder_query_get_category (query);
+
+            i = 0;
+            while (i < n_categories)
+              {
+                if (strcmp (categories[i], search) == 0)                            
+                  {
+                    query_verbose (depth_debug, "%s IS in category %s\n",
+                             basename, search);
+                    retval = TRUE;
+                    break;
+                  }
+                
+                ++i;
+              }
+
+            g_strfreev (categories);
+
+            if (!retval)
+              query_verbose (depth_debug, "%s is NOT in category %s\n", basename, search);
+          }
+        else
+          {
+            query_verbose (depth_debug, "No Categories field in desktop file\n");
+          }
+      }
+      break;
+    }
+
+  query_verbose (depth_debug, "%s\n",
+                 retval ? "INCLUDED" : "EXCLUDED");
+  
+  if (vfolder_query_get_negated (query))
+    {
+      retval = !retval;
+      query_verbose (depth_debug - 1, "%s\n",
+                     retval ? "INCLUDED" : "EXCLUDED");
+    }
+  
+  return retval;      
+}
+
+typedef struct
+{
+  GHashTable *allocated_apps;
+
+  GNode *parent;
+
+  gboolean only_unallocated;
+
+  VfolderQuery *query;
+
+  GSList *excludes;
+} QueryData;
+
+static gboolean
+string_in_list (GSList     *strings,
+                const char *str)
+{
+  GSList *tmp;
+
+  tmp = strings;
+  while (tmp != NULL)
+    {
+      if (strcmp (tmp->data, str) == 0)
+        return TRUE;
+      tmp = tmp->next;
+    }
+
+  return FALSE;
+}
+
+static void
+query_foreach (void *key, void *value, void *data)
+{
+  QueryData *qd;
+  gboolean include;
+  
+  qd = data;
+
+  query_verbose (0, "Considering \"%s\"\n", key);
+  
+  include = query_matches_desktop_file (qd->query, key, value, 1);
+
+  if (include && string_in_list (qd->excludes, key))
+    {
+      include = FALSE;
+      query_verbose (1, "EXCLUDED due to exclude list\n");
+    }
+
+  if (include && qd->only_unallocated &&
+      g_hash_table_lookup (qd->allocated_apps, key))
+    {
+      include = FALSE;
+      query_verbose (1, "EXCLUDED because it was already allocated\n");
+    }
+  
+  if (include)
+    {
+      GNode *child;
+      
+      child = g_node_new (value);
+
+      g_node_append (qd->parent, child);
+
+      /* Mark it allocated */
+      g_hash_table_insert (qd->allocated_apps, key, value);
+    }
+}
+
 static GNode*
 node_from_vfolder (DesktopFileTree *tree,
                    Vfolder         *folder)
@@ -443,6 +714,9 @@ node_from_vfolder (DesktopFileTree *tree,
   GNode *node;
   GSList *list;
   GSList *tmp;
+  QueryData qd;
+
+  query_verbose (0, "FOLDER: %s\n", vfolder_get_name (folder));
   
   df_basename = vfolder_get_desktop_file (folder);
   if (df_basename == NULL)
@@ -475,8 +749,46 @@ node_from_vfolder (DesktopFileTree *tree,
       
       tmp = tmp->next;
     }
-  
-  /* FIXME run the query to add child application nodes */
+
+  qd.query = vfolder_get_query (folder);
+  if (qd.query)
+    {
+      qd.allocated_apps = tree->allocated_apps;
+      qd.only_unallocated = vfolder_get_only_unallocated (folder);
+      qd.parent = node;
+      qd.excludes = vfolder_get_excludes (folder);
+      
+      g_hash_table_foreach (tree->apps, (GHFunc) query_foreach,
+                            &qd);
+    }
+
+  /* Include the <Include> */
+  list = vfolder_get_includes (folder);
+  tmp = list;
+  while (tmp != NULL)
+    {
+      if (!(vfolder_get_only_unallocated (folder) &&
+            g_hash_table_lookup (tree->allocated_apps,
+                                 tmp->data)))
+        {
+          df = g_hash_table_lookup (tree->apps,
+                                    tmp->data);
+          
+          if (df)
+            {
+              GNode *child;
+              
+              child = g_node_new (df);
+              
+              g_node_append (node, child);
+              
+              /* Mark it allocated */
+              g_hash_table_insert (tree->allocated_apps, tmp->data, df);
+            }
+        }
+      
+      tmp = tmp->next;
+    }
   
   return node;
 }

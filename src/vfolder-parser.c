@@ -56,6 +56,12 @@ struct _VfolderQuery
 typedef struct
 {
   VfolderQuery query;
+  VfolderQuery *child;
+} VfolderRootQuery;
+
+typedef struct
+{
+  VfolderQuery query;
   GSList *sub_queries;
 } VfolderLogicalQuery;
 
@@ -65,15 +71,9 @@ typedef struct
   char *category;
 } VfolderCategoryQuery;
 
-typedef struct
-{
-  VfolderQuery query;
-  char *filename;
-} VfolderFilenameQuery;
-
+#define VFOLDER_ROOT_QUERY(q)     ((VfolderRootQuery*)q)
 #define VFOLDER_LOGICAL_QUERY(q)  ((VfolderLogicalQuery*)q)
 #define VFOLDER_CATEGORY_QUERY(q) ((VfolderCategoryQuery*)q)
-#define VFOLDER_FILENAME_QUERY(q) ((VfolderFilenameQuery*)q)
 
 typedef enum
 {
@@ -101,7 +101,8 @@ typedef struct
   GSList *states;
 
   GSList *folder_stack;
-
+  GSList *query_stack;
+  
   Vfolder *root_folder;
 
   GSList *merge_dirs;
@@ -109,6 +110,9 @@ typedef struct
 } ParseInfo;
 
 static Vfolder* vfolder_new  (void);
+
+static VfolderQuery* vfolder_query_new  (VfolderQueryType  type);
+static void          vfolder_query_free (VfolderQuery     *query);
 
 static void set_error (GError             **err,
                        GMarkupParseContext *context,
@@ -120,11 +124,15 @@ static void set_error (GError             **err,
 static void add_context_to_error (GError             **err,
                                   GMarkupParseContext *context);
 
-static void       parse_info_init (ParseInfo *info);
-static void       parse_info_free (ParseInfo *info);
-static Vfolder*   parse_info_push_folder (ParseInfo *info);
-static Vfolder*   parse_info_peek_folder (ParseInfo *info);
-static void       parse_info_pop_folder  (ParseInfo *info);
+static void          parse_info_init        (ParseInfo    *info);
+static void          parse_info_free        (ParseInfo    *info);
+static Vfolder*      parse_info_push_folder (ParseInfo    *info);
+static Vfolder*      parse_info_peek_folder (ParseInfo    *info);
+static void          parse_info_pop_folder  (ParseInfo    *info);
+static VfolderQuery* parse_info_push_query  (ParseInfo    *info,
+                                             VfolderQuery *query);
+static VfolderQuery* parse_info_peek_query  (ParseInfo    *info);
+static void          parse_info_pop_query   (ParseInfo    *info);
 
 static void       push_state (ParseInfo  *info,
                               ParseState  state);
@@ -272,6 +280,29 @@ static void
 parse_info_pop_folder (ParseInfo *info)
 {
   info->folder_stack = g_slist_remove (info->folder_stack, info->folder_stack->data);
+}
+
+static VfolderQuery*
+parse_info_push_query (ParseInfo    *info,
+                       VfolderQuery *query)
+{
+  query->negated = (peek_state (info) == STATE_NOT);
+  
+  info->query_stack = g_slist_prepend (info->query_stack, query);
+
+  return info->folder_stack->data;
+}
+
+static VfolderQuery*
+parse_info_peek_query (ParseInfo *info)
+{
+  return info->query_stack ? info->query_stack->data : NULL;
+}
+
+static void
+parse_info_pop_query (ParseInfo *info)
+{
+  info->query_stack = g_slist_remove (info->query_stack, info->query_stack->data);
 }
 
 static void
@@ -528,6 +559,11 @@ parse_folder_child_element (GMarkupParseContext  *context,
     }
   else if (ELEMENT_IS ("Query"))
     {
+      VfolderQuery *query;
+
+      query = vfolder_query_new (VFOLDER_QUERY_ROOT);
+      parse_info_push_query (info, query);
+
       push_state (info, STATE_QUERY);
     }
   else if (ELEMENT_IS ("DontShowIfEmpty"))
@@ -540,7 +576,9 @@ parse_folder_child_element (GMarkupParseContext  *context,
     }
   else if (ELEMENT_IS ("OnlyUnallocated"))
     {
-      Vfolder *folder = parse_info_peek_folder (info);
+      Vfolder *folder;
+
+      folder = parse_info_peek_folder (info);
 
       folder->only_unallocated = TRUE;
       
@@ -570,14 +608,29 @@ parse_query_child_element  (GMarkupParseContext  *context,
 
   if (ELEMENT_IS ("Keyword"))
     {
+      VfolderQuery *query;
+
+      query = vfolder_query_new (VFOLDER_QUERY_CATEGORY);
+      parse_info_push_query (info, query);
+
       push_state (info, STATE_KEYWORD);
     }
   else if (ELEMENT_IS ("And"))
     {
+      VfolderQuery *query;
+
+      query = vfolder_query_new (VFOLDER_QUERY_AND);
+      parse_info_push_query (info, query);
+      
       push_state (info, STATE_AND);
     }
   else if (ELEMENT_IS ("Or"))
     {
+      VfolderQuery *query;
+
+      query = vfolder_query_new (VFOLDER_QUERY_OR);
+      parse_info_push_query (info, query);
+      
       push_state (info, STATE_OR);
     }
   else if (ELEMENT_IS ("Not"))
@@ -768,18 +821,75 @@ end_element_handler (GMarkupParseContext *context,
           }
       }
       break;
+    case STATE_NOT:
+      pop_state (info);
+      break;
+    case STATE_QUERY:
+      {
+        VfolderQuery *query;
+        Vfolder *folder;
+        
+        query = parse_info_peek_query (info);
+        parse_info_pop_query (info);
+        pop_state (info);
+        
+        folder = parse_info_peek_folder (info);
+
+        if (folder->query != NULL)
+          {
+            vfolder_query_free (query);
+            set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                       _("Two <Query> elements given for a single <Folder>"));
+            return;
+          }
+
+        folder->query = query;
+      }
+      break;
+
+    case STATE_AND:
+    case STATE_OR:
+    case STATE_KEYWORD:
+      {
+        VfolderQuery *query;
+        VfolderQuery *parent;
+        
+        query = parse_info_peek_query (info);
+        parse_info_pop_query (info);
+        pop_state (info);
+        
+        parent = parse_info_peek_query (info);
+
+        if (parent->type == VFOLDER_QUERY_ROOT)
+          {
+            if (VFOLDER_ROOT_QUERY (parent)->child != NULL)
+              {
+                vfolder_query_free (query);
+                set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                           _("Two child elements given for a single <Query>"));
+                return;
+              }
+            else
+              {
+                VFOLDER_ROOT_QUERY (parent)->child = query;
+              }
+          }
+        else
+          {
+            VFOLDER_LOGICAL_QUERY (parent)->sub_queries =
+              g_slist_prepend (VFOLDER_LOGICAL_QUERY (parent)->sub_queries,
+                               query);
+          }
+      }
+      break;
+      
     case STATE_MERGE_DIR:
     case STATE_DESKTOP_DIR:
     case STATE_FOLDER_NAME:
     case STATE_FOLDER_DESKTOP_FILE:
     case STATE_EXCLUDE:
     case STATE_INCLUDE:
-    case STATE_QUERY:
     case STATE_DONT_SHOW_IF_EMPTY:
-    case STATE_AND:
-    case STATE_OR:
-    case STATE_NOT:
-    case STATE_KEYWORD:
     case STATE_ONLY_UNALLOCATED:
       pop_state (info);
       break;
@@ -897,11 +1007,18 @@ text_handler (GMarkupParseContext *context,
     case STATE_ONLY_UNALLOCATED:
       NO_TEXT ("OnlyUnallocated");
       break;
-#if 0
     case STATE_KEYWORD:
-      
+      {
+        VfolderQuery *query;
+
+        query = parse_info_peek_query (info);
+
+        g_assert (query->type == VFOLDER_QUERY_CATEGORY);
+        g_assert (VFOLDER_CATEGORY_QUERY (query)->category == NULL);
+        
+        VFOLDER_CATEGORY_QUERY (query)->category = g_strndup (text, text_len);
+      }
       break;
-#endif
     }
 }
 
@@ -1030,7 +1147,13 @@ vfolder_get_only_unallocated (Vfolder *folder)
 VfolderQuery*
 vfolder_get_query (Vfolder *folder)
 {
-  return folder->query;
+  if (folder->query)
+    {
+      g_assert (folder->query->type == VFOLDER_QUERY_ROOT);
+      return VFOLDER_ROOT_QUERY (folder->query)->child;
+    }
+  else
+    return NULL;
 }
 
 VfolderQueryType
@@ -1057,12 +1180,10 @@ vfolder_query_get_category (VfolderQuery *query)
   return VFOLDER_CATEGORY_QUERY (query)->category;
 }
 
-const char*
-vfolder_query_get_filename (VfolderQuery *query)
+gboolean
+vfolder_query_get_negated (VfolderQuery *query)
 {
-  g_return_val_if_fail (query->type == VFOLDER_QUERY_FILENAME, NULL);
-  
-  return VFOLDER_FILENAME_QUERY (query)->filename;
+  return query->negated;
 }
 
 static Vfolder*
@@ -1103,4 +1224,56 @@ vfolder_free (Vfolder *folder)
                    (GFunc) g_free, NULL);
   
   g_free (folder);
+}
+
+static VfolderQuery*
+vfolder_query_new (VfolderQueryType type)
+{
+  VfolderQuery *query;
+
+  query = NULL;
+  switch (type)
+    {
+    case VFOLDER_QUERY_ROOT:
+      query = (VfolderQuery*) g_new0 (VfolderRootQuery, 1);
+      break;
+
+    case VFOLDER_QUERY_OR:
+    case VFOLDER_QUERY_AND:
+      query = (VfolderQuery*) g_new0 (VfolderLogicalQuery, 1);
+      break;
+
+    case VFOLDER_QUERY_CATEGORY:
+      query = (VfolderQuery*) g_new0 (VfolderCategoryQuery, 1);
+      break;
+    }
+
+  query->type = type;
+
+  return query;
+}
+
+static void
+vfolder_query_free (VfolderQuery *query)
+{
+  switch (query->type)
+    {
+    case VFOLDER_QUERY_ROOT:
+      if (VFOLDER_ROOT_QUERY (query)->child)
+        vfolder_query_free (VFOLDER_ROOT_QUERY (query)->child);
+      break;
+      
+    case VFOLDER_QUERY_OR:
+    case VFOLDER_QUERY_AND:
+      g_slist_foreach (VFOLDER_LOGICAL_QUERY (query)->sub_queries,
+                       (GFunc) vfolder_query_free,
+                       NULL);
+      break;
+
+    case VFOLDER_QUERY_CATEGORY:
+      g_free (VFOLDER_CATEGORY_QUERY (query)->category);
+      break;
+    }
+
+  g_free (query);
 }

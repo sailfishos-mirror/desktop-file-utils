@@ -1198,6 +1198,24 @@ gnome_desktop_file_get_locale_string (GnomeDesktopFile  *df,
 }
 
 gboolean
+gnome_desktop_file_get_string (GnomeDesktopFile   *df,
+                               const char         *section,
+                               const char         *keyname,
+                               char              **val)
+{
+  const char *raw;
+  
+  *val = NULL;
+  
+  if (!gnome_desktop_file_get_raw (df, section, keyname, NULL, &raw))
+    return FALSE;
+
+  *val = g_strdup (raw);
+  
+  return TRUE;
+}
+
+gboolean
 gnome_desktop_file_get_strings (GnomeDesktopFile   *df,
                                 const char         *section,
                                 const char         *keyname,

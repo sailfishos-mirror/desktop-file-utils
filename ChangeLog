@@ -1,5 +1,15 @@
 2004-09-02  Mark McLoughlin  <mark@skynet.ie>
 
+	* src/menu-entries.c:
+	(handle_cached_dir_changed): always invalidate the cache,
+	even if a file has just changed - we need to re-read the
+	categories and such.
+	(cached_dir_get_full_path): append a "/" between path
+	elements - trying to read /usrshareapplications isn't
+	going to work, is it?
+
+2004-09-02  Mark McLoughlin  <mark@skynet.ie>
+
 	* src/menu-process.c: (handle_menu_node_menu_changed):
 	Don't crash if the tree has already been freed.
 

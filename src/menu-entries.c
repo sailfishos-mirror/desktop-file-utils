@@ -1584,14 +1584,13 @@ handle_cached_dir_changed (MenuMonitor      *monitor,
 		event == MENU_MONITOR_CHANGED ? ("changed") : ("unknown-event"));
 		
 
-  if (event == MENU_MONITOR_CREATED || event == MENU_MONITOR_DELETED)
-    {
-      /* FIXME:
-       *   we should just add an entry if its an entry or add a
-       *   subdir if its a subdir
-       */
-      cached_dir_invalidate (dir);
-    }
+  /* FIXME: we should just update the cache rather than invalidating
+   *
+   * Note, though, that its not just the list of entries we need
+   * to re-do, we also need to re-read the files to pull out
+   * categories etc.
+   */
+  cached_dir_invalidate (dir);
 
   iter = dir;
   while (iter != NULL)
@@ -1632,11 +1631,11 @@ cached_dir_get_full_path (CachedDir *dir)
   GSList *tmp;
   CachedDir *iter;
   
-  str = g_string_new (NULL);
+  str = g_string_new ("/");
 
   parents = NULL;
   iter = dir;
-  while (iter != NULL)
+  while (iter != NULL && iter->parent != NULL)
     {
       parents = g_slist_prepend (parents, iter->name);
       iter = iter->parent;
@@ -1645,7 +1644,10 @@ cached_dir_get_full_path (CachedDir *dir)
   tmp = parents;
   while (tmp != NULL)
     {
-      g_string_append (str, tmp->data);
+      char *subdir = tmp->data;
+
+      g_string_append (str, subdir);
+      g_string_append_c (str, '/');
       
       tmp = tmp->next;
     }

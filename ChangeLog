@@ -1,5 +1,9 @@
 2004-02-19  Mark McLoughlin  <mark@skynet.ie>
 
+	* configure.in: Version 0.4
+
+2004-02-19  Mark McLoughlin  <mark@skynet.ie>
+
 	Add support for .desktop files which contains Actions. Verify
 	that the Actions key and Desktop Action sections match up
 	and that each Desktop Action section has an Exec key.

@@ -41,7 +41,8 @@ menu_sources=					\
 	menu-tree-cache.c			\
 	menu-tree-cache.h			\
 	menu-util.c				\
-	menu-util.h
+	menu-util.h				\
+	dfu-test.h
 
 libmenu_sources_la_SOURCES=			\
 	$(menu_sources)
@@ -72,6 +73,7 @@ desktop_menu_tool_SOURCES=			\
 	vfolder-query.h
 
 dfu_test_SOURCES=				\
+	dfu-test.h				\
 	dfu-test.c
 
 desktop_file_validate_LDADD=$(DESKTOP_FILE_UTILS_LIBS)

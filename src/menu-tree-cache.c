@@ -220,6 +220,8 @@ lookup_absolute_entry (DesktopEntryTreeCache *cache,
   CacheEntry *entry;
   char *canonical;
 
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+  
   menu_verbose ("Looking up absolute filename in tree cache: \"%s\"\n",
                 absolute);
   
@@ -265,6 +267,8 @@ cache_lookup (DesktopEntryTreeCache *cache,
 {
   CacheEntry *retval;
 
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+  
   retval = NULL;
   
   /* menu_file may be absolute, or if relative should be searched
@@ -325,7 +329,7 @@ cache_lookup (DesktopEntryTreeCache *cache,
           else
             chain_to = NULL;
           
-          entry = lookup_absolute_entry (cache, absolute, chain_to, error);
+          entry = lookup_absolute_entry (cache, absolute, chain_to, NULL);
           g_free (absolute);
           g_free (chain_to);
           
@@ -333,7 +337,6 @@ cache_lookup (DesktopEntryTreeCache *cache,
             {
               /* in case an earlier lookup piled up */
               menu_verbose ("Successfully got entry %p\n", entry);
-              g_clear_error (error);
               retval = entry;
               goto out;
             }
@@ -341,9 +344,10 @@ cache_lookup (DesktopEntryTreeCache *cache,
           ++i;
         }
 
-      /* We didn't find anything; the error from the last lookup
-       * should still be set.
-       */
+      /* We didn't find anything */
+      g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_EXIST,
+                   _("Did not find file \"%s\" in search path"),
+                   menu_file);
     }
 
  out:
@@ -363,6 +367,8 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
 {
   CacheEntry *entry;
 
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+  
   entry = cache_lookup (cache, menu_file, create_user_file,
                         error);
   
@@ -377,8 +383,7 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
 
 static void
 try_create_overrides (CacheEntry *entry,
-                      const char *menu_file,
-                      GError    **error)
+                      const char *menu_file,                      GError    **error)
 {
   if (entry->overrides == NULL)
     {

@@ -15,6 +15,7 @@
 #include "vfolder-parser.h"
 #include "vfolder-query.h"
 #include "menu-process.h"
+#include "menu-tree-cache.h"
 
 #include <libintl.h>
 #include <stdlib.h>
@@ -34,6 +35,7 @@ static gboolean do_verbose = FALSE;
 static char *only_show_in_desktop = NULL;
 static gboolean print_available = FALSE;
 static gboolean do_print_test_results = FALSE;
+static DesktopEntryTreeCache *tree_cache = NULL;
 
 static void parse_options_callback (poptContext              ctx,
                                     enum poptCallbackReason  reason,
@@ -114,6 +116,15 @@ struct poptOption options[] = {
     NULL,
     OPTION_PRINT_AVAILABLE,
     N_("Print the set of desktop files used for a given menu file."),
+    NULL
+  },
+  {
+    "verbose",
+    '\0',
+    POPT_ARG_NONE,
+    NULL,
+    OPTION_VERBOSE,
+    N_("Print verbose debug information."),
     NULL
   },
   {
@@ -370,25 +381,24 @@ process_one_file (const char *filename)
   GError *err;
   char *root_element;
 
-  err = NULL;
-  root_element = markup_get_root_node_name (filename, &err);
+  /* the filename may be just "applications.menu" to be searched for
+   * in XDG_CONFIG_DIRS, so we don't fail fatally if we can't open the
+   * root element, just assume <Menu>
+   */
 
-  if (err != NULL)
+  root_element = NULL;
+  if (g_path_is_absolute (filename))
     {
-      g_printerr (_("Failed to load %s: %s\n"),
-                  filename, err->message);
-      g_error_free (err);
+      err = NULL;
+      root_element = markup_get_root_node_name (filename, &err);
       
-      exit (1);
+      if (err != NULL)
+        g_error_free (err);
     }
 
   if (root_element == NULL)
-    {
-      g_printerr (_("No root XML element found in %s\n"),
-                  filename);
-      exit (1);                  
-    }
-
+    root_element = g_strdup ("Menu");
+  
   if (strcmp (root_element, "VFolderInfo") == 0)
     {
       Vfolder *folder;
@@ -430,9 +440,14 @@ process_one_file (const char *filename)
     {
       DesktopEntryTree *tree;
 
+      if (tree_cache == NULL)
+        tree_cache = desktop_entry_tree_cache_new ();
+      
       err = NULL;
-      tree = desktop_entry_tree_load (filename, only_show_in_desktop,
-                                      NULL, &err);
+      tree = desktop_entry_tree_cache_lookup (tree_cache,
+                                              filename,
+                                              FALSE, &err);
+      
       if (err)
         {
           g_printerr (_("Failed to load %s: %s\n"),
@@ -442,6 +457,8 @@ process_one_file (const char *filename)
           exit (1);
         }
 
+      g_assert (tree != NULL);
+      
       if (print_available)
         desktop_entry_tree_dump_desktop_list (tree);
       

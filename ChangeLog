@@ -1,3 +1,14 @@
+2003-10-16  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.c (foreach_dir): include full menu paths
+
+	* src/gen-compat-tree.c (process_one_file): search for relative
+	filenames in the XDG paths
+
+	* src/menu-tree-cache.c (cache_lookup): fix GError pileup
+
+	* src/gen-compat-tree.c: add --verbose option
+
 2003-07-17  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-method.c: add a bunch of #ifdef READ_ONLY sections for

@@ -703,8 +703,11 @@ struct DesktopEntryTree
   TreeNode   *root;
 };
 
-static void build_tree     (DesktopEntryTree *tree);
-static void tree_node_free (TreeNode *node);
+static void  build_tree     (DesktopEntryTree *tree);
+static void  tree_node_free (TreeNode         *node);
+static char* path_to_node   (TreeNode         *node);
+static char* path_to_entry  (TreeNode         *parent,
+                             Entry            *entry);
 
 DesktopEntryTree*
 desktop_entry_tree_load (const char  *filename,
@@ -1183,29 +1186,42 @@ foreach_dir (DesktopEntryTree            *tree,
              void                        *user_data)
 {
   GSList *tmp;
+  char *p;
 
+  p = path_to_node (dir);
+  
   if (! (* func) (tree,
                   TRUE,
                   depth,
                   dir->name,
-                  NULL, /* FIXME */
+                  p,
                   dir->dir_entry ? entry_get_absolute_path (dir->dir_entry) : NULL,
                   user_data))
-    return FALSE;
+    {
+      g_free (p);
+      return FALSE;
+    }
+  g_free (p);
   
   tmp = dir->entries;
   while (tmp != NULL)
     {
       Entry *e = tmp->data;
 
+      p = path_to_entry (dir, e);
+      
       if (! (* func) (tree,
                       FALSE,
                       depth + 1,
                       entry_get_name (e),
-                      NULL, /* FIXME */
+                      p,
                       entry_get_absolute_path (e),
                       user_data))
-        return FALSE;
+        {
+          g_free (p);
+          return FALSE;
+        }
+      g_free (p);
 
       tmp = tmp->next;
     }
@@ -1662,12 +1678,15 @@ foreach_print (DesktopEntryTree *tree,
 
   if (comment == NULL)
     comment = g_strdup (_("<missing Comment>"));
-  
-  i = depth;
-  while (i > 0)
+
+  if (!(pd->flags & DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS))
     {
-      fputc (' ', stdout);
-      --i;
+      i = depth;
+      while (i > 0)
+        {
+          fputc (' ', stdout);
+          --i;
+        }
     }
 
   i = 0;
@@ -1713,10 +1732,34 @@ foreach_print (DesktopEntryTree *tree,
 
   if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS)
     {
-      if (is_dir)
-        g_print ("DIRECTORY %s\n", menu_basename);
-      else
-        g_print ("ENTRY %s\n", filesystem_path_to_entry);
+      if (!is_dir)
+        {
+          char *dirname;
+          char *p;
+          char *s;
+          
+          dirname = g_path_get_dirname (menu_fullpath);
+
+          /* We have to kill the root name, since the test suite
+           * doesn't want to see the root name
+           */
+          p = dirname;
+          g_assert (*p == '/');
+          ++p;
+          while (*p && *p != '/')
+            ++p;
+          if (*p == '/') /* don't want the leading '/' */
+            ++p;
+          s = g_strconcat (p, "/", NULL); /* do want trailing '/' */
+          g_free (dirname);
+          
+          g_print ("%s\t%s\t%s\n",
+                   s,
+                   menu_basename,
+                   filesystem_path_to_entry);
+
+          g_free (s);
+        }
     }
   
   return TRUE;
@@ -1729,15 +1772,6 @@ desktop_entry_tree_print (DesktopEntryTree           *tree,
   PrintData pd;
 
   pd.flags = flags;
-
-  if (flags & DESKTOP_ENTRY_TREE_PRINT_TEST_RESULTS)
-    {
-      char *basename;
-
-      basename = g_path_get_basename (tree->menu_file);
-      g_print ("MENU \"%s\"\n", basename);
-      g_free (basename);
-    }
   
   desktop_entry_tree_foreach (tree, "/", foreach_print, &pd);
 }

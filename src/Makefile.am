@@ -80,6 +80,7 @@ update_desktop_database_SOURCES=				\
 	update-desktop-database.c				\
 	eggdesktopentries.c				\
 	eggdesktopentries.h				\
+	eggintl.h					\
 	eggdirfuncs.c				\
 	eggdirfuncs.h
 
@@ -92,6 +93,7 @@ update_desktop_database_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
 
 EXTRA_DIST =			\
 	$(dfu_test_SOURCES)	\
+	$(update_desktop_database_SOURCES)	\
 	menu-modules.conf
 
 if HAVE_GNOME_VFS

@@ -633,7 +633,7 @@ required_section (GnomeDesktopFile *df, char *filename)
 gboolean
 required_keys (GnomeDesktopFile *df, char *filename)
 {
-  char *val;
+  const char *val;
   
   if (gnome_desktop_file_get_raw (df, NULL,
 				  "Encoding",
@@ -682,8 +682,8 @@ required_keys (GnomeDesktopFile *df, char *filename)
 static void
 validate_desktop_file (GnomeDesktopFile *df, char *filename)
 {
-  char *name;
-  char *comment;
+  const char *name;
+  const char *comment;
   
   if (!required_section (df, filename))
     return;

@@ -100,6 +100,7 @@ parser_free (GnomeDesktopFileParser *parser)
 static void
 gnome_desktop_file_line_free (GnomeDesktopFileLine *line)
 {
+  g_free (line->locale);
   g_free (line->value);
 }
 
@@ -122,6 +123,8 @@ gnome_desktop_file_free (GnomeDesktopFile *df)
   for (i = 0; i < df->n_sections; i++)
     gnome_desktop_file_section_free (&df->sections[i]);
   g_free (df->sections);
+
+  g_free (df);
 }
 
 static void
@@ -427,6 +430,7 @@ parse_section_start (GnomeDesktopFileParser *parser, GError **error)
     {
       report_error (parser, "Invalid characters in section name", GNOME_DESKTOP_PARSE_ERROR_INVALID_CHARS, error);
       parser_free (parser);
+      g_free (section_name);
       return FALSE;
     }
   
@@ -435,6 +439,8 @@ parse_section_start (GnomeDesktopFileParser *parser, GError **error)
   parser->line = (line_end) ? line_end + 1 : NULL;
   parser->line_nr++;
 
+  g_free (section_name);
+  
   return TRUE;
 }
 
@@ -759,7 +765,7 @@ gnome_desktop_file_get_raw (GnomeDesktopFile  *df,
 			    const char        *section_name,
 			    const char        *keyname,
 			    const char        *locale,
-			    char             **val)
+			    const char       **val)
 {
   GnomeDesktopFileSection *section;
   GnomeDesktopFileLine *line;
@@ -787,7 +793,6 @@ gnome_desktop_file_get_raw (GnomeDesktopFile  *df,
   
   return TRUE;
 }
-
 
 void
 gnome_desktop_file_foreach_section (GnomeDesktopFile            *df,
@@ -925,3 +930,62 @@ gnome_desktop_file_save (GnomeDesktopFile *df,
 
   return TRUE;
 }
+
+gboolean
+gnome_desktop_file_get_strings (GnomeDesktopFile   *df,
+                                const char         *section,
+                                const char         *keyname,
+                                char             ***vals,
+                                int                *len)
+{
+  const char *raw;
+  char **retval;
+  int i;
+  
+  if (vals)
+    *vals = NULL;
+  if (len)
+    *len = 0;
+  
+  if (!gnome_desktop_file_get_raw (df, section, keyname, NULL, &raw))
+    return FALSE;
+
+  retval = g_strsplit (raw, ";", G_MAXINT);
+
+  i = 0;
+  while (retval[i])
+    ++i;
+
+  if (vals)
+    *vals = retval;
+  else
+    g_strfreev (retval);
+
+  if (len)
+    *len = i;
+
+  return TRUE;
+}
+
+void
+gnome_desktop_file_merge_string_into_list (GnomeDesktopFile *df,
+                                           const char        *section,
+                                           const char        *keyname,
+                                           const char        *value)
+{
+
+
+
+}
+
+void
+gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
+                                            const char        *section,
+                                            const char        *keyname,
+                                            const char        *value)
+{
+
+
+
+}
+

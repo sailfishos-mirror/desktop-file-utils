@@ -64,7 +64,7 @@ gboolean gnome_desktop_file_get_raw           (GnomeDesktopFile  *df,
 					       const char        *section,
 					       const char        *keyname,
 					       const char        *locale,
-					       char             **val);
+					       const char       **val);
 gboolean gnome_desktop_file_get_boolean       (GnomeDesktopFile  *df,
 					       const char        *section,
 					       const char        *keyname,
@@ -124,6 +124,16 @@ gboolean gnome_desktop_file_set_strings       (GnomeDesktopFile  *df,
 					       const char        *section,
 					       const char        *keyname,
 					       const char        *value);
+
+void gnome_desktop_file_merge_string_into_list  (GnomeDesktopFile *df,
+                                                 const char        *section,
+                                                 const char        *keyname,
+                                                 const char        *value);
+void gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
+                                                 const char        *section,
+                                                 const char        *keyname,
+                                                 const char        *value);
+
 
 
 /* ... More setters ... */

@@ -84,6 +84,7 @@ process_one_file (const char *filename,
   char *dirname;
   char *basename;
   GnomeDesktopFile *df = NULL;
+  GSList *tmp;
   
   g_assert (vendor_name);
 
@@ -108,6 +109,22 @@ process_one_file (const char *filename,
   df = gnome_desktop_file_load (filename, err);
   if (df == NULL)
     goto cleanup;
+
+  /* Mark file as having been processed by us, so automated
+   * tools can check that desktop files went through our
+   * munging
+   */
+  /*   gnome_desktop_file_set_raw (df, "Desktop Entry", "X-Desktop-File-Install-Version", VERSION); */
+
+
+  /* Add categories */
+  tmp = added_categories;
+  while (tmp != NULL)
+    {
+      
+
+      tmp = tmp->next;
+    }
   
   if (!gnome_desktop_file_save (df, new_filename,
                                 permissions, err))

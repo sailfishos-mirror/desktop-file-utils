@@ -1,3 +1,9 @@
+2005-01-09  Ray Strode  <rstrode@redhat.com>
+	
+	* src/update-desktop-database.c:
+	NULL terminate default search path.  Spotted by 
+	Mike Hearn <mike@navi.cx>
+
 2004-11-23  Mark McLoughlin  <mark@skynet.ie>
 
 	Patch from Ville Skyttä <ville.skytta@iki.fi>

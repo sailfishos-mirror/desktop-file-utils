@@ -449,6 +449,8 @@ get_default_search_path (void)
   for (i = 0; data_dirs[i] != NULL; i++)
     args[i] = g_build_filename (data_dirs[i], "applications", NULL);
 
+  args[i] = NULL;
+
   g_strfreev (data_dirs);
 
   return (const char **) args;

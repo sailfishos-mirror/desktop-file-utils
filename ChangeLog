@@ -1,3 +1,10 @@
+2002-08-04  Havoc Pennington  <hp@redhat.com>
+
+	* src/install.c (main): create target directory if it doesn't 
+	exist.
+
+	* configure.in: 0.3
+
 2002-08-01  Havoc Pennington  <hp@redhat.com>
 
 	* src/vfolder-query.c (add_or_free_desktop_file): when complaining

@@ -452,6 +452,27 @@ parse_options_callback (poptContext              ctx,
     }
 }
 
+static void
+mkdir_and_parents (const char *dirname,
+                   mode_t      mode)
+{
+  char *parent;
+  char *slash;
+  
+  parent = g_strdup (dirname);
+  slash = NULL;
+  if (*parent != '\0')
+    slash = strrchr (parent, '/');
+  if (slash != NULL)
+    {
+      *slash = '\0';
+      mkdir_and_parents (parent, mode);
+    }
+  g_free (parent);
+  
+  mkdir (dirname, mode);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -460,6 +481,7 @@ main (int argc, char **argv)
   GError* err = NULL;
   const char** args;
   int i;
+  mode_t dir_permissions;
   
   setlocale (LC_ALL, "");
   
@@ -499,6 +521,19 @@ main (int argc, char **argv)
 
   if (target_dir == NULL)
     target_dir = g_build_filename (DATADIR, "applications", NULL);
+
+  /* Create the target directory */
+  dir_permissions = permissions;
+
+  /* Add search bit when the target file is readable */
+  if (permissions & 0400)
+    dir_permissions |= 0100;
+  if (permissions & 0040)
+    dir_permissions |= 0010;
+  if (permissions & 0004)
+    dir_permissions |= 0001;
+
+  mkdir_and_parents (target_dir, dir_permissions);
   
   args = poptGetArgs (ctx);
 

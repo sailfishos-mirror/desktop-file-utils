@@ -1,3 +1,36 @@
+2004-11-11  Mark McLoughlin  <mark@skynet.ie>
+
+	* src/desktop_file.c: (gnome_desktop_file_remove_string_from_list):
+	fix uninitialized variable.
+	
+	* configure.in: modernize a bit, don't check for gnome-vfs,
+	remove --enable-tests etc.
+	
+	* src/Makefile.am: remove a bunch of stuff.
+	
+	* src/canonicalize.[ch],
+	  src/dfu-test.[ch],
+	  src/gen-compat-tree.c,
+	  src/gen_table.py,
+	  src/menu-entries.[ch],
+	  src/menu-layout.[ch],
+	  src/menu-method.c,
+	  src/menu-modules.conf,
+	  src/menu-monitor.[ch],
+	  src/menu-overrides.[ch],
+	  src/menu-parser.[ch],
+	  src/menu-process.[ch],
+	  src/menu-tree-cache.[ch],
+	  src/menu-util.[ch],
+	  src/menu.h,
+	  src/vfolder-parser.[ch],
+	  src/vfolder-query.[ch]: remove all this menu stuff. Its now
+	in GNOME itself.
+	
+	* test/*: remove empty dir;
+
+	* Makefile.am: don't build tests dir.
+
 2004-10-18  Ray Strode  <rstrode@redhat.com>
 
 	* src/eggdesktopentries.c:

@@ -1442,7 +1442,7 @@ gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
           ++i;
         }
 
-      i = 0;
+      i = j = 0;
       while (i < n_values)
         {
           j = MAX (i + 1, j);

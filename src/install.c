@@ -114,14 +114,14 @@ process_one_file (const char *filename,
    * tools can check that desktop files went through our
    * munging
    */
-  /*   gnome_desktop_file_set_raw (df, "Desktop Entry", "X-Desktop-File-Install-Version", VERSION); */
-
+  gnome_desktop_file_set_raw (df, NULL, "X-Desktop-File-Install-Version", NULL, VERSION);
 
   /* Add categories */
   tmp = added_categories;
   while (tmp != NULL)
     {
-      
+      gnome_desktop_file_merge_string_into_list (df, NULL, "Categories",
+                                                 NULL, tmp->data);
 
       tmp = tmp->next;
     }

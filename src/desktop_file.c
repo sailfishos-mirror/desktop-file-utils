@@ -976,6 +976,7 @@ gboolean
 gnome_desktop_file_get_strings (GnomeDesktopFile   *df,
                                 const char         *section,
                                 const char         *keyname,
+                                const char         *locale,
                                 char             ***vals,
                                 int                *len)
 {
@@ -988,7 +989,7 @@ gnome_desktop_file_get_strings (GnomeDesktopFile   *df,
   if (len)
     *len = 0;
   
-  if (!gnome_desktop_file_get_raw (df, section, keyname, NULL, &raw))
+  if (!gnome_desktop_file_get_raw (df, section, keyname, locale, &raw))
     return FALSE;
 
   retval = g_strsplit (raw, ";", G_MAXINT);
@@ -1051,14 +1052,55 @@ gnome_desktop_file_set_raw (GnomeDesktopFile  *df,
 
 void
 gnome_desktop_file_merge_string_into_list (GnomeDesktopFile *df,
-                                           const char        *section,
-                                           const char        *keyname,
-                                           const char        *locale,
-                                           const char        *value)
+                                           const char       *section,
+                                           const char       *keyname,
+                                           const char       *locale,
+                                           const char       *value)
 {
+  char **values;
+  int n_values;
+  const char *raw;
+  
+  if (gnome_desktop_file_get_strings (df, section, keyname, locale,
+                                      &values, &n_values))
+    {
+      /* Look for a duplicate */
+      int i;
+      gboolean found;
 
+      found = FALSE;
+      
+      i = 0;
+      while (i < n_values)
+        {
+          if (strcmp (values[i], value) == 0)
+            {
+              found = TRUE;
+              break;
+            }
 
+          ++i;
+        }
 
+      g_strfreev (values);
+      
+      if (found)
+        return; /* nothing to do */
+    }
+
+  if (gnome_desktop_file_get_raw (df, section, keyname, locale, &raw))
+    {
+      /* Append to current list */
+      char *str;
+      str = g_strconcat (raw, value, ";", NULL);
+      gnome_desktop_file_set_raw (df, section, keyname, locale, str);
+      g_free (str);
+    }
+  else
+    {
+      /* Start a new key */
+      gnome_desktop_file_set_raw (df, section, keyname, locale, value);
+    }
 }
 
 void

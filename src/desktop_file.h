@@ -99,11 +99,7 @@ gboolean gnome_desktop_file_get_numbers        (GnomeDesktopFile   *df,
 gboolean gnome_desktop_file_get_strings        (GnomeDesktopFile   *df,
 						const char         *section,
 						const char         *keyname,
-						char             ***vals,
-						int                *len);
-gboolean gnome_desktop_file_get_locale_strings (GnomeDesktopFile   *df,
-						const char         *section,
-						const char         *keyname,
+                                                const char         *locale,
 						char             ***vals,
 						int                *len);
 gboolean gnome_desktop_file_get_regexps        (GnomeDesktopFile   *df,

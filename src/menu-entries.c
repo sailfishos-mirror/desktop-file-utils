@@ -453,23 +453,21 @@ list_all_func (EntryDirectory *ed,
                void           *data1,
                void           *data2)
 {
-  GSList **listp = data1;
+  EntrySet *set = data1;
+  Entry *e;
 
-  *listp = g_slist_prepend (*listp,
-                            entry_from_cached_entry (ed, src, relative_path));
+  e = entry_from_cached_entry (ed, src, relative_path);
+  entry_set_add_entry (set, e);
+  entry_unref (e);
 
   return TRUE;
 }
 
-GSList*
-entry_directory_get_all_desktops (EntryDirectory *ed)
+void
+entry_directory_get_all_desktops (EntryDirectory *ed,
+                                  EntrySet       *add_to_set)
 {
-  GSList *list;
-
-  list = NULL;
-  entry_directory_foreach (ed, list_all_func, &list, NULL);
-
-  return list;
+  entry_directory_foreach (ed, list_all_func, add_to_set, NULL);
 }
 
 static gboolean
@@ -479,35 +477,36 @@ list_in_category_func (EntryDirectory *ed,
                        void           *data1,
                        void           *data2)
 {
-  GSList **listp = data1;
+  EntrySet *set = data1;
   const char *category = data2;
 
   if (entry_has_category (src, category) ||
       ((ed->flags & ENTRY_LOAD_LEGACY) &&
        strcmp (category, "Legacy") == 0))
-    *listp = g_slist_prepend (*listp,
-                              entry_from_cached_entry (ed, src, relative_path));
-
+    {
+      Entry *e;
+      e = entry_from_cached_entry (ed, src, relative_path);
+      entry_set_add_entry (set, e);
+      entry_unref (e);
+    }
+  
   return TRUE;
 }
 
-GSList*
+void
 entry_directory_get_by_category (EntryDirectory *ed,
-                                 const char     *category)
+                                 const char     *category,
+                                 EntrySet       *set)
 {
-  GSList *list;
-
-  list = NULL;
-  entry_directory_foreach (ed, list_in_category_func, &list,
+  entry_directory_foreach (ed, list_in_category_func, set,
                            (char*) category);
-
-  return list;
 }
 
 struct _EntryDirectoryList
 {
   int refcount;
   GSList *dirs;
+  int length;
 };
 
 EntryDirectoryList*
@@ -519,7 +518,8 @@ entry_directory_list_new (void)
 
   list->refcount = 1;
   list->dirs = NULL;
-
+  list->length = 0;
+  
   return list;
 }
 
@@ -551,6 +551,7 @@ entry_directory_list_clear (EntryDirectoryList *list)
                    NULL);
   g_slist_free (list->dirs);
   list->dirs = NULL;
+  list->length = 0;
 }
 
 void
@@ -559,6 +560,7 @@ entry_directory_list_prepend (EntryDirectoryList *list,
 {
   entry_directory_ref (dir);
   list->dirs = g_slist_prepend (list->dirs, dir);
+  list->length += 1;
 }
 
 void
@@ -567,6 +569,38 @@ entry_directory_list_append  (EntryDirectoryList *list,
 {
   entry_directory_ref (dir);
   list->dirs = g_slist_append (list->dirs, dir);
+  list->length += 1;
+}
+
+int
+entry_directory_list_get_length (EntryDirectoryList *list)
+{
+  return list->length;
+}
+
+void
+entry_directory_list_append_list (EntryDirectoryList *list,
+                                  EntryDirectoryList *to_append)
+{
+  GSList *tmp;
+  GSList *new_dirs;
+
+  if (to_append->length == 0)
+    return;
+  
+  new_dirs = NULL;
+  tmp = to_append->dirs;
+  while (tmp != NULL)
+    {
+      entry_directory_ref (tmp->data);
+      new_dirs = g_slist_prepend (new_dirs, tmp->data);
+      list->length += 1;
+      
+      tmp = tmp->next;
+    }
+
+  new_dirs = g_slist_reverse (new_dirs);
+  list->dirs = g_slist_concat (list->dirs, new_dirs);
 }
 
 Entry*
@@ -616,33 +650,20 @@ entry_directory_list_get_directory (EntryDirectoryList *list,
 }
 
 static void
-entry_hash_listify_foreach (void *key, void *value, void *data)
-{
-  GSList **list = data;
-  Entry *e = value;
-  
-  *list = g_slist_prepend (*list, e);
-  entry_ref (e);
-}
-
-static GSList*
-entry_directory_list_get (EntryDirectoryList       *list,
+entry_directory_list_add (EntryDirectoryList       *list,
                           EntryDirectoryForeachFunc func,
+                          EntrySet                 *set,
                           void                     *data2)
 {
   /* The only tricky thing here is that desktop files later
    * in the search list with the same relative path
    * are "hidden" by desktop files earlier in the path,
-   * so we have to do the hash table thing.
+   * so we have to do the earlier files first causing
+   * the later files to replace the earlier files
+   * in the EntrySet
    */
-  GHashTable *hash;
   GSList *tmp;
   GSList *reversed;
-  
-  hash = g_hash_table_new_full (g_str_hash,
-                                g_str_equal,
-                                NULL,
-                                (GDestroyNotify) entry_unref);
 
   /* We go from the end of the list so we can just
    * g_hash_table_replace and not have to do two
@@ -655,54 +676,45 @@ entry_directory_list_get (EntryDirectoryList       *list,
   tmp = reversed;
   while (tmp != NULL)
     {
-      entry_directory_foreach (tmp->data, func, hash, data2);
+      entry_directory_foreach (tmp->data, func, set, data2);
       
       tmp = tmp->next;
     }
 
   g_slist_free (reversed);
-
-  /* listify the hash */
-  tmp = NULL;
-  g_hash_table_foreach (hash, entry_hash_listify_foreach, &tmp);
-  
-  g_hash_table_destroy (hash);
-
-  return tmp;
 }
 
 static gboolean
-hash_all_func (EntryDirectory *ed,
-               Entry          *src,
-               const char     *relative_path,
-               void           *data1,
-               void           *data2)
+get_all_func (EntryDirectory *ed,
+              Entry          *src,
+              const char     *relative_path,
+              void           *data1,
+              void           *data2)
 {
-  GHashTable *hash = data1;
+  EntrySet *set = data1;
   Entry *e;
 
   e = entry_from_cached_entry (ed, src, relative_path);
-
-  /* pass ownership of reference to the hash table */
-  g_hash_table_replace (hash, e->relative_path,
-                        e);
+  entry_set_add_entry (set, e);
+  entry_unref (e);
 }
 
-GSList*
-entry_directory_list_get_all_desktops (EntryDirectoryList *list)
+void
+entry_directory_list_get_all_desktops (EntryDirectoryList *list,
+                                       EntrySet           *set)
 {
-  return entry_directory_list_get (list, hash_all_func,
-                                   NULL);
+  entry_directory_list_add (list, get_all_func,
+                            set, NULL);
 }
 
 static gboolean
-hash_by_category_func (EntryDirectory *ed,
-                       Entry          *src,
-                       const char     *relative_path,
-                       void           *data1,
-                       void           *data2)
+get_by_category_func (EntryDirectory *ed,
+                      Entry          *src,
+                      const char     *relative_path,
+                      void           *data1,
+                      void           *data2)
 {
-  GHashTable *hash = data1;
+  EntrySet *set = data1;
   const char *category = data2;
   Entry *e;
   
@@ -711,23 +723,291 @@ hash_by_category_func (EntryDirectory *ed,
        strcmp (category, "Legacy") == 0))
     {
       e = entry_from_cached_entry (ed, src, relative_path);
-      
-      /* pass ownership of reference to the hash table */
-      g_hash_table_replace (hash, e->relative_path,
-                            e);
+      entry_set_add_entry (set, e);
+      entry_unref (e);
     }
 
   return TRUE;
 }
 
-GSList*
+void
 entry_directory_list_get_by_category (EntryDirectoryList *list,
-                                      const char         *category)
+                                      const char         *category,
+                                      EntrySet           *set)
 {
-  return entry_directory_list_get (list, hash_by_category_func,
-                                   (char*) category);
+  entry_directory_list_add (list, get_by_category_func,
+                            set, (char*) category);
 }
+
+static gboolean
+get_inverse_func (EntryDirectory *ed,
+                  Entry          *src,
+                  const char     *relative_path,
+                  void           *data1,
+                  void           *data2)
+{
+  EntrySet *inverse = data1;
+  EntrySet *set = data2;
   
+  if (entry_set_lookup (set, relative_path) == NULL)
+    {
+      /* not in the original set, so add to inverse set */
+      Entry *e;
+      
+      e = entry_from_cached_entry (ed, src, relative_path);
+      entry_set_add_entry (inverse, e);
+      entry_unref (e);
+    }
+
+  return TRUE;
+}
+
+void
+entry_directory_list_invert_set (EntryDirectoryList *list,
+                                 EntrySet           *set)
+{
+  EntrySet *inverse;
+
+  inverse = entry_set_new ();
+  entry_directory_list_add (list, get_inverse_func,
+                            inverse, set);
+
+  entry_set_swap_contents (set, inverse);
+
+  entry_set_unref (inverse);
+}
+
+struct _EntrySet
+{
+  int refcount;
+  GHashTable *hash;
+};
+
+EntrySet*
+entry_set_new (void)
+{
+  EntrySet *set;
+
+  set = g_new (EntrySet, 1);
+  set->refcount = 1;
+
+  return set;
+}
+
+void
+entry_set_ref (EntrySet *set)
+{
+  set->refcount += 1;
+}
+
+void
+entry_set_unref (EntrySet *set)
+{
+  g_return_if_fail (set != NULL);
+  g_return_if_fail (set->refcount > 0);
+
+  set->refcount -= 1;
+  if (set->refcount == 0)
+    {
+      if (set->hash)
+        g_hash_table_destroy (set->hash);
+      g_free (set);
+    }
+}
+
+void
+entry_set_add_entry (EntrySet *set,
+                     Entry    *entry)
+{
+  if (set->hash == NULL)
+    {
+      set->hash = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                         NULL, (GDestroyNotify) entry_unref);      
+    }
+  
+  entry_ref (entry);
+  g_hash_table_replace (set->hash,
+                        entry->relative_path,
+                        entry);
+}
+
+void
+entry_set_remove_entry (EntrySet *set,
+                        Entry    *entry)
+{
+  if (set->hash == NULL)
+    return;
+  
+  g_hash_table_remove (set->hash,
+                       entry->relative_path);
+}
+
+Entry*
+entry_set_lookup (EntrySet   *set,
+                  const char *relative_path)
+{
+  if (set->hash == NULL)
+    return NULL;
+
+  return g_hash_table_lookup (set->hash, relative_path);
+}
+
+void
+entry_set_clear (EntrySet *set)
+{
+  if (set->hash != NULL)
+    {
+      g_hash_table_destroy (set->hash);
+      set->hash = NULL;
+    }
+}
+
+static void
+entry_hash_listify_foreach (void *key, void *value, void *data)
+{
+  GSList **list = data;
+  Entry *e = value;
+  
+  *list = g_slist_prepend (*list, e);
+  entry_ref (e);
+}
+
+GSList*
+entry_set_list_entries (EntrySet *set)
+{
+  GSList *list;
+
+  if (set->hash == NULL)
+    return NULL;
+  
+  list = NULL;
+  g_hash_table_foreach (set->hash, entry_hash_listify_foreach, &list);
+
+  return list;
+}
+
+int
+entry_set_get_count (EntrySet *set)
+{
+  if (set->hash)
+    return g_hash_table_size (set->hash);
+  else
+    return 0;
+}
+
+static void
+union_foreach (void *key, void *value, void *data)
+{
+  /* we are iterating over "with" adding anything not
+   * already in "set". We unconditionally overwrite
+   * the stuff in "set" because we can assume
+   * two entries with the same name are equivalent.
+   */
+  EntrySet *set = data;
+  Entry *e = value;
+
+  entry_set_add_entry (set, e);
+}
+
+void
+entry_set_union (EntrySet *set,
+                 EntrySet *with)
+{
+  if (entry_set_get_count (with) == 0)
+    {
+      /* A fast simple case */
+      return;
+    }
+  else
+    {
+      g_assert (with->hash);
+
+      g_hash_table_foreach (with->hash,
+                            union_foreach,
+                            set);
+    }
+}
+
+typedef struct
+{
+  EntrySet *with;
+} IntersectData;
+
+static gboolean
+intersect_foreach_remove (void *key, void *value, void *data)
+{
+  IntersectData *id = data;
+
+  /* return TRUE to remove if the key is not in the other set */
+  return g_hash_table_lookup (id->with->hash, key) == NULL;
+}
+
+void
+entry_set_intersection (EntrySet *set,
+                        EntrySet *with)
+{
+  if (entry_set_get_count (set) == 0 ||
+      entry_set_get_count (with) == 0)
+    {
+      /* A fast simple case */
+      entry_set_clear (set);
+      return;
+    }
+  else
+    {
+      /* Remove everything in "set" which is not in "with" */
+      IntersectData id;
+
+      g_assert (set->hash);
+      g_assert (with->hash);
+
+      id.with = with;
+      
+      g_hash_table_foreach_remove (set->hash, intersect_foreach_remove, &id);
+    }
+}
+
+static gboolean
+subtract_foreach_remove (void *key, void *value, void *data)
+{
+  EntrySet *other = data;
+
+  /* return TRUE to remove if the key IS in the other set */
+  return g_hash_table_lookup (other->hash, key) == NULL;
+}
+
+
+void
+entry_set_subtract (EntrySet *set,
+                    EntrySet *other)
+{
+  if (entry_set_get_count (set) == 0 ||
+      entry_set_get_count (other) == 0)
+    {
+      /* A fast simple case */
+      return;
+    }
+  else
+    {
+      /* Remove everything in "set" which is not in "with" */
+      g_assert (set->hash);
+      g_assert (other->hash);
+      
+      g_hash_table_foreach_remove (set->hash, subtract_foreach_remove, other);
+    }
+}
+
+void
+entry_set_swap_contents (EntrySet *a,
+                         EntrySet *b)
+{
+  GHashTable *tmp;
+
+  tmp = a->hash;
+  a->hash = b->hash;
+  b->hash = tmp;
+}
+
 /*
  * Big global cache of desktop entries
  */

@@ -25,6 +25,10 @@
 #include <glib.h>
 
 typedef struct _MenuNode MenuNode;
+typedef struct _Entry Entry;
+typedef struct _EntryDirectory EntryDirectory;
+typedef struct _EntryDirectoryList EntryDirectoryList;
+typedef struct _EntrySet EntrySet;
 
 typedef enum
 {
@@ -79,6 +83,9 @@ MenuNodeType menu_node_get_type      (MenuNode *node);
 const char*  menu_node_get_content   (MenuNode *node);
 const char*  menu_node_get_filename  (MenuNode *node);
 const char*  menu_node_menu_get_name (MenuNode *node);
+
+EntryDirectoryList* menu_node_menu_get_app_entries (MenuNode *node);
+EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
 
 /* Return the pristine menu node for the file.
  * Changing this node will change what gets written

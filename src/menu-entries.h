@@ -23,6 +23,7 @@
 #define MENU_ENTRIES_H
 
 #include <glib.h>
+#include "menu-layout.h"
 
 typedef enum
 {
@@ -47,10 +48,6 @@ typedef enum
   ENTRY_LOAD_DIRECTORIES = 1 << 2
 } EntryLoadFlags;
 
-typedef struct _Entry Entry;
-typedef struct _EntryDirectory EntryDirectory;
-typedef struct _EntryDirectoryList EntryDirectoryList;
-
 /* returns a new ref, never has Legacy category, relative path is entry basename */
 Entry* entry_get_by_absolute_path (const char *path);
 
@@ -66,9 +63,11 @@ Entry* entry_directory_get_desktop   (EntryDirectory *dir,
 Entry* entry_directory_get_directory (EntryDirectory *dir,
                                       const char     *relative_path);
 
-GSList* entry_directory_get_all_desktops (EntryDirectory *dir);
-GSList* entry_directory_get_by_category  (EntryDirectory *dir,
-                                          const char     *category);
+void entry_directory_get_all_desktops (EntryDirectory *dir,
+                                       EntrySet       *add_to_set);
+void entry_directory_get_by_category  (EntryDirectory *dir,
+                                       const char     *category,
+                                       EntrySet       *add_to_set);
 
 EntryDirectoryList* entry_directory_list_new (void);
 
@@ -76,10 +75,14 @@ void entry_directory_list_ref     (EntryDirectoryList *list);
 void entry_directory_list_unref   (EntryDirectoryList *list);
 void entry_directory_list_clear   (EntryDirectoryList *list);
 /* prepended dirs are searched first */
-void entry_directory_list_prepend (EntryDirectoryList *list,
-                                   EntryDirectory     *dir);
-void entry_directory_list_append  (EntryDirectoryList *list,
-                                   EntryDirectory     *dir);
+void entry_directory_list_prepend     (EntryDirectoryList *list,
+                                       EntryDirectory     *dir);
+void entry_directory_list_append      (EntryDirectoryList *list,
+                                       EntryDirectory     *dir);
+int  entry_directory_list_get_length  (EntryDirectoryList *list);
+void entry_directory_list_append_list (EntryDirectoryList *list,
+                                       EntryDirectoryList *to_append);
+
 
 /* return a new ref */
 Entry* entry_directory_list_get_desktop   (EntryDirectoryList *list,
@@ -87,10 +90,14 @@ Entry* entry_directory_list_get_desktop   (EntryDirectoryList *list,
 Entry* entry_directory_list_get_directory (EntryDirectoryList *list,
                                            const char         *relative_path);
 
-GSList* entry_directory_list_get_all_desktops (EntryDirectoryList *list);
-GSList* entry_directory_list_get_by_category  (EntryDirectoryList *list,
-                                               const char         *category);
+void entry_directory_list_get_all_desktops (EntryDirectoryList *list,
+                                            EntrySet           *set);
+void entry_directory_list_get_by_category  (EntryDirectoryList *list,
+                                            const char         *category,
+                                            EntrySet           *set);
 
+void entry_directory_list_invert_set       (EntryDirectoryList *list,
+                                            EntrySet           *set);
 
 void entry_ref   (Entry *entry);
 void entry_unref (Entry *entry);
@@ -101,5 +108,28 @@ gboolean    entry_has_category      (Entry      *entry,
                                      const char *category);
 
 void entry_set_only_show_in_name (const char *name);
-                   
+
+EntrySet* entry_set_new          (void);
+void      entry_set_ref          (EntrySet *set);
+void      entry_set_unref        (EntrySet *set);
+void      entry_set_add_entry    (EntrySet *set,
+                                  Entry    *entry);
+void      entry_set_remove_entry (EntrySet *set,
+                                  Entry    *entry);
+Entry*    entry_set_lookup       (EntrySet   *set,
+                                  const char *relative_path);
+void      entry_set_clear        (EntrySet *set);
+/* returns a ref to each entry */
+GSList*   entry_set_list_entries (EntrySet *set);
+int       entry_set_get_count    (EntrySet *set);
+
+void      entry_set_union        (EntrySet *set,
+                                  EntrySet *with);
+void      entry_set_intersection (EntrySet *set,
+                                  EntrySet *with);
+void      entry_set_subtract     (EntrySet *set,
+                                  EntrySet *other);
+void      entry_set_swap_contents (EntrySet *a,
+                                   EntrySet *b);
+
 #endif /* MENU_ENTRIES_H */

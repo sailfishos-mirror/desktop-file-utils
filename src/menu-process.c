@@ -20,6 +20,8 @@
  */
 
 #include "menu-process.h"
+#include "canonicalize.h"
+#include <string.h>
 
 static void menu_node_resolve_files (const char *node_dirname,
                                      const char *node_filename,
@@ -342,7 +344,6 @@ menu_node_strip_duplicate_children (MenuNode *node)
   menu_nodes = g_slist_sort (menu_nodes,
                              node_menu_compare_func);
 
-  recurse_nodes = NULL;
   prev = NULL;
   tmp = menu_nodes;
   while (tmp != NULL)
@@ -352,7 +353,7 @@ menu_node_strip_duplicate_children (MenuNode *node)
           MenuNode *p = prev->data;
           MenuNode *n = tmp->data;
 
-          if (menu_node_compare_func (p, n) == 0)
+          if (node_compare_func (p, n) == 0)
             {
               /* Move children of first menu to the start of second
                * menu and nuke the first menu
@@ -403,6 +404,8 @@ struct _DesktopEntryTree
   TreeNode *root;
 };
 
+static void build_tree (DesktopEntryTree *tree);
+
 DesktopEntryTree*
 desktop_entry_tree_load (const char *filename)
 {
@@ -412,7 +415,7 @@ desktop_entry_tree_load (const char *filename)
   char *dirname;
   char *canonical;
 
-  canonical = g_canonicalize_file_name (filename, NULL);
+  canonical = g_canonicalize_file_name (filename);
   if (canonical == NULL)
     return NULL;
   
@@ -440,3 +443,296 @@ desktop_entry_tree_load (const char *filename)
   return tree;
 }
 
+static TreeNode*
+tree_node_new (void)
+{
+  TreeNode *node;
+
+  node = g_new (TreeNode, 1);
+  node->dir_entry = NULL;
+  node->entries = NULL;
+  node->children = NULL;
+
+  return node;
+}
+
+static void
+tree_node_free (TreeNode *node)
+{
+  GSList *tmp;
+
+  tmp = node->children;
+  while (tmp != NULL)
+    {
+      tree_node_free (tmp->data);
+      tmp = tmp->next;
+    }
+  g_slist_free (node->children);
+
+  tmp = node->entries;
+  while (tmp != NULL)
+    {
+      entry_unref (tmp->data);
+      tmp = tmp->next;
+    }
+  g_slist_free (node->entries);
+
+  if (node->dir_entry)
+    entry_unref (node->dir_entry);
+
+  g_free (node);
+}
+
+static EntrySet*
+menu_node_to_entry_set (EntryDirectoryList *list,
+                        MenuNode           *node)
+{
+  EntrySet *set;
+
+  set = NULL;
+  
+  switch (menu_node_get_type (node))
+    {
+    case MENU_NODE_AND:
+      {
+        MenuNode *child;
+        
+        child = menu_node_get_children (node);
+        while (child != NULL)
+          {
+            EntrySet *child_set;
+            child_set = menu_node_to_entry_set (list, child);
+
+            if (set == NULL)
+              set = child_set;
+            else
+              {
+                entry_set_intersection (set, child_set);
+                entry_set_unref (child_set);
+              }
+
+            /* as soon as we get empty results, we can bail,
+             * because it's an AND
+             */
+            if (entry_set_get_count (set) == 0)
+              break;
+            
+            child = menu_node_get_next (child);
+          }
+      }
+      break;
+      
+    case MENU_NODE_OR:
+      {
+        MenuNode *child;
+        
+        child = menu_node_get_children (node);
+        while (child != NULL)
+          {
+            EntrySet *child_set;
+            child_set = menu_node_to_entry_set (list, child);
+            
+            if (set == NULL)
+              set = child_set;
+            else
+              {
+                entry_set_union (set, child_set);
+                entry_set_unref (child_set);
+              }
+            
+            child = menu_node_get_next (child);
+          }
+      }
+      break;
+      
+    case MENU_NODE_NOT:
+      {
+        /* First get the OR of all the rules */
+        MenuNode *child;
+        
+        child = menu_node_get_children (node);
+        while (child != NULL)
+          {
+            EntrySet *child_set;
+            child_set = menu_node_to_entry_set (list, child);
+            
+            if (set == NULL)
+              set = child_set;
+            else
+              {
+                entry_set_union (set, child_set);
+                entry_set_unref (child_set);
+              }
+            
+            child = menu_node_get_next (child);
+          }
+
+        if (set != NULL)
+          {
+            /* Now invert the result */
+            entry_directory_list_invert_set (list, set);
+          }
+      }
+      break;
+      
+    case MENU_NODE_ALL:
+      set = entry_set_new ();
+      entry_directory_list_get_all_desktops (list, set);
+      break;
+
+    case MENU_NODE_FILENAME:
+      {
+        Entry *e;
+        e = entry_directory_list_get_desktop (list,
+                                              menu_node_get_content (node));
+        if (e != NULL)
+          {
+            set = entry_set_new ();
+            entry_set_add_entry (set, e);
+            entry_unref (e);
+          }
+      }
+      break;
+      
+    case MENU_NODE_CATEGORY:
+      set = entry_set_new ();
+      entry_directory_list_get_by_category (list,
+                                            menu_node_get_content (node),
+                                            set);
+      break;
+
+    default:
+      break;
+    }
+
+  if (set == NULL)
+    set = entry_set_new (); /* create an empty set */
+  
+  return set;
+}
+
+static void
+fill_tree_node_from_menu_node (TreeNode *tree_node,
+                               MenuNode *menu_node)
+{
+  MenuNode *child;
+  EntryDirectoryList *app_dirs;
+  EntryDirectoryList *dir_dirs;
+  EntrySet *entries;
+  
+  if (menu_node_get_type (menu_node) == MENU_NODE_MENU)
+    {
+      app_dirs = menu_node_menu_get_app_entries (menu_node);
+      dir_dirs = menu_node_menu_get_directory_entries (menu_node);
+    }
+  else
+    {
+      app_dirs = NULL;
+      dir_dirs = NULL;
+    }
+
+  entries = entry_set_new ();
+  
+  child = menu_node_get_children (menu_node);
+  while (child != NULL)
+    {
+      switch (menu_node_get_type (child))
+        {
+        case MENU_NODE_MENU:
+          /* recurse */
+          {
+            TreeNode *child_tree;
+            child_tree = tree_node_new ();
+            fill_tree_node_from_menu_node (child_tree, child);
+            tree_node->children = g_slist_prepend (tree_node->children,
+                                                   child_tree);
+          }
+          break;
+
+        case MENU_NODE_INCLUDE:
+          {
+            /* The match rule children of the <Include> are
+             * independent (logical OR) so we can process each one by
+             * itself
+             */
+            MenuNode *rule;
+            
+            rule = menu_node_get_children (child);
+            while (rule != NULL)
+              {
+                EntrySet *rule_set;
+                rule_set = menu_node_to_entry_set (app_dirs, rule);
+
+                if (rule_set != NULL)
+                  {
+                    entry_set_union (entries, rule_set);
+                    entry_set_unref (rule_set);
+                  }
+                
+                rule = menu_node_get_next (rule);
+              }
+          }
+          break;
+
+        case MENU_NODE_EXCLUDE:
+          {
+            /* The match rule children of the <Exclude> are
+             * independent (logical OR) so we can process each one by
+             * itself
+             */
+            MenuNode *rule;
+            
+            rule = menu_node_get_children (child);
+            while (rule != NULL)
+              {
+                EntrySet *rule_set;
+                rule_set = menu_node_to_entry_set (app_dirs, rule);
+                
+                if (rule_set != NULL)
+                  {
+                    entry_set_subtract (entries, rule_set);
+                    entry_set_unref (rule_set);
+                  }
+                
+                rule = menu_node_get_next (rule);
+              }
+          }
+          break;
+
+        case MENU_NODE_DIRECTORY:
+          {
+            Entry *e;
+
+            /* The last <Directory> to exist wins, so we always try overwriting */
+            e = entry_directory_list_get_directory (dir_dirs,
+                                                    menu_node_get_content (child));
+
+            if (e != NULL)
+              {
+                if (tree_node->dir_entry)
+                  entry_unref (tree_node->dir_entry);
+                tree_node->dir_entry = e; /* pass ref ownership */
+              }
+          }
+          break;
+        default:
+          break;
+        }
+
+      child = menu_node_get_next (child);
+    }
+
+  tree_node->entries = entry_set_list_entries (entries);
+  entry_set_unref (entries);
+}
+
+static void
+build_tree (DesktopEntryTree *tree)
+{
+  if (tree->root != NULL)
+    return;
+
+  tree->root = tree_node_new ();
+  fill_tree_node_from_menu_node (tree->root,
+                                 tree->resolved_node);
+}

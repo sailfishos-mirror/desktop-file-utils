@@ -1,5 +1,11 @@
 2002-05-25  Havoc Pennington  <hp@pobox.com>
 
+	* src/vfolder-query.c (desktop_file_tree_write_symlink_dir): 
+	Add the create-a-dir-of-symlinks support.
+
+	* src/desktop_file.c (gnome_desktop_file_merge_string_into_list):
+	fix bug when adding the first string in the list.
+
 	* src/vfolder-query.c: handle OnlyUnallocated correctly
 
 2002-05-25  Havoc Pennington  <hp@pobox.com>

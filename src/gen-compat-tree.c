@@ -20,7 +20,8 @@
 #define N_(x) x
 
 static char *target_dir = NULL;
-
+static gboolean do_print = FALSE;
+static gboolean do_verbose = FALSE;
 
 static void parse_options_callback (poptContext              ctx,
                                     enum poptCallbackReason  reason,
@@ -30,6 +31,8 @@ static void parse_options_callback (poptContext              ctx,
 
 enum {
   OPTION_DIR,
+  OPTION_PRINT,
+  OPTION_VERBOSE,
   OPTION_LAST
 };
 
@@ -62,6 +65,15 @@ struct poptOption options[] = {
     NULL
   },
   {
+    "print",
+    '\0',
+    POPT_ARG_NONE,
+    NULL,
+    OPTION_PRINT,
+    N_("Print a human-readable representation of the menu to standard output."),
+    NULL
+  },
+  {
     NULL,
     '\0',
     0,
@@ -89,12 +101,35 @@ parse_options_callback (poptContext              ctx,
     case OPTION_DIR:
       if (target_dir)
         {
-          g_printerr (_("Can only specify --dir once\n"));
+          g_printerr (_("Can only specify %s once\n"), "--dir");
+
           exit (1);
         }
 
       str = poptGetOptArg (ctx);
       target_dir = g_strdup (str);
+      break;
+
+    case OPTION_PRINT:
+      if (do_print)
+        {
+          g_printerr (_("Can only specify %s once\n"), "--print");
+
+          exit (1);
+        }
+      do_print = TRUE;
+      break;
+
+    case OPTION_VERBOSE:
+      if (do_verbose)
+        {
+          g_printerr (_("Can only specify %s once\n"), "--verbose");
+
+          exit (1);
+        }
+
+      do_verbose = TRUE;
+      set_verbose_queries (TRUE);
       break;
       
     default:
@@ -129,9 +164,9 @@ main (int argc, char **argv)
       return 1;
     }
 
-  if (target_dir == NULL)
+  if (target_dir == NULL && !do_print)
     {
-      g_printerr (_("Must specify --dir option for target directory\n"));
+      g_printerr (_("Must specify --dir option for target directory or --print option to print the menu\n"));
       return 1;
     }
   
@@ -149,17 +184,24 @@ main (int argc, char **argv)
           g_printerr (_("Failed to load %s: %s\n"),
                       args[i], err->message);
           g_error_free (err);
+
+          return 1;
         }
+
       if (folder)
         {
           DesktopFileTree *tree;
 
           tree = desktop_file_tree_new (folder);
 
-          desktop_file_tree_print (tree,
-                                   DESKTOP_FILE_TREE_PRINT_NAME |
-                                   DESKTOP_FILE_TREE_PRINT_GENERIC_NAME);          
+          if (do_print)
+            desktop_file_tree_print (tree,
+                                     DESKTOP_FILE_TREE_PRINT_NAME |
+                                     DESKTOP_FILE_TREE_PRINT_GENERIC_NAME); 
 
+          if (target_dir)
+            desktop_file_tree_write_symlink_dir (tree, target_dir);
+          
           desktop_file_tree_free (tree);
           
           vfolder_free (folder);

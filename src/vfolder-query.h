@@ -39,7 +39,9 @@ DesktopFileTree* desktop_file_tree_new   (Vfolder                   *folder);
 void             desktop_file_tree_free  (DesktopFileTree           *tree);
 void             desktop_file_tree_print (DesktopFileTree           *tree,
                                           DesktopFileTreePrintFlags  flags);
+void             desktop_file_tree_write_symlink_dir (DesktopFileTree *tree,
+                                                      const char      *dirname);
 
-
+void set_verbose_queries (gboolean value);
 
 #endif

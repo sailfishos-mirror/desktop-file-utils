@@ -1356,19 +1356,15 @@ gnome_desktop_file_merge_string_into_list (GnomeDesktopFile *df,
         return; /* nothing to do */
     }
 
-  if (gnome_desktop_file_get_raw (df, section, keyname, locale, &raw))
-    {
-      /* Append to current list */
-      char *str;
-      str = g_strconcat (raw, value, ";", NULL);
-      gnome_desktop_file_set_raw (df, section, keyname, locale, str);
-      g_free (str);
-    }
-  else
-    {
-      /* Start a new key */
-      gnome_desktop_file_set_raw (df, section, keyname, locale, value);
-    }
+  gnome_desktop_file_get_raw (df, section, keyname, locale, &raw);
+  
+  {
+    /* Append to current list */
+    char *str;
+    str = g_strconcat (raw ? raw : "", value, ";", NULL);
+    gnome_desktop_file_set_raw (df, section, keyname, locale, str);
+    g_free (str);
+  }
 }
 
 void

@@ -71,6 +71,9 @@ struct _DesktopFileTree
 
   GHashTable *allocated_apps;
 
+  GHashTable *app_origins;
+  GHashTable *dir_origins;
+  
   guint loaded : 1;
 };
 
@@ -91,6 +94,15 @@ desktop_file_tree_new (Vfolder *folder)
                                       g_free,
                                       (GDestroyNotify) gnome_desktop_file_free);  
 
+  /* maps from desktop file basename to desktop file full path,
+   * basename is not copied from tree->apps/tree->dirs
+   */
+  tree->app_origins = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                             NULL, g_free);
+
+  tree->dir_origins = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                             NULL, g_free);
+  
   tree->allocated_apps = g_hash_table_new (g_str_hash, g_str_equal);
   
   return tree;
@@ -117,6 +129,8 @@ desktop_file_tree_free (DesktopFileTree *tree)
 
   g_hash_table_destroy (tree->apps);
   g_hash_table_destroy (tree->dirs);
+  g_hash_table_destroy (tree->app_origins);
+  g_hash_table_destroy (tree->dir_origins);
 
   g_hash_table_destroy (tree->allocated_apps);
   
@@ -230,8 +244,121 @@ desktop_file_tree_print (DesktopFileTree          *tree,
 }
 
 static void
+symlink_recurse_nodes (GNode      *node,
+                       const char *parent_dir,
+                       GHashTable *dir_origins,
+                       GHashTable *app_origins)
+{
+  NodeData *nd;
+  
+  nd = node->data;
+  
+  switch (nd->type)
+    {
+    case NODE_FOLDER:  
+      {
+        char *full_dirname;
+        GNode *child;
+        
+        full_dirname = g_build_filename (parent_dir,
+                                         vfolder_get_name (nd->folder),
+                                         NULL);
+
+        if (mkdir (full_dirname, 0755) < 0 &&
+            errno != EEXIST)
+          {
+            g_printerr (_("Failed to create directory \"%s\": %s\n"),
+                        full_dirname, g_strerror (errno));
+
+          }
+        else
+          {
+            const char *origin;
+            char *l;
+            
+            origin = g_hash_table_lookup (dir_origins,
+                                          nd->basename);
+            
+            g_assert (origin);
+
+            l = g_build_filename (full_dirname, ".directory", NULL);
+            
+            if (symlink (origin, l) < 0)
+              {
+                g_printerr (_("Failed to symlink \"%s\" to \"%s\": %s\n"),
+                            l, origin, g_strerror (errno));                
+              }
+
+            g_free (l);
+          }
+
+        child = node->children;
+        while (child != NULL)
+          {
+            symlink_recurse_nodes (child, full_dirname,
+                                   dir_origins, app_origins);
+            child = child->next;
+          }
+        
+        g_free (full_dirname);
+      }
+      break;
+    case NODE_APPLICATION:
+      {
+        const char *origin;
+        char *l;
+        
+        origin = g_hash_table_lookup (app_origins,
+                                      nd->basename);
+        
+        g_assert (origin);
+        
+        l = g_build_filename (parent_dir, nd->basename, NULL);
+        
+        if (symlink (origin, l) < 0)
+          {
+            g_printerr (_("Failed to symlink \"%s\" to \"%s\": %s\n"),
+                        l, origin, g_strerror (errno));                
+          }
+        
+        g_free (l);            
+      }
+      break;
+    }
+}
+
+void
+desktop_file_tree_write_symlink_dir (DesktopFileTree *tree,
+                                     const char      *dirname)
+{
+  load_tree (tree);
+
+  if (tree->node == NULL)
+    return;
+    
+  if (mkdir (dirname, 0755) < 0)
+    {
+      if (errno != EEXIST)
+        {
+          g_printerr (_("Failed to create directory \"%s\": %s\n"),
+                      dirname, g_strerror (errno));
+          
+          /* Can't do more */
+          return;
+        }
+    }
+
+
+  symlink_recurse_nodes (tree->node, dirname,
+                         tree->dir_origins,
+                         tree->app_origins);
+}
+
+static void
 add_or_free_desktop_file (GHashTable       *dirs_hash,
                           GHashTable       *apps_hash,
+                          GHashTable       *dir_origins,
+                          GHashTable       *app_origins,
                           const char       *full_path,
                           const char       *basename,
                           GnomeDesktopFile *df)
@@ -239,6 +366,7 @@ add_or_free_desktop_file (GHashTable       *dirs_hash,
   gboolean is_dir;
   char *type;
   GHashTable *hash;
+  GHashTable *origin_hash;
   
   if (!desktop_file_fixup (df, full_path) ||
       !desktop_file_validate (df, full_path))
@@ -275,9 +403,15 @@ add_or_free_desktop_file (GHashTable       *dirs_hash,
     }
 
   if (is_dir)
-    hash = dirs_hash;
+    {
+      hash = dirs_hash;
+      origin_hash = dir_origins;
+    }
   else
-    hash = apps_hash;
+    {
+      hash = apps_hash;
+      origin_hash = app_origins;
+    }
   
   if (g_hash_table_lookup (hash, basename))
     {
@@ -287,79 +421,18 @@ add_or_free_desktop_file (GHashTable       *dirs_hash,
     }
   else
     {
+      char *b;
+
+      b = g_strdup (basename);
+      
       /*       g_print ("Adding desktop file %s\n", full_path);*/
-      g_hash_table_replace (hash, g_strdup (basename),
+      g_hash_table_replace (hash, b,
                             df);
+
+      g_hash_table_replace (origin_hash, b, g_strdup (full_path));
     }
 
   g_free (type);
-}
-
-static void
-merge_compat_dir (GHashTable *dirs_hash,
-                  GHashTable *apps_hash,
-                  const char *dirname)
-{
-  DIR* dp;
-  struct dirent* dent;
-  struct stat statbuf;
-  char* fullpath;
-  char* fullpath_end;
-  guint len;
-  guint subdir_len;
-
-  /* FIXME */
-  return;
-  
-  len = strlen (dirname);
-  subdir_len = PATH_MAX - len;
-  
-  fullpath = g_new0 (char, subdir_len + len + 2); /* ensure null termination */
-  strcpy (fullpath, dirname);
-  
-  fullpath_end = fullpath + len;
-  if (*(fullpath_end - 1) != '/')
-    {
-      *fullpath_end = '/';
-      ++fullpath_end;
-    }
-  
-  while ((dent = readdir (dp)) != NULL)
-    {
-      /* Load directory file for this dir */
-      if (strcmp (".directory", dent->d_name) == 0)
-        {
-          
-        }
-      /* ignore ., .., and all dot-files */
-      else if (dent->d_name[0] == '.')
-        continue;
-
-      len = strlen (dent->d_name);
-
-      if (len < subdir_len)
-        {
-          strcpy (fullpath_end, dent->d_name);
-          strncpy (fullpath_end + len, ".directory", subdir_len - len);
-        }
-      else
-        continue; /* Shouldn't ever happen since PATH_MAX is available */
-      
-      if (stat (fullpath, &statbuf) < 0)
-        {
-          /* Not a directory name */
-          continue;
-        }
-      
-      
-    }
-
-  /* if this fails, we really can't do a thing about it
-   * and it's not a meaningful error
-   */
-  closedir (dp);
-
-  g_free (fullpath);
 }
 
 static gboolean
@@ -381,9 +454,171 @@ g_str_has_suffix (const gchar  *str,
   return strcmp (str + str_len - suffix_len, suffix) == 0;
 }
 
+static const struct
+{
+  const char *dirname;
+  const char *category;
+} compat_categories[] =
+  {
+    { "Development", "Development" },
+    { "Editors", "TextEditor" },
+    { "Games", "Games" },
+    { "Graphics", "Graphics" },
+    { "Internet", "Network" },
+    { "Multimedia", "AudioVideo" },
+    { "Settings", "Settings" },
+    { "System", "System" },
+    { "Utilities", "Utility" },
+    { NULL, NULL }
+  };
+
+static void
+merge_compat_dir (GHashTable *dirs_hash,
+                  GHashTable *apps_hash,
+                  GHashTable *dir_origins,
+                  GHashTable *app_origins,
+                  const char *dirname)
+{
+  DIR* dp;
+  struct dirent* dent;
+  char* fullpath;
+  char* fullpath_end;
+  guint len;
+  guint subdir_len;
+  char *dir_basename;
+  const char *category;
+  int i;
+  
+  dp = opendir (dirname);
+  if (dp == NULL)
+    {
+      int saved_errno = errno;
+
+      if (g_file_test (dirname, G_FILE_TEST_IS_DIR))
+        g_printerr (_("Warning: Could not open directory %s: %s\n"),
+                    dirname, g_strerror (saved_errno));
+      else if (g_str_has_suffix (dirname, ".directory"))
+        ; /* silent */
+      else
+        g_printerr (_("Warning: unknown file \"%s\" doesn't end in .desktop and isn't a directory, ignoring\n"),
+                    dirname);
+        
+      return;
+    }
+
+  dir_basename = g_path_get_basename (dirname);
+  category = NULL;
+  i = 0;
+  while (compat_categories[i].dirname)
+    {
+      if (strcmp (compat_categories[i].dirname,
+                  dir_basename) == 0)
+        {
+          category = compat_categories[i].category;
+          break;
+        }
+
+      ++i;
+    }
+  g_free (dir_basename);
+  
+  len = strlen (dirname);
+  subdir_len = PATH_MAX - len;
+  
+  fullpath = g_new0 (char, subdir_len + len + 2); /* ensure null termination */
+  strcpy (fullpath, dirname);
+  
+  fullpath_end = fullpath + len;
+  if (*(fullpath_end - 1) != '/')
+    {
+      *fullpath_end = '/';
+      ++fullpath_end;
+    }
+  
+  while ((dent = readdir (dp)) != NULL)
+    {
+      GnomeDesktopFile *df;
+      GError *err;
+      
+      /* ignore ., .., and all dot-files */
+      if (dent->d_name[0] == '.')
+        continue;
+      
+      len = strlen (dent->d_name);
+
+      if (len < subdir_len)
+        {
+          strcpy (fullpath_end, dent->d_name);
+        }
+      else
+        continue; /* Shouldn't ever happen since PATH_MAX is available */
+
+      if (g_str_has_suffix (dent->d_name, ".desktop"))
+        {      
+          err = NULL;
+          df = gnome_desktop_file_load (fullpath, &err);
+          if (err)
+            {
+              g_printerr (_("Warning: failed to load %s: %s\n"),
+                          fullpath, err->message);
+              g_error_free (err);
+            }
+          
+          if (df)
+            {
+              const char *raw;
+
+              raw = NULL;
+              if (!gnome_desktop_file_get_raw (df, NULL, "Categories",
+                                               NULL, &raw))
+                {
+                  /* Make up some categories */
+                  gnome_desktop_file_merge_string_into_list (df, NULL,
+                                                             "Categories",
+                                                             NULL,
+                                                             "Merged");
+                  gnome_desktop_file_merge_string_into_list (df, NULL,
+                                                             "Categories",
+                                                             NULL,
+                                                             "Application");
+                  if (category)
+                    gnome_desktop_file_merge_string_into_list (df, NULL,
+                                                               "Categories",
+                                                               NULL,
+                                                               category);
+                }
+
+              gnome_desktop_file_get_raw (df, NULL, "Categories",
+                                          NULL, &raw);
+              
+              add_or_free_desktop_file (dirs_hash, apps_hash,
+                                        dir_origins, app_origins,
+                                        fullpath, dent->d_name,
+                                        df);
+            }
+        }
+      else
+        {
+          /* Maybe it's a directory, try recursing. */
+          merge_compat_dir (dirs_hash, apps_hash,
+                            dir_origins, app_origins,
+                            fullpath);
+        }
+    }
+
+  /* if this fails, we really can't do a thing about it
+   * and it's not a meaningful error
+   */
+  closedir (dp);
+
+  g_free (fullpath);
+}
+
 static void
 read_desktop_dir (GHashTable *dirs_hash,
                   GHashTable *apps_hash,
+                  GHashTable *dir_origins,
+                  GHashTable *app_origins,
                   const char *dirname)
 {
   DIR* dp;
@@ -451,6 +686,7 @@ read_desktop_dir (GHashTable *dirs_hash,
       if (df)
         {
           add_or_free_desktop_file (dirs_hash, apps_hash,
+                                    dir_origins, app_origins,
                                     fullpath, dent->d_name,
                                     df);
         }
@@ -475,13 +711,17 @@ load_tree (DesktopFileTree *tree)
 
   tree->loaded = TRUE;
 
-  read_desktop_dir (tree->dirs, tree->apps, DATADIR"/applications");
+  read_desktop_dir (tree->dirs, tree->apps,
+                    tree->dir_origins, tree->app_origins,
+                    DATADIR"/applications");
   
   list = vfolder_get_desktop_dirs (tree->folder);
   tmp = list;
   while (tmp != NULL)
     {
-      read_desktop_dir (tree->dirs, tree->apps, tmp->data);
+      read_desktop_dir (tree->dirs, tree->apps,
+                        tree->dir_origins, tree->app_origins,
+                        tmp->data);
       tmp = tmp->next;
     }
   
@@ -489,7 +729,9 @@ load_tree (DesktopFileTree *tree)
   tmp = list;
   while (tmp != NULL)
     {
-      merge_compat_dir (tree->dirs, tree->apps, tmp->data);
+      merge_compat_dir (tree->dirs, tree->apps,
+                        tree->dir_origins, tree->app_origins,
+                        tmp->data);
       tmp = tmp->next;
     }
 
@@ -498,7 +740,13 @@ load_tree (DesktopFileTree *tree)
   distribute_unallocated (tree, tree->node);
 }
 
-static gboolean is_verbose = TRUE;
+static gboolean is_verbose = FALSE;
+void
+set_verbose_queries (gboolean value)
+{
+  is_verbose = value;
+}
+
 static void
 query_verbose (int depth, const char *format, ...)
 {
@@ -733,6 +981,9 @@ fill_folder_with_apps (DesktopFileTree *tree,
   QueryData qd;
   GSList *list;
   GSList *tmp;
+
+  query_verbose (0, "FOLDER: %s%s\n", vfolder_get_name (folder),
+                 vfolder_get_only_unallocated (folder) ? " OnlyUnallocated" : "");
   
   qd.query = vfolder_get_query (folder);
   if (qd.query)
@@ -782,8 +1033,6 @@ node_from_vfolder (DesktopFileTree *tree,
   NodeData *nd;
   GSList *list;
   GSList *tmp;
-  
-  query_verbose (0, "FOLDER: %s\n", vfolder_get_name (folder));
   
   df_basename = vfolder_get_desktop_file (folder);
   if (df_basename == NULL)
@@ -863,10 +1112,11 @@ distribute_unallocated (DesktopFileTree *tree,
       child = child->next;
     }
 
-  nd = node->data;  
+  nd = node->data;
   
   /* Only folders that are "OnlyUnallocated" go in the first pass */
   if (nd->type == NODE_FOLDER &&
       vfolder_get_only_unallocated (nd->folder))
     fill_folder_with_apps (tree, node, nd->folder);
 }
+

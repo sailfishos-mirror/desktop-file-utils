@@ -528,27 +528,95 @@ find_subdir (TreeNode    *parent,
   return NULL;
 }
 
-static TreeNode*
-tree_node_find_subdir (TreeNode   *node,
-                       const char *name)
+/* Get node if it's a dir and return TRUE if it's an entry */
+static gboolean
+tree_node_find_subdir_or_entry (TreeNode   *node,
+                                const char *name,
+                                TreeNode  **subdir_p,
+                                char      **real_fs_absolute_path_p)
 {
   char **split;
   int i;
   TreeNode *iter;
+  TreeNode *prev;
+  Entry *entry;
+
+  if (subdir_p)
+    *subdir_p = NULL;
+  if (real_fs_absolute_path_p)
+    *real_fs_absolute_path_p = NULL;
+  
+  entry = NULL;
   
   split = g_strsplit (name, "/", -1);
 
+  prev = NULL;
   iter = node;
   i = 0;
-  while (iter != NULL && split[i] != NULL && *(split[i]) != '\0')
+  while (split[i] != NULL && *(split[i]) != '\0')
     {
+      if (iter == NULL)
+        {
+          /* We ran out of nodes before running out of path
+           * components
+           */
+          break;
+        }
+      
+      prev = iter;
       iter = find_subdir (iter, split[i]);
-
+      
       ++i;
     }
 
+  if (iter == NULL && prev != NULL && split[i] != NULL)
+    {
+      /* The last element was not a dir; see if it's one
+       * of the entries.
+       */
+      const char *entry_name;
+      GSList *tmp;
+      
+      entry_name = split[i];
+      
+      tmp = prev->entries;
+      while (tmp != NULL)
+        {
+          Entry *e = tmp->data;
+          if (strcmp (entry_get_name (e), entry_name) == 0)
+            {
+              entry = e;
+              break;
+            }
+          tmp = tmp->next;
+        }
+    }
+
   g_strfreev (split);
-  return iter;
+
+  if (real_fs_absolute_path_p && entry)
+    *real_fs_absolute_path_p = g_strdup (entry_get_absolute_path (entry));
+  
+  if (subdir_p)
+    {
+      *subdir_p = iter;
+      return TRUE;
+    }
+  else if (entry != NULL)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+
+static TreeNode*
+tree_node_find_subdir (TreeNode   *node,
+                       const char *name)
+{
+  TreeNode *ret;
+  ret = NULL;
+  tree_node_find_subdir_or_entry (node, name, &ret, NULL);
+  return ret;
 }
 
 gboolean
@@ -564,6 +632,21 @@ desktop_entry_tree_get_node (DesktopEntryTree      *tree,
 
   *node = tree_node_find_subdir (tree->root, path);
   return *node != NULL;
+}
+
+gboolean
+desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
+                                 const char             *path,
+                                 DesktopEntryTreeNode  **node_p,
+                                 char                  **real_fs_absolute_path_p)
+{  
+  build_tree (tree);
+  if (tree->root == NULL)
+    return FALSE;
+  
+  return tree_node_find_subdir_or_entry (tree->root,
+                                         path, node_p,
+                                         real_fs_absolute_path_p);
 }
 
 void
@@ -606,6 +689,7 @@ desktop_entry_tree_list_subdirs (DesktopEntryTree       *tree,
     *n_subdirs = len;
 }
 
+/* This lists absolute paths in the real filesystem */
 void
 desktop_entry_tree_list_entries (DesktopEntryTree     *tree,
                                  DesktopEntryTreeNode *parent_node,
@@ -620,6 +704,10 @@ desktop_entry_tree_list_entries (DesktopEntryTree     *tree,
   if (n_entries)
     *n_entries = 0;
 
+  build_tree (tree);
+  if (tree->root == NULL)
+    return;
+  
   len = g_slist_length (parent_node->entries);
   *entries = g_new0 (char*, len + 1);
 
@@ -639,88 +727,70 @@ desktop_entry_tree_list_entries (DesktopEntryTree     *tree,
     *n_entries = len;
 }
 
+/* Lists entries, subdirs, *and* the ".directory" file if any,
+ * as relative paths in the VFS
+ */
 void
-desktop_entry_tree_list_subdirs_by_name (DesktopEntryTree *tree,
-                                         const char       *parent_dir,
-                                         char           ***subdirs,
-                                         int              *n_subdirs)
+desktop_entry_tree_list_all (DesktopEntryTree       *tree,
+                             DesktopEntryTreeNode   *parent_node,
+                             char                 ***names,
+                             int                    *n_names)
 {
-  TreeNode *dir;
   int len;
   GSList *tmp;
   int i;
+
+  g_return_if_fail (parent_node != NULL);
+  g_return_if_fail (names != NULL);
   
-  *subdirs = NULL;
-  if (n_subdirs)
-    *n_subdirs = 0;
+  *names = NULL;
+  if (n_names)
+    *n_names = 0;
   
   build_tree (tree);
   if (tree->root == NULL)
     return;
-
-  dir = tree_node_find_subdir (tree->root, parent_dir);
-  if (dir == NULL)
-    return;
-
-  len = g_slist_length (dir->subdirs);
-  *subdirs = g_new0 (char*, len + 1);
+  
+  len = g_slist_length (parent_node->subdirs);
+  len += g_slist_length (parent_node->entries);
+  *names = g_new0 (char*, len + 2); /* 1 extra for .directory */
 
   i = 0;
-  tmp = dir->subdirs;
+  tmp = parent_node->subdirs;
   while (tmp != NULL)
     {
       TreeNode *sub = tmp->data;
 
-      (*subdirs)[i] = g_strdup (sub->name);
+      (*names)[i] = g_strdup (sub->name);
 
       ++i;
       tmp = tmp->next;
     }
 
-  if (n_subdirs)
-    *n_subdirs = len;
-}
-
-void
-desktop_entry_tree_list_entries_by_name (DesktopEntryTree *tree,
-                                         const char       *parent_dir,
-                                         char           ***entries,
-                                         int              *n_entries)
-{
-  TreeNode *dir;
-  int len;
-  int i;
-  GSList *tmp;
-  
-  *entries = NULL;
-  if (n_entries)
-    *n_entries = 0;
-  
-  build_tree (tree);
-  if (tree->root == NULL)
-    return;
-
-  dir = tree_node_find_subdir (tree->root, parent_dir);
-  if (dir == NULL)
-    return;
-
-  len = g_slist_length (dir->entries);
-  *entries = g_new0 (char*, len + 1);
-
-  i = 0;
-  tmp = dir->entries;
+  tmp = parent_node->entries;
   while (tmp != NULL)
     {
       Entry *e = tmp->data;
-
-      (*entries)[i] = g_strdup (entry_get_absolute_path (e));
+      
+      (*names)[i] = g_strdup (entry_get_name (e));
 
       ++i;
       tmp = tmp->next;
     }
 
-  if (n_entries)
-    *n_entries = len;
+  g_assert (i == len);
+  
+  if (parent_node->dir_entry)
+    {
+      (*names)[i] = g_strdup (".directory");
+      len += 1;
+      ++i;      
+    }
+
+  g_assert (i == len);
+  
+  if (n_names)
+    *n_names = len;  
 }
 
 char*

@@ -53,6 +53,10 @@ void              desktop_entry_tree_unref (DesktopEntryTree *tree);
 gboolean desktop_entry_tree_get_node     (DesktopEntryTree       *tree,
                                           const char             *path,
                                           DesktopEntryTreeNode  **node);
+gboolean desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
+                                          const char             *path,
+                                          DesktopEntryTreeNode  **node,
+                                          char                  **real_fs_absolute_path_p);
 void     desktop_entry_tree_list_subdirs (DesktopEntryTree       *tree,
                                           DesktopEntryTreeNode   *parent_node,
                                           DesktopEntryTreeNode ***subdirs,
@@ -61,6 +65,10 @@ void     desktop_entry_tree_list_entries (DesktopEntryTree       *tree,
                                           DesktopEntryTreeNode   *parent_node,
                                           char                 ***entries,
                                           int                    *n_entries);
+void     desktop_entry_tree_list_all     (DesktopEntryTree       *tree,
+                                          DesktopEntryTreeNode   *parent_node,
+                                          char                 ***names,
+                                          int                    *n_names);
 
 /* returns a copy of .directory file absolute path */
 char*       desktop_entry_tree_node_get_directory (DesktopEntryTreeNode *node);

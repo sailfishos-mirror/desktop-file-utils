@@ -1,3 +1,11 @@
+2003-05-15  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-method.c: hacking
+
+	* src/menu-process.c (tree_node_find_subdir): fix so we don't
+	ignore trailing junk on paths
+	(desktop_entry_tree_resolve_path): new
+
 2003-05-14  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-tree-cache.c: quick implementation without file change

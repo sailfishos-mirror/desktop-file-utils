@@ -93,7 +93,6 @@ char*        menu_node_get_content_as_path (MenuNode *node);
 void         menu_node_set_content   (MenuNode   *node,
                                       const char *content);
 
-const char* menu_node_menu_get_name         (MenuNode   *node);
 const char* menu_node_legacy_dir_get_prefix (MenuNode   *node);
 void        menu_node_legacy_dir_set_prefix (MenuNode   *node,
                                              const char *prefix);
@@ -103,6 +102,7 @@ void        menu_node_root_set_basedir      (MenuNode   *node,
 void        menu_node_root_set_entry_cache  (MenuNode   *node,
                                              EntryCache *entry_cache);
 
+const char*         menu_node_menu_get_name              (MenuNode *node);
 EntryDirectoryList* menu_node_menu_get_app_entries       (MenuNode *node);
 EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
 

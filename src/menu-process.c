@@ -1474,3 +1474,236 @@ menu_set_verbose_queries (gboolean setting)
   /* FIXME */
 }
 
+static MenuNode*
+menu_node_find_immediate_submenu (MenuNode    *parent,
+                                  const char  *subdir)
+{
+  MenuNode *tmp;
+
+  tmp = menu_node_get_children (parent);
+  while (tmp != NULL)
+    {
+      if (menu_node_get_type (tmp) == MENU_NODE_MENU)
+        {
+          const char *name;
+          name = menu_node_menu_get_name (tmp);
+          if (name && strcmp (name, subdir) == 0)
+            return tmp;
+        }
+
+      tmp = menu_node_get_next (tmp);
+    }
+
+  return NULL;
+}
+
+/* Get node if it's a dir and return TRUE if it's an entry */
+static MenuNode*
+menu_node_find_submenu (MenuNode   *node,
+                        const char *name,
+                        gboolean    create_if_not_found)
+{
+  char **split;
+  int i;
+  MenuNode *iter;
+  MenuNode *prev;
+  
+  /* Skip leading '/' (we're already at the root) */
+  i = 0;
+  while (name[i] &&
+         name[i] == '/')
+    ++i;
+  
+  menu_verbose (" (splitting \"%s\")\n", name + i);
+  
+  split = g_strsplit (name + i, "/", -1);
+
+  prev = NULL;
+  iter = node;
+  i = 0;
+  while (split[i] != NULL && *(split[i]) != '\0' && iter != NULL)
+    {
+      prev = iter;
+      iter = menu_node_find_immediate_submenu (iter, split[i]);
+
+      menu_verbose ("MenuNode %p found for path component \"%s\"\n",
+                    iter, split[i]);
+
+      if (iter == NULL)
+        {
+          /* We ran out of nodes before running out of path
+           * components
+           */
+          menu_verbose ("Remaining path component \"%s\" doesn't point to a current menu node\n",
+                        split[i]);
+
+          if (create_if_not_found)
+            {
+              MenuNode *name_node;
+
+              menu_verbose ("Creating submenu \"%s\"\n", split[i]);
+              
+              iter = menu_node_new (MENU_NODE_MENU);
+              name_node = menu_node_new (MENU_NODE_NAME);
+              menu_node_set_content (name_node, split[i]);
+
+              menu_node_append_child (iter, name_node);
+
+              menu_node_append_child (prev, iter);
+
+              g_assert (menu_node_menu_get_name (iter) != NULL);
+              g_assert (strcmp (menu_node_menu_get_name (iter), split[i]) == 0);
+              
+              menu_node_unref (name_node);
+              menu_node_unref (iter);
+            }
+        }
+
+      ++i;
+    }
+
+  g_assert (iter == NULL || menu_node_get_parent (iter) == prev);
+  
+  g_strfreev (split);
+
+  menu_verbose (" Found menu node %p parent is %p\n", iter, prev);
+
+  return iter;
+}
+
+static void
+menu_node_ensure_child (MenuNode    *parent,
+                        MenuNodeType child_type,
+                        const char  *child_content,
+                        gboolean     content_as_path)
+{
+  MenuNode *tmp;
+  gboolean already_there;
+
+  menu_verbose ("Checking whether we already have a subnode with type %d and content \"%s\"\n", child_type, child_content);
+
+  already_there = FALSE;
+  tmp = menu_node_get_children (parent);
+  while (tmp != NULL && !already_there)
+    {
+      if (menu_node_get_type (tmp) == child_type)
+        {
+
+          if (content_as_path)
+            {
+              char *name;
+              name = menu_node_get_content_as_path (tmp);
+              if (name && strcmp (name, child_content) == 0)
+                {
+                  menu_verbose ("Already have it!\n");
+                  already_there = TRUE;
+                }
+
+              g_free (name);
+            }
+          else
+            {
+              const char *name;
+              name = menu_node_get_content (tmp);
+              if (name && strcmp (name, child_content) == 0)
+                {
+                  menu_verbose ("Already have it!\n");
+                  already_there = TRUE;
+                }
+            }
+        }
+
+      tmp = menu_node_get_next (tmp);
+    }
+
+  if (!already_there)
+    {
+      MenuNode *node;
+      
+      menu_verbose ("Node not found, adding it\n");
+      
+      node = menu_node_new (child_type);
+      menu_node_set_content (node, child_content);
+
+      menu_node_append_child (parent, node);
+
+      menu_node_unref (node);
+    }
+}
+
+gboolean
+desktop_entry_tree_include (DesktopEntryTree *tree,
+                            const char       *menu_path_dirname,
+                            const char       *menu_path_basename,
+                            const char       *override_fs_dirname,
+                            GError          **error)
+{
+  gboolean retval;
+  MenuNode *node;
+  MenuNode *submenu;
+  
+  retval = FALSE;
+
+  /* Get node to modify and save */
+  node = menu_cache_get_menu_for_canonical_file (tree->menu_cache,
+                                                 tree->menu_file,
+                                                 NULL, error);
+  if (node == NULL)
+    goto out;
+
+
+  /* Create submenu */
+  submenu = menu_node_find_submenu (node, menu_path_dirname, TRUE);
+
+  g_assert (submenu != NULL);
+
+  /* Add the given stuff to it */
+
+  menu_node_ensure_child (submenu, MENU_NODE_APP_DIR,
+                          override_fs_dirname,
+                          TRUE);
+  menu_node_ensure_child (submenu, MENU_NODE_INCLUDE,
+                          menu_path_basename,
+                          FALSE);
+  
+  /* Write to disk */
+  if (!menu_cache_sync_for_file (tree->menu_cache,
+                                 tree->menu_file,
+                                 error))
+    goto out;
+  
+  /* We have to reload the menu file */
+  menu_cache_invalidate (tree->menu_cache,
+                         tree->menu_file);
+  
+
+  retval = TRUE;
+
+ out:
+  
+  return retval;
+}
+
+gboolean
+desktop_entry_tree_exclude (DesktopEntryTree *tree,
+                            const char       *menu_path_dirname,
+                            const char       *menu_path_basename,
+                            GError          **error)
+{
+
+  return TRUE;
+}
+
+gboolean
+desktop_entry_tree_move (DesktopEntryTree *tree,
+                         const char       *menu_path_dirname_src,
+                         const char       *menu_path_dirname_dest,
+                         const char       *menu_path_basename,
+                         const char       *override_fs_dirname_dest,
+                         GError          **error)
+{
+
+
+
+  return TRUE;
+}

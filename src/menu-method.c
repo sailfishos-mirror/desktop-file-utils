@@ -62,6 +62,18 @@ static GnomeVFSResult    menu_method_get_info    (MenuMethod               *meth
 						  GnomeVFSURI              *uri,
 						  GnomeVFSFileInfo         *file_info,
 						  GnomeVFSFileInfoOptions   options);
+static GnomeVFSResult    menu_method_truncate    (MenuMethod               *method,
+						  GnomeVFSURI              *uri,
+						  GnomeVFSFileSize          where,
+						  GnomeVFSContext          *context);
+static GnomeVFSResult    menu_method_move        (MenuMethod               *method,
+						  GnomeVFSURI              *old_uri,
+						  GnomeVFSURI              *new_uri,
+						  gboolean                  force_replace,
+						  GnomeVFSContext          *context);
+static GnomeVFSResult    menu_method_unlink      (MenuMethod               *method,
+						  GnomeVFSURI              *uri,
+						  GnomeVFSContext          *context);
 
 
 static gboolean menu_method_resolve_uri_writable (MenuMethod               *method,
@@ -98,9 +110,24 @@ static GnomeVFSResult file_handle_read     (FileHandle               *handle,
 					    GnomeVFSFileSize          num_bytes,
 					    GnomeVFSFileSize         *bytes_read,
 					    GnomeVFSContext          *context);
+static GnomeVFSResult file_handle_write    (FileHandle               *handle,
+					    gconstpointer             buffer,
+					    GnomeVFSFileSize          num_bytes,
+					    GnomeVFSFileSize         *bytes_written,
+					    GnomeVFSContext          *context);
+static GnomeVFSResult file_handle_seek     (FileHandle               *handle,
+					    GnomeVFSSeekPosition      whence,
+					    GnomeVFSFileOffset        offset,
+					    GnomeVFSContext          *context);
+static GnomeVFSResult file_handle_tell     (FileHandle               *handle,
+					    GnomeVFSFileOffset       *offset_return);
+static GnomeVFSResult file_handle_truncate (FileHandle               *handle,
+					    GnomeVFSFileSize          where,
+					    GnomeVFSContext          *context);
 static GnomeVFSResult file_handle_get_info (FileHandle               *handle,
 					    GnomeVFSFileInfo         *file_info,
-					    GnomeVFSFileInfoOptions   options);     
+					    GnomeVFSFileInfoOptions   options);
+     
 
 static GnomeVFSResult
 do_open (GnomeVFSMethod        *vtable,
@@ -192,8 +219,13 @@ do_write (GnomeVFSMethod       *vtable,
           GnomeVFSFileSize     *bytes_written,
           GnomeVFSContext      *context)
 {
+	/* No thread locks since FileHandle is threadsafe */
+	FileHandle *handle;
+	
+	handle = (FileHandle *) method_handle;
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	return file_handle_write (handle, buffer, num_bytes,
+				  bytes_written, context);
 }
 
 static GnomeVFSResult
@@ -203,8 +235,12 @@ do_seek (GnomeVFSMethod       *vtable,
          GnomeVFSFileOffset    offset,
          GnomeVFSContext      *context)
 {
+	/* No thread locks since FileHandle is threadsafe */
+	FileHandle *handle;
+	
+	handle = (FileHandle *) method_handle;
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	return file_handle_seek (handle, whence, offset, context);
 }
 
 static GnomeVFSResult
@@ -212,8 +248,12 @@ do_tell (GnomeVFSMethod       *vtable,
          GnomeVFSMethodHandle *method_handle,
          GnomeVFSFileOffset   *offset_return)
 {
+	/* No thread locks since FileHandle is threadsafe */
+	FileHandle *handle;
+	
+	handle = (FileHandle *) method_handle;
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	return file_handle_tell (handle, offset_return);
 }
 
 
@@ -223,8 +263,12 @@ do_truncate_handle (GnomeVFSMethod       *vtable,
                     GnomeVFSFileSize      where,
                     GnomeVFSContext      *context)
 {
+	/* No thread locks since FileHandle is threadsafe */
+	FileHandle *handle;
+	
+	handle = (FileHandle *) method_handle;
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	return file_handle_truncate (handle, where, context);
 }
 
 static GnomeVFSResult
@@ -233,8 +277,16 @@ do_truncate (GnomeVFSMethod   *vtable,
              GnomeVFSFileSize  where,
              GnomeVFSContext  *context)
 {
+        MenuMethod *method;
+        GnomeVFSResult result;
+        
+        method = method_checkout ();
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	result = menu_method_truncate (method, uri, where, context);
+	
+        method_return (method);
+        
+        return result;
 }
 
 static GnomeVFSResult
@@ -348,7 +400,7 @@ do_make_directory (GnomeVFSMethod  *vtable,
                    guint            perm,
                    GnomeVFSContext *context)
 {
-
+	
         return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
@@ -382,8 +434,17 @@ do_move (GnomeVFSMethod  *vtable,
          gboolean         force_replace,
          GnomeVFSContext *context)
 {
+        MenuMethod *method;
+        GnomeVFSResult result;
+        
+        method = method_checkout ();
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+        result = menu_method_move (method, old_uri, new_uri,
+				   force_replace, context);
+
+        method_return (method);
+        
+        return result;
 }
 
 static GnomeVFSResult
@@ -391,8 +452,16 @@ do_unlink (GnomeVFSMethod  *vtable,
            GnomeVFSURI     *uri,
            GnomeVFSContext *context)
 {
+        MenuMethod *method;
+        GnomeVFSResult result;
+        
+        method = method_checkout ();
 
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+        result = menu_method_unlink (method, uri, context);
+
+        method_return (method);
+        
+        return result;
 }
 
 static GnomeVFSResult
@@ -574,9 +643,9 @@ menu_method_ensure_override (MenuMethod   *method,
         
         unescaped = gnome_vfs_unescape_string (uri->text, "");
 	
-	if (!desktop_entry_tree_cache_override (method->cache,
-						menu, unescaped,
-						error)) {
+	if (!desktop_entry_tree_cache_create (method->cache,
+					      menu, unescaped,
+					      error)) {
 		g_free (unescaped);
 		return FALSE;
 	}
@@ -752,11 +821,14 @@ fill_in_generic_dir_info (GnomeVFSFileInfo         *info,
 		info->mime_type = g_strdup ("x-directory/normal");
 		info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
 	}
-		
+
+	/* All dirs are considered 0755 always */
 	info->permissions =
 		GNOME_VFS_PERM_USER_ALL |
-		GNOME_VFS_PERM_GROUP_ALL |
-		GNOME_VFS_PERM_OTHER_ALL;
+		GNOME_VFS_PERM_GROUP_READ |
+		GNOME_VFS_PERM_GROUP_EXEC |
+		GNOME_VFS_PERM_OTHER_READ |
+		GNOME_VFS_PERM_OTHER_EXEC;
 		
 	info->valid_fields |=
 		GNOME_VFS_FILE_INFO_FIELDS_TYPE |
@@ -789,7 +861,18 @@ fill_in_generic_file_info (GnomeVFSFileInfo         *info,
 		info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
 	}
 
-	info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_TYPE;
+	/* We can always write to the file by creating the override
+	 * copy in the user's home directory.  All files in the menu
+	 * vfs are considered 0644, always.
+	 */
+	info->permissions =
+		GNOME_VFS_PERM_USER_READ |
+		GNOME_VFS_PERM_USER_WRITE |
+		GNOME_VFS_PERM_GROUP_READ |
+		GNOME_VFS_PERM_OTHER_READ;
+	
+	info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_TYPE |
+		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS;
 }
 
 static void
@@ -838,8 +921,83 @@ menu_method_get_info (MenuMethod               *method,
 		fill_in_file_info (tree, node, path,
 				   file_info, options);
 	}
-        
+
+	desktop_entry_tree_unref (tree);
+	
         return retval;
+}
+
+static GnomeVFSResult
+truncate_errno_to_vfs_result (int num)
+{
+	switch (num) {
+	case EBADF:
+	case EROFS:
+		return GNOME_VFS_ERROR_READ_ONLY;
+	case EINVAL:
+		return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	default:
+		return GNOME_VFS_ERROR_GENERIC;
+	}
+}
+
+static GnomeVFSResult
+menu_method_truncate (MenuMethod               *method,
+		      GnomeVFSURI              *uri,
+		      GnomeVFSFileSize          where,
+		      GnomeVFSContext          *context)
+{
+        GnomeVFSResult retval;
+        DesktopEntryTree *tree;
+        DesktopEntryTreeNode *node;
+	char *path;
+
+	path = NULL;
+	node = NULL;
+	tree = NULL;
+
+	retval = GNOME_VFS_OK;
+	
+        if (!menu_method_resolve_uri_writable (method, uri, FALSE,
+					       &tree, &node,
+					       &path, NULL))
+                return GNOME_VFS_ERROR_NOT_FOUND; /* FIXME propagate GError ? */
+	
+        g_assert (tree != NULL);
+	
+	if (path == NULL) {
+		retval = GNOME_VFS_ERROR_IS_DIRECTORY;
+	} else {
+		if (truncate (path, where) < 0)
+			retval = truncate_errno_to_vfs_result (errno);
+	}
+
+	desktop_entry_tree_unref (tree);
+	g_free (path);
+	
+        return retval;
+}
+
+static GnomeVFSResult
+menu_method_move (MenuMethod               *method,
+		  GnomeVFSURI              *old_uri,
+		  GnomeVFSURI              *new_uri,
+		  gboolean                  force_replace,
+		  GnomeVFSContext          *context)
+{
+
+
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
+}
+
+static GnomeVFSResult
+menu_method_unlink (MenuMethod               *method,
+		    GnomeVFSURI              *uri,
+		    GnomeVFSContext          *context)
+{
+	
+
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 /*
@@ -901,6 +1059,9 @@ dir_handle_new (MenuMethod               *method,
 				     &handle->n_entries_that_are_subdirs);
 
         *handle_p = handle;
+
+	desktop_entry_tree_unref (tree);
+	
 	return GNOME_VFS_OK;
 }
 
@@ -983,19 +1144,19 @@ get_base_from_uri (GnomeVFSURI const *uri)
 
 
 static gboolean
-unix_mode_from_vfs_mode (GnomeVFSOpenMode mode,
-			 mode_t          *unix_mode)
+unix_flags_from_vfs_mode (GnomeVFSOpenMode mode,
+			 int             *unix_flags)
 {
-	*unix_mode = 0;
+	*unix_flags = 0;
 
 	if (mode & GNOME_VFS_OPEN_READ) {
 		if (mode & GNOME_VFS_OPEN_WRITE)
-			*unix_mode = O_RDWR;
+			*unix_flags = O_RDWR;
 		else
-			*unix_mode = O_RDONLY;
+			*unix_flags = O_RDONLY;
 	} else {
 		if (mode & GNOME_VFS_OPEN_WRITE)
-			*unix_mode = O_WRONLY;
+			*unix_flags = O_WRONLY;
 		else
 			return FALSE; /* invalid mode - no read or write */
 	}
@@ -1003,7 +1164,7 @@ unix_mode_from_vfs_mode (GnomeVFSOpenMode mode,
 	/* truncate file if we open for writing without random access */
 	if ((!(mode & GNOME_VFS_OPEN_RANDOM)) &&
 	    (mode & GNOME_VFS_OPEN_WRITE))
-		*unix_mode |= O_TRUNC;
+		*unix_flags |= O_TRUNC;
 
 	return TRUE;
 }
@@ -1011,8 +1172,8 @@ unix_mode_from_vfs_mode (GnomeVFSOpenMode mode,
 static GnomeVFSResult
 unix_open (MenuMethod        *method,
 	   GnomeVFSURI       *uri,
-	   mode_t             unix_mode,
-	   unsigned int       perms,
+	   int                unix_flags,
+	   mode_t             perms,
 	   FileHandle       **handle_p)
 {
 	int fd;
@@ -1029,11 +1190,20 @@ unix_open (MenuMethod        *method,
 	tree = NULL;
 
 	retval = GNOME_VFS_OK;
-	
-        if (!menu_method_resolve_uri (method, uri,
-                                      &tree, &node,
-                                      &path, NULL))
-                return GNOME_VFS_ERROR_NOT_FOUND; /* FIXME propagate GError ? */
+
+	if ((unix_flags & O_WRONLY) ||
+	    (unix_flags & O_RDWR)) {		
+		if (!menu_method_resolve_uri_writable (method, uri,
+						       (unix_flags & O_CREAT) != 0,
+						       &tree, &node,
+						       &path, NULL))
+			return GNOME_VFS_ERROR_NOT_FOUND; /* FIXME propagate GError ? */
+	} else {
+		if (!menu_method_resolve_uri (method, uri,
+					      &tree, &node,
+					      &path, NULL))
+			return GNOME_VFS_ERROR_NOT_FOUND; /* FIXME propagate GError ? */
+	}
 	
         g_assert (tree != NULL);
 	
@@ -1043,7 +1213,7 @@ unix_open (MenuMethod        *method,
 	}
 
  again:
-	fd = open (path, unix_mode, perms);
+	fd = open (path, unix_flags, perms);
 	if (fd < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -1073,12 +1243,13 @@ file_handle_open (MenuMethod        *method,
 		  GnomeVFSOpenMode   mode,		  
 		  FileHandle       **handle_p)
 {
-	mode_t unix_mode;
+	int unix_flags;
 	
-	if (!unix_mode_from_vfs_mode (mode, &unix_mode))
+	if (!unix_flags_from_vfs_mode (mode, &unix_flags))
 		return GNOME_VFS_ERROR_INVALID_OPEN_MODE;
 
-	return unix_open (method, uri, unix_mode, 0, handle_p);
+	/* We hardcode 0644 always */
+	return unix_open (method, uri, unix_flags, 0644, handle_p);
 }
 
 static GnomeVFSResult
@@ -1087,27 +1258,27 @@ file_handle_create (MenuMethod        *method,
 		    GnomeVFSOpenMode   mode,
 		    FileHandle       **handle,
 		    gboolean           exclusive,
-		    unsigned int       perms)
+		    mode_t             perms)
 {
-	mode_t unix_mode;
+	int unix_flags;
 	
-	unix_mode = O_CREAT | O_TRUNC;
+	unix_flags = O_CREAT | O_TRUNC;
 	
 	if (!(mode & GNOME_VFS_OPEN_WRITE))
 		return GNOME_VFS_ERROR_INVALID_OPEN_MODE;
 	
 	if (mode & GNOME_VFS_OPEN_READ)
-		unix_mode |= O_RDWR;
+		unix_flags |= O_RDWR;
 	else
-		unix_mode |= O_WRONLY;
+		unix_flags |= O_WRONLY;
 
 	if (exclusive)
-		unix_mode |= O_EXCL;
+		unix_flags |= O_EXCL;
 
 	/* FIXME this can't possibly work since it doesn't
 	 * create an item in the DesktopEntryTree
 	 */
-	return unix_open (method, uri, unix_mode, perms, handle);
+	return unix_open (method, uri, unix_flags, perms, handle);
 }
 
 static void
@@ -1153,6 +1324,97 @@ file_handle_read (FileHandle        *handle,
 }
 
 static GnomeVFSResult
+file_handle_write (FileHandle               *handle,
+		   gconstpointer             buffer,
+		   GnomeVFSFileSize          num_bytes,
+		   GnomeVFSFileSize         *bytes_written,
+		   GnomeVFSContext          *context)
+{
+	int write_val;
+	
+	do {
+		write_val = write (handle->fd, buffer, num_bytes);
+	} while (write_val == -1
+		 && errno == EINTR
+		 && ! gnome_vfs_context_check_cancellation (context));
+	
+	if (write_val == -1) {
+		*bytes_written = 0;
+		return gnome_vfs_result_from_errno ();
+	} else {
+		*bytes_written = write_val;
+		return GNOME_VFS_OK;
+	}
+}
+
+
+static int
+seek_position_to_unix (GnomeVFSSeekPosition position)
+{
+	switch (position) {
+	case GNOME_VFS_SEEK_START:
+		return SEEK_SET;
+	case GNOME_VFS_SEEK_CURRENT:
+		return SEEK_CUR;
+	case GNOME_VFS_SEEK_END:
+		return SEEK_END;
+	default:
+		g_warning ("Unknown GnomeVFSSeekPosition %d", position);
+		return SEEK_SET; /* bogus */
+	}
+}
+
+static GnomeVFSResult
+file_handle_seek (FileHandle               *handle,
+		  GnomeVFSSeekPosition      whence,
+		  GnomeVFSFileOffset        offset,
+		  GnomeVFSContext          *context)
+{
+	int lseek_whence;
+
+	lseek_whence = seek_position_to_unix (whence);
+	
+	if (lseek (handle->fd, offset, lseek_whence) == -1) {
+		if (errno == ESPIPE)
+			return GNOME_VFS_ERROR_NOT_SUPPORTED;
+		else
+			return gnome_vfs_result_from_errno ();
+	}
+
+	return GNOME_VFS_OK;
+}
+
+static GnomeVFSResult
+file_handle_tell (FileHandle               *handle,
+		  GnomeVFSFileOffset       *offset_return)
+{
+	off_t offset;
+	
+	offset = lseek (handle->fd, 0, SEEK_CUR);
+	if (offset == -1) {
+		if (errno == ESPIPE)
+			return GNOME_VFS_ERROR_NOT_SUPPORTED;
+		else
+			return gnome_vfs_result_from_errno ();
+	}
+
+	*offset_return = offset;
+	return GNOME_VFS_OK;
+}
+
+static GnomeVFSResult
+file_handle_truncate (FileHandle               *handle,
+		      GnomeVFSFileSize          where,
+		      GnomeVFSContext          *context)
+{
+	if (ftruncate (handle->fd, where) == 0) {
+		return GNOME_VFS_OK;
+	} else {
+		return truncate_errno_to_vfs_result (errno);
+	}
+}
+
+static GnomeVFSResult
 file_handle_get_info (FileHandle               *handle,
 		      GnomeVFSFileInfo         *file_info,
 		      GnomeVFSFileInfoOptions   options)
@@ -1167,7 +1429,18 @@ file_handle_get_info (FileHandle               *handle,
 	
 	gnome_vfs_stat_to_file_info (file_info, &statbuf);
 	GNOME_VFS_FILE_INFO_SET_LOCAL (file_info, TRUE);
-	
+
+	/* We can always write to the file by creating the
+	 * override copy in the user's home directory.
+	 * All files are considered 0644 always.
+	 */
+	file_info->permissions =
+		GNOME_VFS_PERM_USER_ALL |
+		GNOME_VFS_PERM_GROUP_READ |
+		GNOME_VFS_PERM_GROUP_EXEC |
+		GNOME_VFS_PERM_OTHER_READ |
+		GNOME_VFS_PERM_OTHER_EXEC;
+		
 	file_info->valid_fields = GNOME_VFS_FILE_INFO_FIELDS_TYPE;
 	file_info->type = GNOME_VFS_FILE_TYPE_REGULAR;
 	file_info->name = g_strdup (handle->name);

@@ -170,9 +170,11 @@ init_xdg_paths (XdgPathInfo *info_p)
 typedef struct
 {
   char             *canonical_path;
+  char             *create_chaining_to;
   DesktopEntryTree *tree;
   GError           *load_failure_reason;
   MenuOverrideDir  *overrides;
+  unsigned int      needs_reload : 1;
 } CacheEntry;
 
 struct DesktopEntryTreeCache
@@ -189,11 +191,12 @@ free_cache_entry (void *data)
   CacheEntry *entry = data;
 
   g_free (entry->canonical_path);
+  g_free (entry->create_chaining_to);
   if (entry->tree)
     desktop_entry_tree_unref (entry->tree);
   if (entry->load_failure_reason)
     g_error_free (entry->load_failure_reason);
-
+  
   g_free (entry);
 }
 
@@ -240,6 +243,46 @@ desktop_entry_tree_cache_unref (DesktopEntryTreeCache *cache)
     }
 }
 
+static gboolean
+reload_entry (DesktopEntryTreeCache *cache,
+              CacheEntry            *entry,
+              GError               **error)
+{
+  if (entry->needs_reload)
+    {
+      DesktopEntryTree *reloaded;
+      GError *tmp_error;
+
+      menu_verbose ("Reloading cache entry\n");
+      
+      tmp_error = NULL;
+      reloaded = desktop_entry_tree_load (entry->canonical_path,
+                                          NULL, /* FIXME only show in desktop */
+                                          entry->create_chaining_to,
+                                          &tmp_error);
+      
+      desktop_entry_tree_unref (entry->tree);
+      g_error_free (entry->load_failure_reason);
+      
+      entry->load_failure_reason = tmp_error;
+      entry->tree = reloaded;
+    }
+  
+  if (entry->tree == NULL)
+    {
+      g_assert (entry->load_failure_reason != NULL);
+      
+      menu_verbose ("Load failure cached, reason for failure: %s\n",
+                    entry->load_failure_reason->message);
+      
+      if (error)
+        *error = g_error_copy (entry->load_failure_reason);
+      return FALSE;
+    }
+  else
+    return TRUE;
+}
+
 static CacheEntry*
 lookup_canonical_entry (DesktopEntryTreeCache *cache,
                         const char            *canonical,
@@ -258,10 +301,10 @@ lookup_canonical_entry (DesktopEntryTreeCache *cache,
       
       entry = g_new0 (CacheEntry, 1);
       entry->canonical_path = g_strdup (canonical);
-      entry->tree = desktop_entry_tree_load (canonical,
-                                             NULL, /* FIXME only show in desktop */
-                                             create_chaining_to,
-                                             &entry->load_failure_reason);
+      entry->create_chaining_to = g_strdup (entry->create_chaining_to);
+
+      entry->needs_reload = TRUE;
+      
       g_hash_table_replace (cache->entries, entry->canonical_path,
                             entry);
       basename = g_path_get_basename (entry->canonical_path);
@@ -270,24 +313,8 @@ lookup_canonical_entry (DesktopEntryTreeCache *cache,
     }
 
   g_assert (entry != NULL);
-  
-  if (entry->tree == NULL)
-    {
-      g_assert (entry->load_failure_reason != NULL);
-      
-      menu_verbose ("File load failure cached, reason for failure: %s\n",
-                    entry->load_failure_reason->message);
-      
-      if (error)
-        *error = g_error_copy (entry->load_failure_reason);
-      return NULL;
-    }
-  else
-    {
-      menu_verbose ("Returning cached entry\n");
-      
-      return entry;
-    }
+
+  return entry;
 }
 
 static CacheEntry*
@@ -426,6 +453,10 @@ cache_lookup (DesktopEntryTreeCache *cache,
     }
 
  out:
+
+  /* Fail if we can't reload the entry */
+  if (retval && !reload_entry (cache, retval, error))
+    retval = NULL;
   
   return retval;
 }
@@ -440,7 +471,7 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
 
   entry = cache_lookup (cache, menu_file, create_user_file,
                         error);
-
+  
   if (entry)
     {
       desktop_entry_tree_ref (entry->tree);
@@ -450,22 +481,11 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
     return NULL;
 }
 
-/* For a menu_file like "applications.menu" override a menu_path
- * entry like "Applications/Games/foo.desktop"
- */
-gboolean
-desktop_entry_tree_cache_override (DesktopEntryTreeCache *cache,
-                                   const char            *menu_file,
-                                   const char            *menu_path,
-                                   GError               **error)
+static void
+try_create_overrides (CacheEntry *entry,
+                      const char *menu_file,
+                      GError    **error)
 {
-  CacheEntry *entry;
-
-  entry = cache_lookup (cache, menu_file, TRUE, error);
-
-  if (entry == NULL)
-    return FALSE;
-
   if (entry->overrides == NULL)
     {
       char *d;
@@ -474,7 +494,7 @@ desktop_entry_tree_cache_override (DesktopEntryTreeCache *cache,
 
       init_xdg_paths (&info);
 
-      menu_type = g_string_new (menu_path);
+      menu_type = g_string_new (menu_file);
       g_string_truncate (menu_type, menu_type->len - strlen (".menu"));
       g_string_append (menu_type, "-edits");
       
@@ -486,11 +506,104 @@ desktop_entry_tree_cache_override (DesktopEntryTreeCache *cache,
       g_string_free (menu_type, TRUE);
       g_free (d);
     }
+}
 
+/* For a menu_file like "applications.menu" override a menu_path entry
+ * like "Applications/Games/foo.desktop" by creating the appropriate
+ * .desktop file and adding an <Include> and <AppDir>.  If the file is
+ * already created in the override dir, do nothing.
+ */
+gboolean
+desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
+                                 const char            *menu_file,
+                                 const char            *menu_path,
+                                 GError               **error)
+{
+  CacheEntry *entry;
+  DesktopEntryTree *tree;
+  char *current_fs_path;
+  gboolean retval;
+  char *menu_path_dirname;
+  char *menu_path_basename;
+  char *override_dir;
+  
+  menu_verbose ("Creating \"%s\" in menu %s\n",
+                menu_path, menu_file);
+  
+  entry = cache_lookup (cache, menu_file, TRUE, error);
+
+  if (entry == NULL)
+    return FALSE;
+
+  try_create_overrides (entry, menu_file, error);
+  
   if (entry->overrides == NULL)
     return FALSE;
 
-  /* FIXME */
+  tree = desktop_entry_tree_cache_lookup (cache, menu_file,
+                                          TRUE, error);
+  if (tree == NULL)
+    return FALSE;
+
+  retval = FALSE;
+  override_dir = NULL;
   
+  current_fs_path = NULL;
+  desktop_entry_tree_resolve_path (tree, menu_path,
+                                   NULL, &current_fs_path);
+
+  menu_path_dirname = g_path_get_dirname (menu_path);
+  menu_path_basename = g_path_get_basename (menu_path);
+  
+  if (!menu_override_dir_add (entry->overrides,
+                              menu_path_dirname,
+                              menu_path_basename,
+                              current_fs_path,
+                              error))
+    goto out;
+
+  override_dir = menu_override_dir_get_fs_path (entry->overrides,
+                                                menu_path_dirname,
+                                                NULL);
+
+  /* tell the tree that it needs to reload the .desktop file
+   * cache
+   */
+  desktop_entry_tree_invalidate (tree, override_dir);
+
+  /* Now include the .desktop file in the .menu file */
+  if (!desktop_entry_tree_include (tree,
+                                   menu_path_dirname,
+                                   menu_path_basename,
+                                   override_dir,
+                                   error))
+    goto out;
+
+  /* Mark cache entry to be reloaded next time we cache_lookup() */
+  entry->needs_reload = TRUE;
+  
+  retval = TRUE;
+  
+ out:
+
+  g_free (override_dir);
+  g_free (menu_path_dirname);
+  g_free (menu_path_basename);
+  g_free (current_fs_path);
+  desktop_entry_tree_unref (tree);
+  
+  return retval;
+}
+
+gboolean
+desktop_entry_tree_cache_delete (DesktopEntryTreeCache *cache,
+                                 const char            *menu_file,
+                                 const char            *menu_path,
+                                 GError               **error)
+{
+  menu_verbose ("Deleting \"%s\" in menu %s\n",
+                menu_path, menu_file);
+
+
   return TRUE;
 }

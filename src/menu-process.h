@@ -81,7 +81,6 @@ char*       desktop_entry_tree_node_get_directory (DesktopEntryTreeNode *node);
 /* returns relative name of the subdir */
 const char* desktop_entry_tree_node_get_name      (DesktopEntryTreeNode *node);
 
-
 void desktop_entry_tree_foreach           (DesktopEntryTree            *tree,
                                            const char                  *parent_dir,
                                            DesktopEntryTreeForeachFunc  func,
@@ -93,5 +92,22 @@ void desktop_entry_tree_write_symlink_dir (DesktopEntryTree            *tree,
 void desktop_entry_tree_dump_desktop_list (DesktopEntryTree            *tree);
 
 void menu_set_verbose_queries      (gboolean    value);
+
+/* Editing stuff */
+gboolean desktop_entry_tree_include (DesktopEntryTree *tree,
+                                     const char       *menu_path_dirname,
+                                     const char       *menu_path_basename,
+                                     const char       *override_fs_dirname,
+                                     GError          **error);
+gboolean desktop_entry_tree_exclude (DesktopEntryTree *tree,
+                                     const char       *menu_path_dirname,
+                                     const char       *menu_path_basename,
+                                     GError          **error);
+gboolean desktop_entry_tree_move    (DesktopEntryTree *tree,
+                                     const char       *menu_path_dirname_src,
+                                     const char       *menu_path_dirname_dest,
+                                     const char       *menu_path_basename,
+                                     const char       *override_fs_dirname_dest,
+                                     GError          **error);
 
 #endif /* MENU_PROCESS_H */

@@ -33,10 +33,14 @@ DesktopEntryTree*      desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *c
                                                         gboolean               create_user_file,
                                                         GError               **error);
 
-gboolean               desktop_entry_tree_cache_override (DesktopEntryTreeCache *cache,
-                                                          const char            *menu_file,
-                                                          const char            *menu_path,
-                                                          GError               **error);
+gboolean               desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
+                                                        const char            *menu_file,
+                                                        const char            *menu_path,
+                                                        GError               **error);
+gboolean               desktop_entry_tree_cache_delete (DesktopEntryTreeCache *cache,
+                                                        const char            *menu_file,
+                                                        const char            *menu_path,
+                                                        GError               **error);
 
 
 #endif /* MENU_TREE_CACHE_H */

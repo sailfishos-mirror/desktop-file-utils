@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <string.h>
 
 #include <libintl.h>
 #define _(x) gettext ((x))
@@ -118,6 +119,7 @@ menu_override_dir_unref (MenuOverrideDir  *override)
     }
 }
 
+/* Must silently succeed if the .desktop override has already been added. */
 gboolean
 menu_override_dir_add (MenuOverrideDir  *override,
                        const char       *menu_path,
@@ -144,8 +146,9 @@ menu_override_dir_add (MenuOverrideDir  *override,
   
   fs_file_path =
     menu_override_dir_get_fs_path (override, menu_path, name_to_override);
-
-  if (based_on_fs_path)
+  
+  if (based_on_fs_path &&
+      strcmp (fs_file_path, based_on_fs_path) != 0)
     {
       char *contents;
       gsize len;

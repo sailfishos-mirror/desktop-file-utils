@@ -1,3 +1,13 @@
+2003-05-30  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.c (menu_node_find_submenu): hack
+	(menu_node_ensure_child): hack
+	(desktop_entry_tree_include): hack
+
+	* src/menu-method.c: hack
+
+	* src/menu-tree-cache.c (desktop_entry_tree_cache_create): hack
+
 2003-05-29  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-method.c (menu_method_resolve_uri_writable): new

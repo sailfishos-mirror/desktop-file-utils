@@ -22,6 +22,8 @@
 #include <config.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
 #include "menu-layout.h"
 #include "canonicalize.h"
 #include "menu-entries.h"
@@ -397,7 +399,7 @@ menu_node_append_child (MenuNode *parent,
   RETURN_IF_HAS_ENTRY_DIRS (new_child);
   
   if (parent->children)
-    menu_node_insert_before (parent->children->prev, new_child);
+    menu_node_insert_after (parent->children->prev, new_child);
   else
     {
       parent->children = new_child;
@@ -889,6 +891,10 @@ struct MenuCache
   GSList     *menu_files;
 };
 
+static void menu_node_append_to_string (MenuNode *node,
+                                        int       depth,
+                                        GString  *str);
+
 MenuCache*
 menu_cache_new (void)
 {
@@ -1052,6 +1058,260 @@ menu_cache_get_menu_for_file (MenuCache  *cache,
   return node;
 }
 
+static void
+append_spaces (GString *str,
+               int      depth)
+{
+  while (depth > 0)
+    {
+      g_string_append_c (str, ' ');
+      --depth;
+    }
+}
+
+static void
+append_children (MenuNode *node,
+                 int       depth,
+                 GString  *str)
+{
+  MenuNode *iter;
+  
+  iter = node->children;
+  while (iter != NULL)
+    {
+      MenuNode *next = NODE_NEXT (iter);
+      menu_node_append_to_string (iter, depth, str);
+      iter = next;
+    }
+}
+
+static void
+append_simple_with_attr (MenuNode   *node,
+                         int         depth,
+                         const char *node_name,
+                         const char *attr_name,
+                         const char *attr_value,
+                         GString    *str)
+{
+  append_spaces (str, depth);
+  if (node->content)
+    {
+      char *escaped;
+
+      escaped = g_markup_escape_text (node->content, -1);
+
+      if (attr_name && attr_value)
+        {
+          char *attr_escaped;
+          attr_escaped = g_markup_escape_text (attr_value, -1);
+          
+          g_string_append_printf (str, "<%s %s=\"%s\">%s</%s>\n",
+                                  node_name, attr_name,
+                                  attr_escaped, escaped, node_name);
+          g_free (attr_escaped);
+        }
+      else
+        g_string_append_printf (str, "<%s>%s</%s>\n",
+                                node_name, escaped, node_name);
+
+      g_free (escaped);
+    }
+  else
+    {
+      if (attr_name && attr_value)
+        {
+          char *attr_escaped;
+          attr_escaped = g_markup_escape_text (attr_value, -1);
+          
+          g_string_append_printf (str, "<%s %s=\"%s\"/>\n",
+                                  node_name, attr_name,
+                                  attr_escaped);
+          g_free (attr_escaped);
+        }
+      else
+        g_string_append_printf (str, "<%s/>\n", node_name);
+    }
+}
+
+static void
+append_simple (MenuNode   *node,
+               int         depth,
+               const char *node_name,
+               GString    *str)
+{
+  append_simple_with_attr (node, depth, node_name,
+                           NULL, NULL, str);
+}
+
+static void
+append_start (MenuNode   *node,
+              int         depth,
+              const char *node_name,
+              GString    *str)
+{
+  append_spaces (str, depth);
+  g_string_append_printf (str, "<%s>\n", node_name);
+}
+
+static void
+append_end (MenuNode   *node,
+            int         depth,
+            const char *node_name,
+            GString    *str)
+{
+  append_spaces (str, depth);
+  g_string_append_printf (str, "</%s>\n", node_name);
+}
+
+static void
+append_container (MenuNode   *node,
+                  int         depth,
+                  const char *node_name,
+                  GString    *str)
+{
+  append_start (node, depth, node_name, str);
+  append_children (node, depth + 2, str);
+  append_end (node, depth, node_name, str);
+}
+
+static void
+menu_node_append_to_string (MenuNode *node,
+                            int       depth,
+                            GString  *str)
+{
+  switch (node->type)
+    {
+    case MENU_NODE_ROOT:
+      append_children (node, depth - 1, str); /* -1 to ignore depth of root */
+      break;
+    case MENU_NODE_PASSTHROUGH:
+      g_string_append (str, node->content);
+      g_string_append_c (str, '\n');
+      break;
+    case MENU_NODE_MENU:
+      append_container (node, depth, "Menu", str);
+      break;
+    case MENU_NODE_APP_DIR:
+      append_simple (node, depth, "AppDir", str);
+      break;
+    case MENU_NODE_DEFAULT_APP_DIRS:
+      append_simple (node, depth, "DefaultAppDirs", str);
+      break;
+    case MENU_NODE_DIRECTORY_DIR:
+      append_simple (node, depth, "DirectoryDir", str);
+      break;
+    case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
+      append_simple (node, depth, "DefaultDirectoryDirs", str);
+      break;
+    case MENU_NODE_NAME:
+      append_simple (node, depth, "Name", str);
+      break;
+    case MENU_NODE_DIRECTORY:
+      append_simple (node, depth, "Directory", str);
+      break;
+    case MENU_NODE_ONLY_UNALLOCATED:
+      append_simple (node, depth, "OnlyUnallocated", str);
+      break;
+    case MENU_NODE_NOT_ONLY_UNALLOCATED:
+      append_simple (node, depth, "NotOnlyUnallocated", str);
+      break;
+    case MENU_NODE_INCLUDE:
+      append_container (node, depth, "Include", str);
+      break;
+    case MENU_NODE_EXCLUDE:
+      append_container (node, depth, "Exclude", str);
+      break;
+    case MENU_NODE_FILENAME:
+      append_simple (node, depth, "Filename", str);
+      break;
+    case MENU_NODE_CATEGORY:
+      append_simple (node, depth, "Category", str);
+      break;
+    case MENU_NODE_ALL:
+      append_simple (node, depth, "All", str);
+      break;
+    case MENU_NODE_AND:
+      append_container (node, depth, "And", str);
+      break;
+    case MENU_NODE_OR:
+      append_container (node, depth, "Or", str);
+      break;
+    case MENU_NODE_NOT:
+      append_container (node, depth, "Not", str);
+      break;
+    case MENU_NODE_MERGE_FILE:
+      append_simple (node, depth, "MergeFile", str);
+      break;
+    case MENU_NODE_MERGE_DIR:
+      append_simple (node, depth, "MergeDir", str);
+      break;
+    case MENU_NODE_LEGACY_DIR:
+      {
+        MenuNodeLegacyDir *nld = (MenuNodeLegacyDir*) node;
+        
+        append_simple_with_attr (node, depth, "KDELegacyDirs",
+                                 "prefix", nld->prefix, str);
+      }
+      break;
+    case MENU_NODE_KDE_LEGACY_DIRS:
+      append_simple (node, depth, "KDELegacyDirs", str);
+      break;
+    case MENU_NODE_MOVE:
+      append_container (node, depth, "Move", str);
+      break;
+    case MENU_NODE_OLD:
+      append_simple (node, depth, "Old", str);
+      break;
+    case MENU_NODE_NEW:
+      append_simple (node, depth, "New", str);
+      break;
+    case MENU_NODE_DELETED:
+      append_simple (node, depth, "Deleted", str);
+      break;
+    case MENU_NODE_NOT_DELETED:
+      append_simple (node, depth, "NotDeleted", str);
+      break;
+    }
+}
+
+static gboolean
+write_string (int         fd,
+              GString    *str,
+              const char *filename,
+              GError    **error)
+{
+  size_t total_written;
+  size_t bytes_written;
+
+  total_written = 0;
+  
+ again:
+
+  bytes_written = write (fd, str->str + total_written, str->len - total_written);
+
+  if (bytes_written < 0)
+    {
+      if (errno == EINTR)
+        goto again;
+      else
+        {
+          g_set_error (error, G_FILE_ERROR,
+                       g_file_error_from_errno (errno),
+                       _("Failed to write file \"%s\": %s\n"),
+                       filename, g_strerror (errno));
+          return FALSE;
+        }
+    }
+  else
+    {
+      total_written += bytes_written;
+      if (total_written < str->len)
+        goto again;
+    }
+  
+  return TRUE;
+}
+
 gboolean
 menu_cache_sync_for_file (MenuCache   *cache,
                           const char  *filename,
@@ -1059,7 +1319,15 @@ menu_cache_sync_for_file (MenuCache   *cache,
 {
   MenuFile *file;
   char *canonical;
+  char *tmpfile;
+  int fd;
+  GString *str;
+  gboolean retval;
 
+  retval = FALSE;
+  tmpfile = NULL;
+  str = NULL;
+  
   canonical = g_canonicalize_file_name (filename);
   if (canonical == NULL)
     {
@@ -1067,12 +1335,10 @@ menu_cache_sync_for_file (MenuCache   *cache,
                    G_FILE_ERROR_FAILED,
                    _("Could not canonicalize filename \"%s\"\n"),
                    filename);
-      return FALSE;
+      goto out;
     }
   
   file = find_file_by_name (cache, canonical);
-
-  g_free (canonical);
   
   if (file == NULL)
     {
@@ -1080,12 +1346,57 @@ menu_cache_sync_for_file (MenuCache   *cache,
                    G_FILE_ERROR_FAILED,
                    _("No menu file loaded for filename \"%s\"\n"),
                    filename);
-      return FALSE;
+      goto out;
     }
 
-  /* FIXME save file */
+  tmpfile = g_strconcat (canonical, ".tmp-XXXXXX", NULL);
+  
+  fd = g_mkstemp (tmpfile);
+  if (fd < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Could not create file \"%s\": %s\n"),
+                   tmpfile, g_strerror (errno));
+      goto out;
+    }
 
-  return TRUE;
+  str = g_string_new (NULL);
+  menu_node_append_to_string (file->root, 0, str);
+  if (!write_string (fd, str, tmpfile, error))
+    goto out;
+  if (close (fd) < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to close file \"%s\": %s\n"),
+                   tmpfile, g_strerror (errno));
+      goto out;
+    }
+
+  if (rename (tmpfile, canonical) < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to move file \"%s\" to \"%s\": %s\n"),
+                   tmpfile, canonical, g_strerror (errno));
+      goto out;
+    }
+
+  g_free (tmpfile);
+  tmpfile = NULL; /* so we won't try to unlink it */
+  
+  retval = TRUE;
+  
+ out:
+  if (tmpfile)
+    unlink (tmpfile); /* ignore failures */
+  g_free (canonical);
+  g_free (tmpfile);
+  if (str)
+    g_string_free (str, TRUE);
+  
+  return retval;
 }
 
 static int
@@ -1130,6 +1441,17 @@ menu_verbose (const char *format,
   fflush (stderr);
   
   g_free (str);
+}
+
+void
+menu_node_debug_print (MenuNode *node)
+{
+  GString *str;
+
+  str = g_string_new (NULL);
+  menu_node_append_to_string (node, 0, str);
+  g_print ("%s", str->str);
+  g_string_free (str, TRUE);
 }
 
 #ifdef DFU_BUILD_TESTS

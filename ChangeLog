@@ -1,3 +1,13 @@
+2003-05-10  Havoc Pennington  <hp@pobox.com>
+
+	* src/menu-layout.c (menu_node_append_to_string): implement
+	serialization of the "DOM tree" of menu nodes so that we can 
+	resave after editing.
+	(menu_node_append_child): fix this, it was messing up order 
+	of nodes
+	(menu_cache_sync_for_file): implement doing the standard
+	write-to-tmp-and-rename hoop-jumping.
+
 2003-05-09  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-entries.c: use a quark scheme for entry->categories

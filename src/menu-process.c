@@ -453,6 +453,8 @@ desktop_entry_tree_load (const char  *filename,
   if (only_show_in_desktop)
     entry_cache_set_only_show_in_name (entry_cache,
                                        only_show_in_desktop);
+
+  menu_node_debug_print (orig_node);
   
   resolved_node = menu_node_deep_copy (orig_node);
   menu_node_resolve_files (menu_cache, entry_cache, resolved_node);

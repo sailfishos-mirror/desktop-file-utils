@@ -494,7 +494,7 @@ start_element_handler (GMarkupParseContext *context,
                        GError             **error)
 {
   MenuParser *parser = user_data;
-
+  
   if (ELEMENT_IS ("Menu"))
     {
       if (parser->stack_top == parser->root &&

@@ -106,6 +106,8 @@ void        menu_node_root_set_entry_cache  (MenuNode   *node,
 EntryDirectoryList* menu_node_menu_get_app_entries       (MenuNode *node);
 EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
 
+void menu_node_debug_print (MenuNode *node);
+
 typedef struct MenuCache MenuCache;
 
 MenuCache* menu_cache_new   (void);

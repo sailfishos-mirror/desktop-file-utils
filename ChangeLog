@@ -1,5 +1,11 @@
 2004-08-29  Mark McLoughlin  <mark@skynet.ie>
 
+	Patch from Dan Williams <dcbw@redhat.com>
+
+	* src/menu-method.c: add a reasonable set of schemes.
+
+2004-08-29  Mark McLoughlin  <mark@skynet.ie>
+
 	* src/menu-tree-cache.[ch]:
 	(desktop_entry_tree_cache_new): add an only_show_in arg.
 	(desktop_entry_tree_cache_unref: free only_show_in.

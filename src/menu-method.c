@@ -160,7 +160,11 @@ struct {
 	const char *scheme;
 	const char *menu_file;
 } all_schemes[] = {
-	{ "menu-test", "applications.menu" }
+	{ "applications",    "applications.menu"    },
+	{ "preferences",     "preferences.menu"     },
+	{ "server-settings", "server-settings.menu" },
+	{ "start-here",      "start-here.menu"      },
+	{ "system-settings", "system-settings.menu" }
 };
 
 static const char*

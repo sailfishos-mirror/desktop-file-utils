@@ -28,12 +28,27 @@ typedef enum
 {
   VFOLDER_QUERY_OR,
   VFOLDER_QUERY_AND,
-  VFOLDER_QUERY_KEYWORD,
+  VFOLDER_QUERY_CATEGORY,
   VFOLDER_QUERY_FILENAME
 } VfolderQueryType;
 
 typedef struct _VfolderQuery VfolderQuery;
 typedef struct _Vfolder Vfolder;
+
+Vfolder* vfolder_load (const char  *filename,
+                       GError     **err);
+
+GSList*       vfolder_get_subfolders       (Vfolder *folder);
+const char*   vfolder_get_name             (Vfolder *folder);
+const char*   vfolder_get_desktop_file     (Vfolder *folder);
+gboolean      vfolder_get_show_if_empty    (Vfolder *folder);
+gboolean      vfolder_get_only_unallocated (Vfolder *folder);
+VfolderQuery* vfolder_get_query            (Vfolder *folder);
+
+VfolderQueryType vfolder_query_get_type       (VfolderQuery *query);
+GSList*          vfolder_query_get_subqueries (VfolderQuery *query);
+const char*      vfolder_query_get_category   (VfolderQuery *query);
+const char*      vfolder_query_get_filename   (VfolderQuery *query);
 
 
 

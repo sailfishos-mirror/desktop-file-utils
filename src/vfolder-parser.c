@@ -24,6 +24,19 @@
 #include <string.h>
 #include <stdlib.h>
 
+struct _Vfolder
+{
+  char *name;
+  char *desktop_file;
+  
+  GSList *subfolders;
+
+  VfolderQuery *query;
+
+  guint only_unallocated : 1;
+  guint show_if_empty : 1;
+};
+
 struct _VfolderQuery
 {
   VfolderQueryType type;
@@ -48,6 +61,10 @@ typedef struct
   char *filename;
 } VfolderFilenameQuery;
 
+#define VFOLDER_LOGICAL_QUERY(q)  ((VfolderLogicalQuery*)q)
+#define VFOLDER_CATEGORY_QUERY(q) ((VfolderCategoryQuery*)q)
+#define VFOLDER_FILENAME_QUERY(q) ((VfolderFilenameQuery*)q)
+
 typedef enum
 {
   STATE_START,
@@ -59,6 +76,7 @@ typedef struct
 {
   GSList *states;
 
+  Vfolder *vfolder;
 } ParseInfo;
 
 static void set_error (GError             **err,
@@ -465,7 +483,7 @@ vfolder_load (const char *filename,
   char *text;
   int length;
   Vfolder *retval;
-  
+
   text = NULL;
   length = 0;
   retval = NULL;
@@ -506,12 +524,11 @@ vfolder_load (const char *filename,
     {
       g_propagate_error (err, error);
     }
-#if 0
-  else if (info.theme)
+  else if (info.vfolder)
     {
-
+      retval = info.vfolder;
+      info.vfolder = NULL;
     }
-#endif
   else
     {
       g_set_error (err, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
@@ -520,6 +537,75 @@ vfolder_load (const char *filename,
     }
 
   parse_info_free (&info);
-'
+  
   return retval;
 }
+
+GSList*
+vfolder_get_subfolders (Vfolder *folder)
+{
+  return folder->subfolders;
+}
+
+const char*
+vfolder_get_name (Vfolder *folder)
+{
+  return folder->name;
+}
+
+const char*
+vfolder_get_desktop_file (Vfolder *folder)
+{
+  return folder->desktop_file;
+}
+
+gboolean
+vfolder_get_show_if_empty (Vfolder *folder)
+{
+  return folder->show_if_empty;
+}
+
+gboolean
+vfolder_get_only_unallocated (Vfolder *folder)
+{
+  return folder->only_unallocated;
+}
+
+VfolderQuery*
+vfolder_get_query (Vfolder *folder)
+{
+  return folder->query;
+}
+
+VfolderQueryType
+vfolder_query_get_type (VfolderQuery *query)
+{
+  return query->type;
+}
+
+GSList*
+vfolder_query_get_subqueries (VfolderQuery *query)
+{
+  g_return_val_if_fail (query->type == VFOLDER_QUERY_OR ||
+                        query->type == VFOLDER_QUERY_AND,
+                        NULL);
+
+  return VFOLDER_LOGICAL_QUERY (query)->subqueries;
+}
+
+const char*
+vfolder_query_get_category (VfolderQuery *query)
+{
+  g_return_val_if_fail (query->type == VFOLDER_QUERY_CATEGORY, NULL);
+  
+  return VFOLDER_CATEGORY_QUERY (query)->category;
+}
+
+const char*
+vfolder_query_get_filename (VfolderQuery *query)
+{
+  g_return_val_if_fail (query->type == VFOLDER_QUERY_FILENAME, NULL);
+  
+  return VFOLDER_FILENAME_QUERY (query)->filename;
+}
+

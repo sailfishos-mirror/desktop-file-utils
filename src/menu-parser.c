@@ -21,6 +21,7 @@
 
 #include <config.h>
 #include "menu-parser.h"
+#include "menu-util.h"
 #include <string.h>
 #include <stdlib.h>
 

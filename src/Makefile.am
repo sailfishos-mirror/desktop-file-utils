@@ -39,7 +39,9 @@ menu_sources=					\
 	menu-process.c				\
 	menu-process.h				\
 	menu-tree-cache.c			\
-	menu-tree-cache.h
+	menu-tree-cache.h			\
+	menu-util.c				\
+	menu-util.h
 
 libmenu_sources_la_SOURCES=			\
 	$(menu_sources)

@@ -1,3 +1,11 @@
+2003-05-31  Havoc Pennington  <hp@pobox.com>
+
+	* src/menu-util.c: move some functions that didn't make sense 
+	in other files into here
+
+	* src/menu-process.c (menu_node_resolve_files_recursive): fix bug
+	where we used an uninitialized variable
+
 2003-05-30  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-process.c (menu_node_find_submenu): hack

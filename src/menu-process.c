@@ -24,6 +24,7 @@
 #include "menu-entries.h"
 #include "canonicalize.h"
 #include "desktop_file.h"
+#include "menu-util.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -185,6 +186,11 @@ menu_node_resolve_files_recursive (MenuCache  *menu_cache,
     case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
       break;
 #endif
+
+    case MENU_NODE_PASSTHROUGH:
+      /* Just get rid of this, we don't need the memory usage */
+      menu_node_unlink (node);
+      break;
           
     default:
       /* Recurse */

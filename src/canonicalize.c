@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include <glib.h>
+#include "canonicalize.h"
 
 /* Return the canonical absolute name of file NAME.  A canonical name
    does not contain any `.', `..' components nor any repeated path

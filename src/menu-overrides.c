@@ -31,47 +31,6 @@
 #define _(x) gettext ((x))
 #define N_(x) x
 
-gboolean
-g_create_dir (const char    *dir,
-              unsigned int   mode,
-              GError       **err)
-{
-  char *parent;
-  
-  menu_verbose ("Creating directory \"%s\" mode %o\n", dir, mode);
-  
-  parent = g_path_get_dirname (dir);
-
-  menu_verbose ("Parent dir is \"%s\"\n", parent);
-
-  if (!g_file_test (parent, G_FILE_TEST_IS_DIR))
-    {
-      if (!g_create_dir (parent, mode, err))
-        {
-          menu_verbose ("Failed to create parent dir\n");
-          g_free (parent);
-          return FALSE;
-        }
-    }
-
-  g_free (parent);
-  
-  if (mkdir (dir, mode) < 0)
-    {
-      if (errno != EEXIST)
-        {
-          g_set_error (err, G_FILE_ERROR_FAILED,
-                       g_file_error_from_errno (errno),
-                       _("Could not make directory \"%s\": %s"),
-                       dir, g_strerror (errno));
-          menu_verbose ("Error: \"%s\"\n", err ? (*err)->message : "(no err requested)");
-          return FALSE;
-        }
-    }
-  
-  return TRUE;
-}
-
 struct MenuOverrideDir
 {
   int refcount;

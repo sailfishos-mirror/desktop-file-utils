@@ -22,7 +22,7 @@
 #ifndef MENU_OVERRIDES_H
 #define MENU_OVERRIDES_H
 
-#include "menu-layout.h"
+#include "menu-util.h"
 
 typedef struct MenuOverrideDir MenuOverrideDir;
 

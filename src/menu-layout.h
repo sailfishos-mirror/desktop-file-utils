@@ -138,23 +138,4 @@ gboolean  menu_cache_sync_for_file               (MenuCache   *cache,
                                                   const char  *filename,
                                                   GError     **error);
 
-/* random utility function */
-#ifdef DFU_MENU_DISABLE_VERBOSE
-#ifdef G_HAVE_ISO_VARARGS
-#define menu_verbose(...)
-#elif defined(G_HAVE_GNUC_VARARGS)
-#define menu_verbose(format...)
-#else
-#error "Cannot disable verbose mode due to lack of varargs macros"
-#endif
-#else
-void menu_verbose    (const char *format,
-                      ...) G_GNUC_PRINTF (1, 2);
-#endif
-
-gboolean g_file_save_atomically (const char *filename,
-                                 const char *str,
-                                 int         len,
-                                 GError    **error);
-
 #endif /* MENU_LAYOUT_H */

@@ -22,7 +22,7 @@
 #include <config.h>
 
 #include "menu-entries.h"
-#include "menu-layout.h"
+#include "menu-util.h"
 #include "canonicalize.h"
 #include <string.h>
 #include <errno.h>

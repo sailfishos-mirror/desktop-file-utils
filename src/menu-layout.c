@@ -29,6 +29,7 @@
 #include "menu-entries.h"
 #include "menu-parser.h"
 #include "dfu-test.h"
+#include "menu-util.h"
 
 #include <libintl.h>
 #define _(x) gettext ((x))
@@ -1382,105 +1383,6 @@ menu_node_append_to_string (MenuNode *node,
     }
 }
 
-static gboolean
-write_string (int         fd,
-              const char *data,
-              size_t      len,
-              const char *filename,
-              GError    **error)
-{
-  size_t total_written;
-  size_t bytes_written;
-
-  total_written = 0;
-  
- again:
-
-  bytes_written = write (fd, data + total_written, len - total_written);
-
-  if (bytes_written < 0)
-    {
-      if (errno == EINTR)
-        goto again;
-      else
-        {
-          g_set_error (error, G_FILE_ERROR,
-                       g_file_error_from_errno (errno),
-                       _("Failed to write file \"%s\": %s\n"),
-                       filename, g_strerror (errno));
-          return FALSE;
-        }
-    }
-  else
-    {
-      total_written += bytes_written;
-      if (total_written < len)
-        goto again;
-    }
-  
-  return TRUE;
-}
-
-gboolean
-g_file_save_atomically (const char *filename,
-                        const char *str,
-                        int         len,
-                        GError    **error)
-{
-  char *tmpfile;
-  int fd;
-  gboolean retval;
-
-  retval = FALSE;
-  
-  if (len < 0)
-    len = strlen (str);
-  
-  tmpfile = g_strconcat (filename, ".tmp-XXXXXX", NULL);
-  
-  fd = g_mkstemp (tmpfile);
-  if (fd < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Could not create file \"%s\": %s\n"),
-                   tmpfile, g_strerror (errno));
-      goto out;
-    }
-  
-  if (!write_string (fd, str, len, tmpfile, error))
-    goto out;
-  
-  if (close (fd) < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Failed to close file \"%s\": %s\n"),
-                   tmpfile, g_strerror (errno));
-      goto out;
-    }
-
-  if (rename (tmpfile, filename) < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Failed to move file \"%s\" to \"%s\": %s\n"),
-                   tmpfile, filename, g_strerror (errno));
-      goto out;
-    }
-
-  g_free (tmpfile);
-  tmpfile = NULL; /* so we won't try to unlink it */
-
-  retval = TRUE;
-  
- out:
-  if (tmpfile)
-    unlink (tmpfile); /* ignore failures */
-  g_free (tmpfile);
-  return retval;
-}
-
 gboolean
 menu_cache_sync_for_file (MenuCache   *cache,
                           const char  *filename,
@@ -1531,53 +1433,6 @@ menu_cache_sync_for_file (MenuCache   *cache,
     g_string_free (str, TRUE);
   
   return retval;
-}
-
-static int
-utf8_fputs (const char *str,
-            FILE       *f)
-{
-  char *l;
-  int ret;
-  
-  l = g_locale_from_utf8 (str, -1, NULL, NULL, NULL);
-
-  if (l == NULL)
-    ret = fputs (str, f); /* just print it anyway, better than nothing */
-  else
-    ret = fputs (l, f);
-
-  g_free (l);
-
-  return ret;
-}
-
-void
-menu_verbose (const char *format,
-              ...)
-{
-  va_list args;
-  char *str;
-  static gboolean verbose = FALSE;
-  static gboolean initted = FALSE;
-  
-  if (!initted)
-    {
-      verbose = g_getenv ("DFU_MENU_VERBOSE") != NULL;
-      initted = TRUE;
-    }
-
-  if (!verbose)
-    return;
-    
-  va_start (args, format);
-  str = g_strdup_vprintf (format, args);
-  va_end (args);
-
-  utf8_fputs (str, stderr);
-  fflush (stderr);
-  
-  g_free (str);
 }
 
 void

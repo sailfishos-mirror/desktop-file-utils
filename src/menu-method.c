@@ -38,7 +38,7 @@
 #include <libgnomevfs/gnome-vfs-utils.h>
 
 #include "menu-tree-cache.h"
-#include "menu-layout.h"
+#include "menu-util.h"
 
 /* FIXME - we have a gettext domain problem while not included in libgnomevfs */
 #define _(x) x

@@ -1,3 +1,9 @@
+2004-09-23  Ray Strode  <rstrode@redhat.com>
+
+	* src/desktop_file.c:
+	(gnome_desktop_file_remove_string_from_list):
+	Fix --remove-show-in option
+
 2004-09-13  Dan Williams <dcbw@redhat.com>
 
 	* src/eggdesktopentreis.c:

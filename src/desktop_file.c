@@ -1421,7 +1421,7 @@ gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
   if (gnome_desktop_file_get_strings (df, section, keyname, locale,
                                       &values, &n_values))
     {
-      int i;
+      int i, j;
       int n_found;
 
       n_found = 0;
@@ -1429,25 +1429,38 @@ gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
       i = 0;
       while (i < n_values)
         {
-          if (n_found > 0)
+          if (values[i] == NULL)
+            continue;
+
+          if (strcmp (values[i], value) == 0)
             {
               g_free (values[i]);
-              values[i] = values[i+1];
-              values[i+1] = NULL;
-            }
-
-          if (((i+1) < n_values) &&
-              strcmp (values[i], value) == 0)
-            {
+              values[i] = NULL;
               ++n_found;
             }
-          else
-            {
-              ++i;
-            }
+
+          ++i;
         }
 
-      if (n_found > 0)
+      i = 0;
+      while (i < n_values)
+        {
+          j = MAX (i + 1, j);
+          if (values[i] == NULL)
+            {
+              while (j < n_values && values[j] == NULL)
+                j++;
+
+              values[i] = values[j];
+              values[j] = NULL;
+            }
+
+          ++i;
+        }
+
+      if (n_found == n_values)
+        gnome_desktop_file_unset (df, section, keyname);
+      else if (n_found > 0)
         gnome_desktop_file_set_strings (df, section, keyname, locale,
                                         (const char**) values);
       

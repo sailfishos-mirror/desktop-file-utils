@@ -1,5 +1,14 @@
 2002-05-25  Havoc Pennington  <hp@pobox.com>
 
+	* src/vfolder-query.c: handle OnlyUnallocated correctly
+
+2002-05-25  Havoc Pennington  <hp@pobox.com>
+
+	* src/vfolder-query.c, src/vfolder-parser.c: implement more query
+	stuff
+
+2002-05-25  Havoc Pennington  <hp@pobox.com>
+
 	* src/validate.c (desktop_file_fixup): move here from install.c
 
 	* src/gen-compat-tree.c (main): initial test version, 

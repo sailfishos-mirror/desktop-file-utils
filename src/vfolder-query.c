@@ -37,8 +37,28 @@
 #define N_(x) x
 
 static void load_tree (DesktopFileTree *tree);
-static GNode* node_from_vfolder (DesktopFileTree *tree,
-                                 Vfolder         *folder);
+
+typedef enum
+{
+  NODE_FOLDER,
+  NODE_APPLICATION
+} NodeType;
+  
+typedef struct
+{
+  NodeType type;
+  const char *basename;
+  GnomeDesktopFile *df;
+  Vfolder *folder;
+} NodeData;
+
+static GNode* node_from_vfolder     (DesktopFileTree  *tree,
+                                     Vfolder          *folder);
+static GNode* node_from_application (const char       *basename,
+                                     GnomeDesktopFile *df);
+
+static void distribute_unallocated (DesktopFileTree *tree,
+                                    GNode           *node);
 
 struct _DesktopFileTree
 {
@@ -80,7 +100,7 @@ static gboolean
 free_node_func (GNode *node,
                 void  *data)
 {
-  gnome_desktop_file_free (node->data);
+  g_free (node->data);
   
   return TRUE;
 }
@@ -88,15 +108,10 @@ free_node_func (GNode *node,
 void
 desktop_file_tree_free (DesktopFileTree *tree)
 {
-#if 0
-  /* Don't do this, the nodes just point into the copies
-   * of the desktop files in the hash
-   */
   if (tree->node)
     g_node_traverse (tree->node,
                      G_IN_ORDER, G_TRAVERSE_ALL,
                      -1, free_node_func, NULL);
-#endif
   
   /* we don't own tree->folder which is bad practice but what the hell */
 
@@ -119,14 +134,14 @@ print_node_func (GNode *node,
 {
 #define MAX_FIELDS 3
   PrintData *pd;
-  GnomeDesktopFile *df;
+  NodeData *nd;
   int i;
   char *fields[MAX_FIELDS] = { NULL, NULL, NULL };
   char *s;
   
   pd = data;
   
-  df = node->data;
+  nd = node->data;
   
   i = g_node_depth (node);
   while (i > 0)
@@ -138,7 +153,7 @@ print_node_func (GNode *node,
   i = 0;
   if (pd->flags & DESKTOP_FILE_TREE_PRINT_NAME)
     {
-      if (!gnome_desktop_file_get_locale_string (df,
+      if (!gnome_desktop_file_get_locale_string (nd->df,
                                                  NULL,
                                                  "Name",
                                                  &s))
@@ -150,7 +165,7 @@ print_node_func (GNode *node,
   
   if (pd->flags & DESKTOP_FILE_TREE_PRINT_GENERIC_NAME)
     {
-      if (!gnome_desktop_file_get_locale_string (df,
+      if (!gnome_desktop_file_get_locale_string (nd->df,
                                                  NULL,
                                                  "GenericName",
                                                  &s))
@@ -162,7 +177,7 @@ print_node_func (GNode *node,
 
   if (pd->flags & DESKTOP_FILE_TREE_PRINT_COMMENT)
     {
-      if (!gnome_desktop_file_get_locale_string (df,
+      if (!gnome_desktop_file_get_locale_string (nd->df,
                                                  NULL,
                                                  "Comment",
                                                  &s))
@@ -479,6 +494,8 @@ load_tree (DesktopFileTree *tree)
     }
 
   tree->node = node_from_vfolder (tree, tree->folder);
+
+  distribute_unallocated (tree, tree->node);
 }
 
 static gboolean is_verbose = TRUE;
@@ -644,7 +661,7 @@ typedef struct
   GNode *parent;
 
   gboolean only_unallocated;
-
+  
   VfolderQuery *query;
 
   GSList *excludes;
@@ -684,7 +701,7 @@ query_foreach (void *key, void *value, void *data)
       include = FALSE;
       query_verbose (1, "EXCLUDED due to exclude list\n");
     }
-
+  
   if (include && qd->only_unallocated &&
       g_hash_table_lookup (qd->allocated_apps, key))
     {
@@ -696,12 +713,62 @@ query_foreach (void *key, void *value, void *data)
     {
       GNode *child;
       
-      child = g_node_new (value);
+      child = node_from_application (key, value);
 
       g_node_append (qd->parent, child);
 
-      /* Mark it allocated */
-      g_hash_table_insert (qd->allocated_apps, key, value);
+      if (!qd->only_unallocated)
+        {
+          /* Mark it allocated */
+          g_hash_table_insert (qd->allocated_apps, key, value);
+        }
+    }
+}
+
+static void
+fill_folder_with_apps (DesktopFileTree *tree,
+                       GNode           *node,
+                       Vfolder         *folder)
+{
+  QueryData qd;
+  GSList *list;
+  GSList *tmp;
+  
+  qd.query = vfolder_get_query (folder);
+  if (qd.query)
+    {
+      qd.allocated_apps = tree->allocated_apps;
+      qd.only_unallocated = vfolder_get_only_unallocated (folder);
+      qd.parent = node;
+      qd.excludes = vfolder_get_excludes (folder);
+      
+      g_hash_table_foreach (tree->apps, (GHFunc) query_foreach,
+                            &qd);
+    }
+
+  /* Include the <Include> for first-pass folders */
+  list = vfolder_get_includes (folder);
+  tmp = list;
+  while (tmp != NULL)
+    {
+      GnomeDesktopFile *df;
+      
+      df = g_hash_table_lookup (tree->apps,
+                                tmp->data);
+      
+      if (df)
+        {
+          GNode *child;
+          
+          child = node_from_application (tmp->data, df);
+          
+          g_node_append (node, child);
+          
+          /* Mark it allocated */
+          g_hash_table_insert (tree->allocated_apps, tmp->data, df);
+        }
+      
+      tmp = tmp->next;
     }
 }
 
@@ -712,10 +779,10 @@ node_from_vfolder (DesktopFileTree *tree,
   GnomeDesktopFile *df;
   const char *df_basename;
   GNode *node;
+  NodeData *nd;
   GSList *list;
   GSList *tmp;
-  QueryData qd;
-
+  
   query_verbose (0, "FOLDER: %s\n", vfolder_get_name (folder));
   
   df_basename = vfolder_get_desktop_file (folder);
@@ -734,7 +801,13 @@ node_from_vfolder (DesktopFileTree *tree,
       return NULL;
     }
 
-  node = g_node_new (df);
+  nd = g_new0 (NodeData, 1);
+  nd->type = NODE_FOLDER;
+  nd->basename = df_basename;
+  nd->df = df;
+  nd->folder = folder;
+  
+  node = g_node_new (nd);
 
   list = vfolder_get_subfolders (folder);
   tmp = list;
@@ -750,45 +823,50 @@ node_from_vfolder (DesktopFileTree *tree,
       tmp = tmp->next;
     }
 
-  qd.query = vfolder_get_query (folder);
-  if (qd.query)
-    {
-      qd.allocated_apps = tree->allocated_apps;
-      qd.only_unallocated = vfolder_get_only_unallocated (folder);
-      qd.parent = node;
-      qd.excludes = vfolder_get_excludes (folder);
-      
-      g_hash_table_foreach (tree->apps, (GHFunc) query_foreach,
-                            &qd);
-    }
-
-  /* Include the <Include> */
-  list = vfolder_get_includes (folder);
-  tmp = list;
-  while (tmp != NULL)
-    {
-      if (!(vfolder_get_only_unallocated (folder) &&
-            g_hash_table_lookup (tree->allocated_apps,
-                                 tmp->data)))
-        {
-          df = g_hash_table_lookup (tree->apps,
-                                    tmp->data);
-          
-          if (df)
-            {
-              GNode *child;
-              
-              child = g_node_new (df);
-              
-              g_node_append (node, child);
-              
-              /* Mark it allocated */
-              g_hash_table_insert (tree->allocated_apps, tmp->data, df);
-            }
-        }
-      
-      tmp = tmp->next;
-    }
+  /* Only folders that are not "OnlyUnallocated" go in the first pass */
+  if (!vfolder_get_only_unallocated (folder))
+    fill_folder_with_apps (tree, node, folder);
   
   return node;
+}
+
+static GNode*
+node_from_application (const char       *basename,
+                       GnomeDesktopFile *df)
+{
+  GNode *node;
+  NodeData *nd;
+  
+  nd = g_new0 (NodeData, 1);
+  nd->type = NODE_APPLICATION;
+  nd->basename = basename;
+  nd->df = df;
+  nd->folder = NULL;
+  
+  node = g_node_new (nd);
+
+  return node;
+}
+
+static void
+distribute_unallocated (DesktopFileTree *tree,
+                        GNode           *node)
+{
+  NodeData *nd;
+  GNode *child;
+
+  child = node->children;
+  while (child != NULL)
+    {
+      distribute_unallocated (tree, child);
+      
+      child = child->next;
+    }
+
+  nd = node->data;  
+  
+  /* Only folders that are "OnlyUnallocated" go in the first pass */
+  if (nd->type == NODE_FOLDER &&
+      vfolder_get_only_unallocated (nd->folder))
+    fill_folder_with_apps (tree, node, nd->folder);
 }

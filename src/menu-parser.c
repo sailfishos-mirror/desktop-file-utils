@@ -736,6 +736,8 @@ menu_load (const char *filename,
   length = 0;
   retval = NULL;
   context = NULL;
+
+  menu_verbose ("Loading \"%s\" from disk\n", filename);
   
   if (!g_file_get_contents (filename,
                             &text,
@@ -775,15 +777,19 @@ menu_load (const char *filename,
   
   if (error)
     {
+      menu_verbose ("Error \"%s\" loading \"%s\"\n",
+                    error->message, filename);
       g_propagate_error (err, error);
     }
   else if (has_menu_child (parser.root))
     {
+      menu_verbose ("File loaded OK\n");
       retval = parser.root;
       parser.root = NULL;
     }
   else
     {
+      menu_verbose ("Did not have a root element in file\n");
       g_set_error (err, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
                    _("Menu file %s did not contain a root <Menu> element"),
                    filename);

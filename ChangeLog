@@ -1,3 +1,16 @@
+2003-05-20  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-method.c: code stuff,
+	gnomevfs-ls/gnomevfs-cat/gnomevfs-info are now up and running.
+
+	* src/menu-process.c (tree_node_find_subdir_or_entry): fix
+
+	* src/menu-tree-cache.c (parse_search_path_and_prepend): fix
+	(init_xdg_paths): fix
+
+	* src/Makefile.am: fix to link the menu-* sources into the VFS
+	module.
+
 2003-05-15  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-method.c: hacking

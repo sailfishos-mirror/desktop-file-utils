@@ -20,6 +20,7 @@
 
 #include "menu-tree-cache.h"
 #include "menu-process.h"
+#include "menu-layout.h"
 #include "canonicalize.h"
 #include <glib.h>
 #include <string.h>
@@ -33,89 +34,127 @@ typedef struct XdgPathInfo XdgPathInfo;
 
 struct XdgPathInfo
 {
-        char  *data_home;
-        char  *config_home;
-        char **data_dirs;
-        char **config_dirs;
+  char  *data_home;
+  char  *config_home;
+  char **data_dirs;
+  char **config_dirs;
 };
 
 static char**
 parse_search_path_and_prepend (const char *path,
                                const char *prepend_this)
 {
-        char **retval;
-        int i;
-        int len;
+  char **retval;
+  int i;
+  int len;
 
-        if (path != NULL) {
-                retval = g_strsplit (path, ":", -1);
+  if (path != NULL)
+    {
+      menu_verbose ("Parsing path \"%s\"\n", path);
+      
+      retval = g_strsplit (path, ":", -1);
 
-                for (len = 0; retval[len] != NULL; len++)
-                        ;
+      for (len = 0; retval[len] != NULL; len++)
+        ;
 
+      menu_verbose ("%d elements after split\n", len);
         
-                i = 0;
-                while (i < len) {
-                        /* delete empty strings */
-                        if (*(retval[i]) == '\0') {
-                                g_free (retval[i]);
-                                g_memmove (&retval[i],
-                                           &retval[i + 1],
-                                           (len - i) * sizeof (retval[0]));
-                                --len;
-                        } else {
-                                ++i;
-                        }
-                }
+      i = 0;
+      while (i < len) {
+        /* delete empty strings */
+        if (*(retval[i]) == '\0')
+          {
+            menu_verbose ("Deleting element %d\n", i);
+            
+            g_free (retval[i]);
+            g_memmove (&retval[i],
+                       &retval[i + 1],
+                       (len - i) * sizeof (retval[0]));
+            --len;
+          }
+        else
+          {
+            menu_verbose ("Keeping element %d\n", i);
+            ++i;
+          }
+      }
 
-                if (prepend_this != NULL) {
-                        retval = g_realloc (retval, sizeof (retval[0]) * (len + 2));
-                        g_memmove (&retval[0],
-                                   &retval[1],
-                                   (len + 1) * sizeof (retval[0]));
-                        retval[0] = g_strdup (prepend_this);
-                }
-        } else {
-                retval = g_new0 (char*, 2);
-                if (prepend_this)
-                        retval[0] = g_strdup (prepend_this);
+      if (prepend_this != NULL)
+        {
+          menu_verbose ("Prepending \"%s\"\n", prepend_this);
+          
+          retval = g_renew (char*, retval, len + 2);
+          g_memmove (&retval[1],
+                     &retval[0],
+                     (len + 1) * sizeof (retval[0]));
+          retval[0] = g_strdup (prepend_this);
         }
+    }
+  else
+    {
+      menu_verbose ("Using \"%s\" as only path element\n", prepend_this);
+      retval = g_new0 (char*, 2);
+      if (prepend_this)
+        retval[0] = g_strdup (prepend_this);
+    }
         
-        return retval;
+  return retval;
 }
                         
 
 static void
 init_xdg_paths (XdgPathInfo *info_p)
 {
-        static XdgPathInfo info = { NULL, NULL, NULL, NULL };
+  static XdgPathInfo info = { NULL, NULL, NULL, NULL };
 
-        if (info.data_home == NULL) {
-                const char *p;
+  if (info.data_home == NULL)
+    {
+      const char *p;
 
-                p = g_getenv ("XDG_DATA_HOME");
-                if (p != NULL)
-                        info.data_home = g_strdup (p);
-                else
-                        info.data_home = g_build_path (g_get_home_dir (),
-                                                       ".local", "share",
-                                                       NULL);
+      p = g_getenv ("XDG_DATA_HOME");
+      if (p != NULL)
+        info.data_home = g_strdup (p);
+      else
+        info.data_home = g_build_filename (g_get_home_dir (),
+                                           ".local", "share",
+                                           NULL);
                 
-                p = g_getenv ("XDG_CONFIG_HOME");
-                if (p != NULL)
-                        info.config_home = g_strdup (p);
-                else
-                        info.config_home = g_build_path (g_get_home_dir (),
-                                                         ".config", NULL);
+      p = g_getenv ("XDG_CONFIG_HOME");
+      if (p != NULL)
+        info.config_home = g_strdup (p);
+      else
+        info.config_home = g_build_filename (g_get_home_dir (),
+                                             ".config", NULL);
                         
-                p = g_getenv ("XDG_DATA_DIRS");
-                info.data_dirs = parse_search_path_and_prepend (p, info.data_home);
+      p = g_getenv ("XDG_DATA_DIRS");
+      if (p == NULL)
+        p = PREFIX"/local/share:"DATADIR;
+      info.data_dirs = parse_search_path_and_prepend (p, info.data_home);
                 
-                p = g_getenv ("XDG_CONFIG_DIRS");
-                info.config_dirs = parse_search_path_and_prepend (p, info.config_home);
-        }
+      p = g_getenv ("XDG_CONFIG_DIRS");
+      if (p == NULL)
+        p = SYSCONFDIR"/xdg";
+      info.config_dirs = parse_search_path_and_prepend (p, info.config_home);
+#ifndef DFU_MENU_DISABLE_VERBOSE
+      {
+        int q;
+        q = 0;
+        while (info.data_dirs[q])
+          {
+            menu_verbose ("Data Path Entry: %s\n", info.data_dirs[q]);
+            ++q;
+          }
+        q = 0;
+        while (info.config_dirs[q])
+          {
+            menu_verbose ("Conf Path Entry: %s\n", info.config_dirs[q]);
+            ++q;
+          }
+      }
+#endif /* Verbose */
+    }
 
-        *info_p = info;
+  *info_p = info;
 }
 
 /* We need to keep track of what absolute path we're using for each
@@ -200,6 +239,9 @@ lookup_canonical (DesktopEntryTreeCache *cache,
                   GError               **error)
 {
   CacheEntry *entry;
+
+  menu_verbose ("Looking up canonical filename in tree cache: \"%s\"\n",
+                canonical);
   
   entry = g_hash_table_lookup (cache->entries, canonical);
   if (entry == NULL)
@@ -222,12 +264,19 @@ lookup_canonical (DesktopEntryTreeCache *cache,
   
   if (entry->tree == NULL)
     {
+      g_assert (entry->load_failure_reason != NULL);
+      
+      menu_verbose ("File load failure cached, reason for failure: %s\n",
+                    entry->load_failure_reason->message);
+      
       if (error)
         *error = g_error_copy (entry->load_failure_reason);
       return NULL;
     }
   else
     {
+      menu_verbose ("Returning cached entry tree\n");
+      
       desktop_entry_tree_ref (entry->tree);
       return entry->tree;
     }
@@ -241,6 +290,9 @@ lookup_absolute (DesktopEntryTreeCache *cache,
   DesktopEntryTree *tree;
   char *canonical;
 
+  menu_verbose ("Looking up absolute filename in tree cache: \"%s\"\n",
+                absolute);
+  
   /* First just guess the absolute is already canonical and see if
    * it's in the cache, to avoid the canonicalization. Don't
    * want to cache the failed lookup so check the hash table
@@ -261,6 +313,8 @@ lookup_absolute (DesktopEntryTreeCache *cache,
                    g_file_error_from_errno (errno),
                    _("Could not find or canonicalize the file \"%s\"\n"),
                    absolute);
+      menu_verbose ("Failed to canonicalize: \"%s\"\n",
+                    absolute);
       return NULL;
     }
   
@@ -307,7 +361,7 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
           char *absolute;
 
           absolute = g_build_filename (info.config_dirs[i],
-                                       menu_file, NULL);
+                                       "menus", menu_file, NULL);
 
           tree = lookup_absolute (cache, absolute, error);
           g_free (absolute);

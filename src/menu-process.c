@@ -429,6 +429,8 @@ desktop_entry_tree_load (const char  *filename,
   char *canonical;
   EntryCache *entry_cache;
   MenuCache *menu_cache;
+
+  menu_verbose ("Loading desktop entry tree at \"%s\"\n", filename);
   
   canonical = g_canonicalize_file_name (filename);
   if (canonical == NULL)
@@ -440,6 +442,8 @@ desktop_entry_tree_load (const char  *filename,
       return NULL;
     }
 
+  menu_verbose ("Canonicalized \"%s\" -> \"%s\"\n", filename, canonical);
+  
   menu_cache = menu_cache_new ();
   
   orig_node = menu_cache_get_menu_for_canonical_file (menu_cache,
@@ -457,7 +461,7 @@ desktop_entry_tree_load (const char  *filename,
     entry_cache_set_only_show_in_name (entry_cache,
                                        only_show_in_desktop);
 
-  menu_node_debug_print (orig_node);
+  /* menu_node_debug_print (orig_node); */
   
   resolved_node = menu_node_deep_copy (orig_node);
   menu_node_resolve_files (menu_cache, entry_cache, resolved_node);
@@ -547,24 +551,35 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
     *real_fs_absolute_path_p = NULL;
   
   entry = NULL;
+
+  /* Skip leading '/' (we're already at the root) */
+  i = 0;
+  while (name[i] &&
+         name[i] == '/')
+    ++i;
   
-  split = g_strsplit (name, "/", -1);
+  split = g_strsplit (name + i, "/", -1);
 
   prev = NULL;
   iter = node;
   i = 0;
   while (split[i] != NULL && *(split[i]) != '\0')
-    {
+    {      
+      prev = iter;
+      iter = find_subdir (iter, split[i]);
+
+      menu_verbose ("Node %p found for path component \"%s\"\n",
+                    iter, split[i]);
+
       if (iter == NULL)
         {
           /* We ran out of nodes before running out of path
            * components
            */
+          menu_verbose ("Remaining path component \"%s\" doesn't point to a directory node\n",
+                        split[i]);
           break;
         }
-      
-      prev = iter;
-      iter = find_subdir (iter, split[i]);
       
       ++i;
     }
@@ -576,6 +591,9 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
        */
       const char *entry_name;
       GSList *tmp;
+
+      menu_verbose ("Scanning for entry named \"%s\"\n",
+                    split[i]);
       
       entry_name = split[i];
       
@@ -588,12 +606,19 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
               entry = e;
               break;
             }
+
+          menu_verbose ("   (\"%s\" doesn't match)\n",
+                        entry_get_name (e));
+          
           tmp = tmp->next;
         }
     }
 
   g_strfreev (split);
 
+  menu_verbose (" Found node %p and entry path \"%s\"\n",
+                iter, entry ? entry_get_absolute_path (entry) : "(none)");
+  
   if (real_fs_absolute_path_p && entry)
     *real_fs_absolute_path_p = g_strdup (entry_get_absolute_path (entry));
   
@@ -734,7 +759,8 @@ void
 desktop_entry_tree_list_all (DesktopEntryTree       *tree,
                              DesktopEntryTreeNode   *parent_node,
                              char                 ***names,
-                             int                    *n_names)
+                             int                    *n_names,
+                             int                    *n_subdirs)
 {
   int len;
   GSList *tmp;
@@ -746,6 +772,8 @@ desktop_entry_tree_list_all (DesktopEntryTree       *tree,
   *names = NULL;
   if (n_names)
     *n_names = 0;
+  if (n_subdirs)
+    *n_subdirs = 0;
   
   build_tree (tree);
   if (tree->root == NULL)
@@ -767,6 +795,9 @@ desktop_entry_tree_list_all (DesktopEntryTree       *tree,
       tmp = tmp->next;
     }
 
+  if (n_subdirs)
+    *n_subdirs = i;
+  
   tmp = parent_node->entries;
   while (tmp != NULL)
     {
@@ -790,7 +821,7 @@ desktop_entry_tree_list_all (DesktopEntryTree       *tree,
   g_assert (i == len);
   
   if (n_names)
-    *n_names = len;  
+    *n_names = len;
 }
 
 char*

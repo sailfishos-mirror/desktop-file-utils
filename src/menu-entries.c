@@ -795,6 +795,8 @@ get_all_func (EntryDirectory *ed,
   e = entry_from_cached_entry (ed, src, relative_path);
   entry_set_add_entry (set, e);
   entry_unref (e);
+
+  return TRUE;
 }
 
 void

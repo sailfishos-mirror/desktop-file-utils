@@ -68,7 +68,8 @@ void     desktop_entry_tree_list_entries (DesktopEntryTree       *tree,
 void     desktop_entry_tree_list_all     (DesktopEntryTree       *tree,
                                           DesktopEntryTreeNode   *parent_node,
                                           char                 ***names,
-                                          int                    *n_names);
+                                          int                    *n_names,
+                                          int                    *n_subdirs);
 
 /* returns a copy of .directory file absolute path */
 char*       desktop_entry_tree_node_get_directory (DesktopEntryTreeNode *node);

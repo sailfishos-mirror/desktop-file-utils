@@ -1009,10 +1009,13 @@ menu_cache_get_menu_for_canonical_file (MenuCache  *cache,
   
   if (file)
     {
+      menu_verbose ("Got orig nodes for file \"%s\" from cache\n", canonical);
       menu_node_ref (file->root);
       return file->root;
     }
 
+  menu_verbose ("File \"%s\" not in cache\n", canonical);
+  
   node = menu_load (canonical, error);
   if (node == NULL)
     return NULL; /* FIXME - cache failures? */
@@ -1404,15 +1407,18 @@ utf8_fputs (const char *str,
             FILE       *f)
 {
   char *l;
+  int ret;
   
   l = g_locale_from_utf8 (str, -1, NULL, NULL, NULL);
 
   if (l == NULL)
-    fputs (str, f); /* just print it anyway, better than nothing */
+    ret = fputs (str, f); /* just print it anyway, better than nothing */
   else
-    fputs (l, f);
+    ret = fputs (l, f);
 
   g_free (l);
+
+  return ret;
 }
 
 void

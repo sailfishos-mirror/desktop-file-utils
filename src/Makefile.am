@@ -1,6 +1,7 @@
 
 INCLUDES=$(DESKTOP_FILE_UTILS_CFLAGS) -DDATADIR="\"$(datadir)\"" $(VFS_CFLAGS)	\
 	-DSYSCONFDIR="\"$(sysconfdir)\""					\
+	-DPREFIX="\"$(prefix)\""						\
 	-D_FILE_OFFSET_BITS=64							\
 	-D_GNU_SOURCE								\
 	-D_LARGEFILE64_SOURCE							\
@@ -22,6 +23,24 @@ endif
 noinst_PROGRAMS=$(TESTS)
 
 bin_PROGRAMS=desktop-file-validate desktop-file-install desktop-menu-tool
+noinst_LTLIBRARIES = libmenu_sources.la
+
+menu_sources=					\
+	canonicalize.c				\
+	canonicalize.h				\
+	menu-entries.c				\
+	menu-entries.h				\
+	menu-layout.c				\
+	menu-layout.h				\
+	menu-parser.c				\
+	menu-parser.h				\
+	menu-process.c				\
+	menu-process.h				\
+	menu-tree-cache.c			\
+	menu-tree-cache.h
+
+libmenu_sources_la_SOURCES=			\
+	$(menu_sources)
 
 desktop_file_validate_SOURCES=			\
 	desktop_file.c				\
@@ -38,21 +57,9 @@ desktop_file_install_SOURCES=			\
 	install.c
 
 desktop_menu_tool_SOURCES=			\
-	canonicalize.c				\
-	canonicalize.h				\
 	desktop_file.c				\
 	desktop_file.h				\
 	gen-compat-tree.c			\
-	menu-entries.c				\
-	menu-entries.h				\
-	menu-layout.c				\
-	menu-layout.h				\
-	menu-parser.c				\
-	menu-parser.h				\
-	menu-process.c				\
-	menu-process.h				\
-	menu-tree-cache.c			\
-	menu-tree-cache.h			\
 	validate.c				\
 	validate.h				\
 	vfolder-parser.c			\
@@ -61,20 +68,12 @@ desktop_menu_tool_SOURCES=			\
 	vfolder-query.h
 
 dfu_test_SOURCES=				\
-	canonicalize.c				\
-	canonicalize.h				\
-	menu-entries.c				\
-	menu-entries.h				\
-	menu-layout.c				\
-	menu-layout.h				\
-	menu-parser.c				\
-	menu-parser.h				\
 	dfu-test.c
 
 desktop_file_validate_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
 desktop_file_install_LDADD= $(DESKTOP_FILE_UTILS_LIBS)
-desktop_menu_tool_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
-dfu_test_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
+desktop_menu_tool_LDADD=$(DESKTOP_FILE_UTILS_LIBS) libmenu_sources.la
+dfu_test_LDADD=$(DESKTOP_FILE_UTILS_LIBS) libmenu_sources.la
 
 EXTRA_DIST =			\
 	menu-modules.conf
@@ -92,7 +91,8 @@ modules_LTLIBRARIES = libmenu.la
 
 libmenu_la_SOURCES = 				\
 	menu-method.c
+
 libmenu_la_LDFLAGS = $(module_flags)
-libmenu_la_LIBADD = $(VFS_LIBS)
+libmenu_la_LIBADD = $(VFS_LIBS) libmenu_sources.la
 
 endif

@@ -40,7 +40,8 @@
 #define CACHE_FILENAME "mimeinfo.cache"
 #define TEMP_CACHE_FILENAME_PREFIX ".mimeinfo.cache.XXXXXX"
 
-#define udd_debug(...) if (verbose) g_printerr (__VA_ARGS__)
+#define udd_print(...) if (!quiet) g_printerr (__VA_ARGS__)
+#define udd_verbose_print(...) if (verbose) g_printerr (__VA_ARGS__)
 
 static FILE *open_temp_cache_file (const char  *dir,
 				   char       **filename,
@@ -50,7 +51,8 @@ static void sync_database (const char *dir, GError **error);
 static void cache_desktop_file (const char  *desktop_file, 
                                 const char  *mime_type,
                                 GError     **error);
-static gboolean is_valid_mime_type (const char *mime_type);
+static gboolean is_valid_mime_type (const char *desktop_file, 
+                                    const char *mime_type);
 static void process_desktop_file (const char  *desktop_file, 
                                   const char  *name,
                                   GError     **error);
@@ -106,7 +108,8 @@ is_valid_mime_type_char (const guchar c)
 
 
 static gboolean
-is_valid_mime_type (const char *mime_type)
+is_valid_mime_type (const char *desktop_file, 
+                    const char *mime_type)
 {
   gulong subtype_offset;
   gulong valid_chars;
@@ -121,33 +124,45 @@ is_valid_mime_type (const char *mime_type)
 	  if (valid_chars == 0) 
 	    {
 	      /* We encountered a / before any valid char */
+              udd_print ("File '%s' contains invalid MIME type '%s' "
+                         "that starts with a slash\n",
+                         desktop_file, mime_type);
 	      return FALSE;
 	    }
 	  if (subtype_offset != 0) 
 	    {
 	      /* We already encountered a '/' previously */
-	      g_warning ("%s is invalid", mime_type);
-	      return FALSE;
-	    }
-	  subtype_offset = valid_chars;
-	} 
+              udd_print ("File '%s' contains invalid MIME type '%s' "
+                         "that has more than one slash\n", 
+                         desktop_file, mime_type);
+              return FALSE;
+            }
+          subtype_offset = valid_chars;
+        } 
       else if (!is_valid_mime_type_char (mime_type[valid_chars])) 
-	{
-	  return FALSE;
-	}
-      
+        {
+          udd_print ("File '%s' contains invalid MIME type '%s' "
+                     "that contains invalid characters\n", 
+                     desktop_file, mime_type);
+          return FALSE;
+        }
+
       valid_chars++;			    
     }
-  
+
   if (subtype_offset == 0) 
     {
       /* The mime type didn't contain any / */
+      udd_print ("File '%s' contains invalid MIME type '%s' that is "
+                 "missing a slash\n", desktop_file, mime_type);
       return FALSE;
     }
-  
+
   if ((subtype_offset != 0) && (subtype_offset == valid_chars)) 
     {
       /* Missing subtype name */
+      udd_print ("File '%s' contains invalid MIME type '%s' that is "
+                 "missing a subtype\n", desktop_file, mime_type);
       return FALSE;
     }
   
@@ -178,8 +193,9 @@ process_desktop_file (const char  *desktop_file,
     }
 
   mime_types = egg_desktop_entries_get_string_list (entries, 
-                                              egg_desktop_entries_get_start_group (entries),
-                                              "MimeType", NULL, &load_error);
+                                  egg_desktop_entries_get_start_group (entries),
+                                                    "MimeType", NULL, 
+                                                    &load_error);
 
   egg_desktop_entries_free (entries);
 
@@ -194,7 +210,7 @@ process_desktop_file (const char  *desktop_file,
       char *mime_type;
 
       mime_type = g_strchomp (mime_types[i]);
-      if (!is_valid_mime_type (mime_types[i])) 
+      if (!is_valid_mime_type (desktop_file, mime_types[i])) 
 	continue;
 
       cache_desktop_file (name, mime_type, &load_error);
@@ -244,7 +260,7 @@ process_desktop_files (const char  *desktop_dir,
 
           if (process_error != NULL)
             {
-              udd_debug ("Could not process directory '%s':\n"
+              udd_verbose_print ("Could not process directory '%s':\n"
                          "\t%s\n", full_path, process_error->message);
               g_error_free (process_error);
               process_error = NULL;
@@ -267,8 +283,14 @@ process_desktop_files (const char  *desktop_dir,
           if (!g_error_matches (process_error, 
                                 EGG_DESKTOP_ENTRIES_ERROR,
                                 EGG_DESKTOP_ENTRIES_ERROR_KEY_NOT_FOUND))
-            udd_debug ("Could not parse file '%s': %s\n", full_path,
-                        process_error->message);
+            {
+              udd_print ("Could not parse file '%s': %s\n", full_path,
+                         process_error->message);
+            }
+          else
+            {
+              udd_verbose_print ("File '%s' lacks MimeType key\n", full_path);
+            }
 
           g_error_free (process_error);
           process_error = NULL;
@@ -286,6 +308,7 @@ open_temp_cache_file (const char *dir, char **filename, GError **error)
   int fd;
   char *file;
   FILE *fp;
+  mode_t mask;
 
   file = g_build_filename (dir, TEMP_CACHE_FILENAME_PREFIX, NULL);
   fd = g_mkstemp (file);
@@ -298,6 +321,11 @@ open_temp_cache_file (const char *dir, char **filename, GError **error)
       g_free (file);
       return NULL;
     }
+
+  mask = umask(0);
+  (void) umask (mask);
+
+  fchmod (fd, 0666 & ~mask);
 
   fp = fdopen (fd, "w+");
   if (fp == NULL) 
@@ -432,15 +460,15 @@ print_desktop_dirs (const char **dirs)
   int i;
   const char *delimiter;
 
-  udd_debug(_("Search path is now: ["));
+  udd_verbose_print(_("Search path is now: ["));
   delimiter = "";
   for (i = 0; dirs[i] != NULL; i++)
     {
-      udd_debug (delimiter);
+      udd_verbose_print (delimiter);
       delimiter = ", ";
-      udd_debug (dirs[i]);
+      udd_verbose_print (dirs[i]);
     }
-  udd_debug ("]\n");
+  udd_verbose_print ("]\n");
 }
 
 int
@@ -483,8 +511,7 @@ main (int    argc,
   if (desktop_dirs == NULL || desktop_dirs[0] == NULL)
     desktop_dirs = get_default_search_path ();
 
-  if (verbose)
-    print_desktop_dirs (desktop_dirs);
+  print_desktop_dirs (desktop_dirs);
 
   found_processable_dir = FALSE;
   for (i = 0; desktop_dirs[i] != NULL; i++)
@@ -494,9 +521,9 @@ main (int    argc,
 
       if (error != NULL)
         {
-          udd_debug (_("Could not create cache file in directory '%s':\n"
-                       "\t%s\n"),
-                     desktop_dirs[i], error->message);
+          udd_verbose_print (_("Could not create cache file in directory '%s':"
+                               "\n\t%s\n"),
+                             desktop_dirs[i], error->message);
           g_error_free (error);
           error = NULL;
         }
@@ -507,9 +534,8 @@ main (int    argc,
 
   if (!found_processable_dir)
     {
-      if (!quiet)
-        g_printerr (_("No directories in update-desktop-database search path "
-                      "could processed and updated.\n"));
+      udd_print (_("No directories in update-desktop-database search path "
+                   "could be processed and updated.\n"));
       return 1;
     }
 

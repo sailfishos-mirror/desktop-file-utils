@@ -1,3 +1,18 @@
+2004-09-08  Ray Strode  <rstrode@redhat.com>
+
+	* src/update-desktop-database.c: 
+	(udd_print), (udd_verbose_print):
+	New macros for printing at various verbosity levels
+	(is_valid_mime_type): give better error messages
+	(process_desktop_files): print unparsable desktop
+	files by default without verbose mode.  Inform user
+	of desktop files that lack mime type keys in verbose
+	mode.
+	(open_temp_cache_file): change file mode of temp
+	file to reflect user's umask.
+	(print_desktop_dirs),
+	(main): use new udd_verbose_print macro
+
 2004-09-03  Ray Strode  <rstrode@redhat.com>
 
 	* src/egg*.[ch]: sync with libegg

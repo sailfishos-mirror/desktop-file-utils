@@ -476,7 +476,7 @@ tree_node_find_subdir (TreeNode   *node,
   
   split = g_strsplit (name, "/", -1);
 
-  iter = dir;
+  iter = node;
   i = 0;
   while (iter != NULL && split[i] != NULL && *(split[i]) != '\0')
     {
@@ -585,7 +585,7 @@ desktop_entry_tree_get_directory (DesktopEntryTree *tree,
 
   dir = tree_node_find_subdir (tree->root, dirname);
   if (dir == NULL)
-    return;
+    return NULL;
 
   return g_strdup (entry_get_absolute_path (dir->dir_entry));
 }

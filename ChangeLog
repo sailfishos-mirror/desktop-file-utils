@@ -1,3 +1,15 @@
+2002-12-15  Havoc Pennington  <hp@pobox.com>
+
+	* src/vfolder-query.c (my_str_has_suffix): rename since glib 2.2
+	now has the symbol
+
+	* src/menu-process.c (tree_node_find_subdir): fix compilation
+
+	* test/run-test.c (main): add a start on a test program, which
+	takes a file describing the menu file to load and the expected
+	results of parsing that menu file, and checks whether the right
+	results are generated.
+
 2002-11-21  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-entries.c (cached_dir_find_entry): fix a bug

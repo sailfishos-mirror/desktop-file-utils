@@ -547,8 +547,8 @@ add_or_free_desktop_file (GHashTable       *dirs_hash,
 }
 
 static gboolean
-g_str_has_suffix (const gchar  *str,
-		  const gchar  *suffix)
+my_str_has_suffix (const gchar  *str,
+                   const gchar  *suffix)
 {
   int str_len;
   int suffix_len;
@@ -608,7 +608,7 @@ merge_compat_dir (GHashTable *dirs_hash,
       if (g_file_test (dirname, G_FILE_TEST_IS_DIR))
         g_printerr (_("Warning: Could not open directory %s: %s\n"),
                     dirname, g_strerror (saved_errno));
-      else if (g_str_has_suffix (dirname, ".directory"))
+      else if (my_str_has_suffix (dirname, ".directory"))
         ; /* silent */
       else
         g_printerr (_("Warning: unknown file \"%s\" doesn't end in .desktop and isn't a directory, ignoring\n"),
@@ -664,7 +664,7 @@ merge_compat_dir (GHashTable *dirs_hash,
       else
         continue; /* Shouldn't ever happen since PATH_MAX is available */
 
-      if (g_str_has_suffix (dent->d_name, ".desktop"))
+      if (my_str_has_suffix (dent->d_name, ".desktop"))
         {      
           err = NULL;
           df = gnome_desktop_file_load (fullpath, &err);
@@ -768,8 +768,8 @@ read_desktop_dir (GHashTable *dirs_hash,
       /* ignore ., .., and all dot-files */
       if (dent->d_name[0] == '.')
         continue;
-      else if (!(g_str_has_suffix (dent->d_name, ".desktop") ||
-                 g_str_has_suffix (dent->d_name, ".directory")))
+      else if (!(my_str_has_suffix (dent->d_name, ".desktop") ||
+                 my_str_has_suffix (dent->d_name, ".directory")))
         {
           g_printerr (_("Warning: ignoring file \"%s\" that doesn't end in .desktop or .directory\n"),
                       dent->d_name);

@@ -263,6 +263,8 @@ menu_node_insert_before (MenuNode *node,
   new_sibling->next = node;
   if (node->next == node)
     node->next = new_sibling;
+
+  /* FIXME fill in new_sibling->prev->next ? */
   
   if (node == node->parent->children)
     node->parent->children = new_sibling;

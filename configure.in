@@ -34,4 +34,5 @@ AC_SUBST(DESKTOP_FILE_UTILS_LIBS)
 AC_OUTPUT([
 Makefile
 src/Makefile
+test/Makefile
 ])

@@ -1,3 +1,13 @@
+2003-05-12  Havoc Pennington  <hp@redhat.com>
+
+	* autogen.sh (ACLOCAL): automake, aclocal 1.7
+
+	* configure.in: check for optional gnome-vfs, not required 
+	of course, just a hack to share some menu code for now.
+
+	* src/menu-method.c, src/Makefile.am: gnome-vfs boilerplate, 
+	doesn't yet do anything.
+
 2003-05-10  Havoc Pennington  <hp@pobox.com>
 
 	* src/menu-layout.c (menu_node_append_to_string): implement

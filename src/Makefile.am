@@ -1,5 +1,10 @@
 
-INCLUDES=$(DESKTOP_FILE_UTILS_CFLAGS) -DDATADIR="\"$(datadir)\""
+INCLUDES=$(DESKTOP_FILE_UTILS_CFLAGS) -DDATADIR="\"$(datadir)\"" $(VFS_CFLAGS)	\
+	-D_FILE_OFFSET_BITS=64							\
+	-D_GNU_SOURCE								\
+	-D_LARGEFILE64_SOURCE							\
+	-D_REENTRANT								\
+	-D_POSIX_PTHREAD_SEMANTICS
 
 ## note that TESTS has special meaning (stuff to use in make check)
 ## so if adding tests not to be run in make check, don't add them to 
@@ -67,3 +72,24 @@ desktop_file_validate_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
 desktop_file_install_LDADD= $(DESKTOP_FILE_UTILS_LIBS)
 desktop_menu_tool_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
 dfu_test_LDADD=$(DESKTOP_FILE_UTILS_LIBS)
+
+EXTRA_DIST =			\
+	menu-modules.conf
+
+if HAVE_GNOME_VFS
+
+module_flags = -export_dynamic -avoid-version
+
+modulesconfdir=$(sysconfdir)/gnome-vfs-2.0/modules
+modulesconf_DATA = menu-modules.conf
+
+modulesdir = $(libdir)/gnome-vfs-2.0/modules
+
+modules_LTLIBRARIES = libmenu.la
+
+libmenu_la_SOURCES = 				\
+	menu-method.c
+libmenu_la_LDFLAGS = $(module_flags)
+libmenu_la_LIBADD = $(VFS_LIBS)
+
+endif

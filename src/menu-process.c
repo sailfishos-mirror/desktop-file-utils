@@ -558,6 +558,8 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
          name[i] == '/')
     ++i;
   
+  menu_verbose (" (splitting \"%s\")\n", name + i);
+  
   split = g_strsplit (name + i, "/", -1);
 
   prev = NULL;
@@ -604,6 +606,7 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
           if (strcmp (entry_get_name (e), entry_name) == 0)
             {
               entry = e;
+              iter = prev; /* set found node to the previous */
               break;
             }
 

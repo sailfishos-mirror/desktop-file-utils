@@ -47,16 +47,21 @@ typedef struct DirHandle  DirHandle;
 typedef struct FileHandle FileHandle;
 
 static MenuMethod*       method_checkout         (void);
-static void              method_return           (MenuMethod            *method);
-static DesktopEntryTree* menu_method_get_tree    (MenuMethod            *method,
-                                                  const char            *scheme,
-                                                  GError               **error);
-static gboolean          menu_method_resolve_uri (MenuMethod            *method,
-                                                  GnomeVFSURI           *uri,
-                                                  DesktopEntryTree     **tree_p,
-                                                  DesktopEntryTreeNode **node_p,
-                                                  char                 **real_path_p,
-                                                  GError               **error);
+static void              method_return           (MenuMethod               *method);
+static DesktopEntryTree* menu_method_get_tree    (MenuMethod               *method,
+						  const char               *scheme,
+						  GError                  **error);
+static gboolean          menu_method_resolve_uri (MenuMethod               *method,
+						  GnomeVFSURI              *uri,
+						  DesktopEntryTree        **tree_p,
+						  DesktopEntryTreeNode    **node_p,
+						  char                    **real_path_p,
+						  GError                  **error);
+static GnomeVFSResult    menu_method_get_info    (MenuMethod               *method,
+						  GnomeVFSURI              *uri,
+						  GnomeVFSFileInfo         *file_info,
+						  GnomeVFSFileInfoOptions   options);
+
 
 static GnomeVFSResult dir_handle_new            (MenuMethod               *method,
                                                  GnomeVFSURI              *uri,
@@ -294,22 +299,12 @@ do_get_file_info (GnomeVFSMethod         *vtable,
 {
         MenuMethod *method;
         GnomeVFSResult result;
-        FileHandle *handle;
 
         method = method_checkout ();
 
-        handle = NULL;
-        result = file_handle_open (method, uri, GNOME_VFS_OPEN_READ, &handle);
+	result = menu_method_get_info (method, uri, file_info, options);
 
 	method_return (method);
-	
-	if (handle == NULL) {
-		return result;
-	}
-
-	result = file_handle_get_info (handle, file_info, options);
-
-	file_handle_unref (handle);
         
         return result;	
 }
@@ -635,6 +630,107 @@ method_return (MenuMethod *method)
         G_UNLOCK (global_method);
 }
 
+/* Fill in dir info that's true for all dirs in the vfs */
+static void
+fill_in_generic_dir_info (GnomeVFSFileInfo         *info,
+			  GnomeVFSFileInfoOptions   options)
+{
+	info->type = GNOME_VFS_FILE_TYPE_DIRECTORY;
+		
+	if (options & GNOME_VFS_FILE_INFO_GET_MIME_TYPE) {
+		info->mime_type = g_strdup ("x-directory/normal");
+		info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
+	}
+		
+	info->permissions =
+		GNOME_VFS_PERM_USER_ALL |
+		GNOME_VFS_PERM_GROUP_ALL |
+		GNOME_VFS_PERM_OTHER_ALL;
+		
+	info->valid_fields |=
+		GNOME_VFS_FILE_INFO_FIELDS_TYPE |
+		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS;
+
+}
+
+static void
+fill_in_dir_info (DesktopEntryTree         *tree,
+		  DesktopEntryTreeNode     *node,
+		  GnomeVFSFileInfo         *file_info,
+		  GnomeVFSFileInfoOptions   options)
+{
+	g_assert (tree != NULL);
+	g_assert (node != NULL);
+	g_assert (file_info != NULL);
+
+	fill_in_generic_dir_info (file_info, options);
+}
+
+/* Fill in file info that's true for all .desktop files */
+static void
+fill_in_generic_file_info (GnomeVFSFileInfo         *info,
+			   GnomeVFSFileInfoOptions   options)
+{
+	info->type = GNOME_VFS_FILE_TYPE_REGULAR;
+		
+	if (options & GNOME_VFS_FILE_INFO_GET_MIME_TYPE) {
+		info->mime_type = g_strdup ("application/x-gnome-app-info");
+		info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
+	}
+
+	info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_TYPE;
+}
+
+static void
+fill_in_file_info (DesktopEntryTree         *tree,
+		   DesktopEntryTreeNode     *node,
+		   const char               *path,
+		   GnomeVFSFileInfo         *file_info,
+		   GnomeVFSFileInfoOptions   options)
+{
+	g_assert (tree != NULL);
+	g_assert (node != NULL);	
+	g_assert (path != NULL);
+	g_assert (file_info != NULL);
+
+	fill_in_generic_file_info (file_info, options);
+}
+
+static GnomeVFSResult
+menu_method_get_info (MenuMethod               *method,
+		      GnomeVFSURI              *uri,
+		      GnomeVFSFileInfo         *file_info,
+		      GnomeVFSFileInfoOptions   options)
+{
+        GnomeVFSResult retval;
+        DesktopEntryTree *tree;
+        DesktopEntryTreeNode *node;
+	char *path;
+
+	path = NULL;
+	node = NULL;
+	tree = NULL;
+
+	retval = GNOME_VFS_OK;
+	
+        if (!menu_method_resolve_uri (method, uri,
+                                      &tree, &node,
+                                      &path, NULL))
+                return GNOME_VFS_ERROR_NOT_FOUND; /* FIXME propagate GError ? */
+	
+        g_assert (tree != NULL);
+	
+	if (path == NULL) {
+		fill_in_dir_info (tree, node,
+				  file_info, options);
+	} else {
+		fill_in_file_info (tree, node, path,
+				   file_info, options);
+	}
+        
+        return retval;
+}
+
 /*
  * Directory handle object
  */
@@ -746,30 +842,9 @@ dir_handle_next_file_info (DirHandle         *handle,
         handle->current += 1;
 
         if (handle->current <= handle->n_entries_that_are_subdirs) {
-		info->type = GNOME_VFS_FILE_TYPE_DIRECTORY;
-		
-		if (handle->options & GNOME_VFS_FILE_INFO_GET_MIME_TYPE) {
-			info->mime_type = g_strdup ("x-directory/normal");
-			info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
-		}
-		
-		info->permissions =
-			GNOME_VFS_PERM_USER_ALL |
-			GNOME_VFS_PERM_GROUP_ALL |
-			GNOME_VFS_PERM_OTHER_ALL;
-		
-		info->valid_fields |=
-			GNOME_VFS_FILE_INFO_FIELDS_TYPE |
-			GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS;
+		fill_in_generic_dir_info (info, handle->options);
 	} else {
-		info->type = GNOME_VFS_FILE_TYPE_REGULAR;
-		
-		if (handle->options & GNOME_VFS_FILE_INFO_GET_MIME_TYPE) {
-			info->mime_type = g_strdup ("application/x-gnome-app-info");
-			info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_MIME_TYPE;
-		}
-
-		info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_TYPE;
+		fill_in_generic_file_info (info, handle->options);
 	}
 
         info->valid_fields &= ~ UNSUPPORTED_INFO_FIELDS;

@@ -1,5 +1,19 @@
 2003-05-21  Havoc Pennington  <hp@redhat.com>
 
+        Enough bugfixes to be able to view a sample menu in nautilus and 
+	launch apps.
+	
+	* src/menu-process.c (tree_node_find_subdir_or_entry): fill in the
+	node when we are loading a .desktop file
+
+	* src/menu-method.c (menu_method_get_info): new function
+	(do_get_file_info): change so we can stat a directory, 
+	doh
+
+	* src/menu-process.c (tree_node_find_subdir_or_entry): handle '/'
+
+2003-05-21  Havoc Pennington  <hp@redhat.com>
+
 	* src/menu-overrides.c: implement directory of .desktop file
 	overrides
 

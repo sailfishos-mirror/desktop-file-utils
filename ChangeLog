@@ -1,7 +1,16 @@
 2004-07-21  Ray Strode  <rstrode@redhat.com>
 
+	* src/install.c: (main)
+	(rebuild_cache),
+	(process_one_file):
+	add new --rebuild-mime-info-cache option
+	(str_has_prefix): this function is now in glib,
+	so remove it here and use it from there.
+
+2004-07-21  Ray Strode  <rstrode@redhat.com>
+
 	* src/update-desktop-database.c: Return 1 on failure,
-          even in quiet mode.
+	even in quiet mode.
 
 2004-07-15  Ray Strode  <rstrode@redhat.com>
 

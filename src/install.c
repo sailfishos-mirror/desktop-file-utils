@@ -21,6 +21,7 @@
 static gboolean delete_original = FALSE;
 static gboolean copy_generic_name_to_name = FALSE;
 static gboolean copy_name_to_generic_name = FALSE;
+static gboolean rebuild_mime_info_cache = FALSE;
 static char *vendor_name = NULL;
 static char *target_dir = NULL;
 static GSList *added_categories = NULL;
@@ -29,25 +30,6 @@ static GSList *added_only_show_in = NULL;
 static GSList *removed_only_show_in = NULL;
 static GSList *removed_keys = NULL;
 static mode_t permissions = 0644;
-
-static gboolean
-str_has_prefix (const char *str,
-                const char *prefix)
-{
-  int str_len;
-  int prefix_len;
-  
-  g_return_val_if_fail (str != NULL, FALSE);
-  g_return_val_if_fail (prefix != NULL, FALSE);
-
-  str_len = strlen (str);
-  prefix_len = strlen (prefix);
-
-  if (str_len < prefix_len)
-    return FALSE;
-  
-  return strncmp (str, prefix, prefix_len) == 0;
-}
 
 static gboolean
 files_are_the_same (const char *first,
@@ -81,6 +63,29 @@ files_are_the_same (const char *first,
           (first_sb.st_mtime == second_sb.st_mtime));
 }
 
+static gboolean
+rebuild_cache (const char  *dir,
+               GError     **err)
+{
+  GError *spawn_error;
+  char *argv[4] = { "update-desktop-database", "-q", (char *) dir, NULL };
+  int exit_status;
+  gboolean retval;
+
+  spawn_error = NULL;
+
+  retval = g_spawn_sync (NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
+                         NULL, NULL, &exit_status, &spawn_error);
+
+  if (spawn_error != NULL) 
+    {
+      g_propagate_error (err, spawn_error);
+      return FALSE;
+    }
+
+  return exit_status == 0 && retval;
+}
+
 static void
 process_one_file (const char *filename,
                   GError    **err)
@@ -89,6 +94,7 @@ process_one_file (const char *filename,
   char *dirname;
   char *basename;
   GnomeDesktopFile *df = NULL;
+  GError *rebuild_error;
   GSList *tmp;
   
   g_assert (vendor_name);
@@ -96,7 +102,7 @@ process_one_file (const char *filename,
   dirname = g_path_get_dirname (filename);
   basename = g_path_get_basename (filename);
   
-  if (!str_has_prefix (basename, vendor_name))
+  if (!g_str_has_prefix (basename, vendor_name))
     {
       char *new_base;
       new_base = g_strconcat (vendor_name, "-", basename, NULL);
@@ -203,6 +209,15 @@ process_one_file (const char *filename,
       g_printerr (_("desktop-file-install created an invalid desktop file!\n"));
       exit (1);
     }
+
+  if (rebuild_mime_info_cache)
+    {
+      rebuild_error = NULL;
+      rebuild_cache (target_dir, &rebuild_error);
+
+      if (rebuild_error != NULL)
+        g_propagate_error (err, rebuild_error);
+    }
   
  cleanup:
   g_free (new_filename);
@@ -229,6 +244,7 @@ enum {
   OPTION_COPY_NAME_TO_GENERIC_NAME,
   OPTION_COPY_GENERIC_NAME_TO_NAME,
   OPTION_REMOVE_KEY,
+  OPTION_REBUILD_MIME_INFO_CACHE,
   OPTION_LAST
 };
 
@@ -348,6 +364,15 @@ struct poptOption options[] = {
     NULL,
     OPTION_REMOVE_KEY,
     N_("Specify a field to be removed from the desktop file."),
+    NULL
+  },
+  {
+    "rebuild-mime-info-cache",
+    '\0',
+    POPT_ARG_NONE,
+    &rebuild_mime_info_cache,
+    OPTION_REBUILD_MIME_INFO_CACHE,
+    N_("After installing desktop file rebuild the mime-types application database."),
     NULL
   },
   {

@@ -855,7 +855,7 @@ menu_method_new (void)
 
         method = g_new0 (MenuMethod, 1);
         method->refcount = 1;
-        method->cache = desktop_entry_tree_cache_new ();
+        method->cache = desktop_entry_tree_cache_new ("GNOME");
 	method->monitors = NULL;
 	
         return method;

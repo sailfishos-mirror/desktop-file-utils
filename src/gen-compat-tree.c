@@ -454,7 +454,7 @@ process_one_file (const char *filename)
       DesktopEntryTree *tree;
 
       if (tree_cache == NULL)
-        tree_cache = desktop_entry_tree_cache_new ();
+        tree_cache = desktop_entry_tree_cache_new (NULL);
       
       err = NULL;
       tree = desktop_entry_tree_cache_lookup (tree_cache,

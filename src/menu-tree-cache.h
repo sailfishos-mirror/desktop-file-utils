@@ -25,7 +25,7 @@
 
 typedef struct DesktopEntryTreeCache DesktopEntryTreeCache;
 
-DesktopEntryTreeCache* desktop_entry_tree_cache_new    (void);
+DesktopEntryTreeCache* desktop_entry_tree_cache_new    (const char            *only_show_in);
 void                   desktop_entry_tree_cache_ref    (DesktopEntryTreeCache *cache);
 void                   desktop_entry_tree_cache_unref  (DesktopEntryTreeCache *cache);
 DesktopEntryTree*      desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,

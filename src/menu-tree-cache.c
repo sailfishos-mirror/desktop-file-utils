@@ -50,6 +50,7 @@ struct DesktopEntryTreeCache
 {
   int refcount;
 
+  char       *only_show_in;
   GHashTable *entries;
   GHashTable *basename_to_canonical;
 };
@@ -79,7 +80,7 @@ free_cache_entry (void *data)
 }
 
 DesktopEntryTreeCache*
-desktop_entry_tree_cache_new (void)
+desktop_entry_tree_cache_new (const char *only_show_in)
 {
   DesktopEntryTreeCache *cache;
 
@@ -87,6 +88,7 @@ desktop_entry_tree_cache_new (void)
 
   cache->refcount = 1;
 
+  cache->only_show_in = g_strdup (only_show_in);
   cache->entries = g_hash_table_new_full (g_str_hash,
                                           g_str_equal,
                                           NULL,
@@ -114,6 +116,7 @@ desktop_entry_tree_cache_unref (DesktopEntryTreeCache *cache)
   cache->refcount -= 1;
   if (cache->refcount == 0)
     {
+      g_free (cache->only_show_in);
       g_hash_table_destroy (cache->entries);
       g_hash_table_destroy (cache->basename_to_canonical);
       
@@ -142,7 +145,7 @@ reload_entry (DesktopEntryTreeCache *cache,
       
       tmp_error = NULL;
       reloaded = desktop_entry_tree_load (entry->canonical_path,
-                                          NULL, /* FIXME only show in desktop */
+                                          cache->only_show_in,
                                           entry->create_chaining_to,
                                           &tmp_error);
 

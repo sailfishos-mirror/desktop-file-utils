@@ -1,5 +1,20 @@
 2004-08-29  Mark McLoughlin  <mark@skynet.ie>
 
+	* src/menu-tree-cache.[ch]:
+	(desktop_entry_tree_cache_new): add an only_show_in arg.
+	(desktop_entry_tree_cache_unref: free only_show_in.
+	(reload_entry): pass in only_show_in when loading the
+	tree.
+	
+	* src/menu-method.c: (menu_method_new): set only-show-in
+	to GNOME.
+	
+	* src/gen-compat-tree.c: (process_one_file): don't
+	set an only-show-in name. Might want a command line
+	argument for this at some point.
+
+2004-08-29  Mark McLoughlin  <mark@skynet.ie>
+
 	Another patch from Dan with some minor changes.
 
 	* src/menu-process.[ch]:

@@ -1851,7 +1851,8 @@ handle_menu_node_menu_changed (MenuNode         *menu_node,
 
   g_assert (menu_node_get_type (menu_node) == MENU_NODE_MENU);
 
-  tree_node_free (tree->root);
+  if (tree->root)
+    tree_node_free (tree->root);
   tree->root = NULL;
 
   tmp = tree->monitors;

@@ -514,7 +514,11 @@ enum_sections (GnomeDesktopFile *df,
 {
   struct SectionData *section = data;
 
-  g_assert (name != NULL);
+  /* Initial sections (for any comments at top of
+   * file, etc) have name == NULL.
+   */
+  if (!name)
+    return;
 
   if (strcmp (name, "Desktop Entry") == 0 ||
       strcmp (name, "KDE Desktop Entry") == 0)
@@ -633,7 +637,11 @@ enum_actions (GnomeDesktopFile *df,
   const char *val;
   const char *action;
 
-  g_assert (section != NULL);
+  /* Initial sections (for any comments at top of
+   * file, etc) have name == NULL.
+   */
+  if (!section)
+    return;
 
   if (strncmp (section, "Desktop Action ", 15) != 0)
     return;

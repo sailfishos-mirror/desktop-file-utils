@@ -1,3 +1,16 @@
+2004-03-01  Mark McLoughlin  <mark@skynet.ie>
+
+	* configure.in: Version 0.5.
+	
+2004-03-01  Mark McLoughlin  <mark@skynet.ie>
+
+	Patch from Dan Williams to not segfault with .desktop
+	files with comments at the start.
+
+	* src/validate.c: (enum_sections), (enum_actions):
+	Don't crap out if the section or action name is
+	NULL.
+
 2004-02-19  Mark McLoughlin  <mark@skynet.ie>
 
 	* configure.in: Version 0.4

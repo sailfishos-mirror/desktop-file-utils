@@ -1390,7 +1390,19 @@ gnome_desktop_file_merge_string_into_list (GnomeDesktopFile *df,
   {
     /* Append to current list */
     char *str;
-    str = g_strconcat (raw ? raw : "", value, ";", NULL);
+    if (raw)
+      {
+        int len;
+        len = strlen (raw);
+        /* handle broken file with no ';' after the list */
+        if (len > 0 && raw[len-1] != ';')
+          str = g_strconcat (raw, ";", value, ";", NULL);
+        else
+          str = g_strconcat (raw, value, ";", NULL);
+      }
+    else
+      str = g_strconcat (value, ";", NULL);
+    
     gnome_desktop_file_set_raw (df, section, keyname, locale, str);
     g_free (str);
   }

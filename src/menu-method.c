@@ -34,7 +34,7 @@ do_open (GnomeVFSMethod        *method,
          GnomeVFSOpenMode       mode,
          GnomeVFSContext       *context)
 {
-
+        
 	return GNOME_VFS_OK;
 }
 

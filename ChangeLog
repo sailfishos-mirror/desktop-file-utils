@@ -1,5 +1,15 @@
 2003-05-12  Havoc Pennington  <hp@redhat.com>
 
+	* src/validate.c: fix a bunch of compiler warnings
+	(desktop_file_fixup): add code to fix semicolon termination of
+	string lists if necessary.
+
+	* src/desktop_file.c (gnome_desktop_file_merge_string_into_list):
+	handle case where existing list is missing ';' at the end; 
+	patch from Adrian Reber
+
+2003-05-12  Havoc Pennington  <hp@redhat.com>
+
 	* autogen.sh (ACLOCAL): automake, aclocal 1.7
 
 	* configure.in: check for optional gnome-vfs, not required 

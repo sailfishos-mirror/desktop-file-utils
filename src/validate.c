@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "desktop_file.h"
+#include "validate.h"
 
 #include <libintl.h>
 #define _(x) gettext ((x))
@@ -22,7 +23,7 @@ struct KeyData {
 static gboolean fatal_error_occurred = FALSE;
 
 
-void
+static void
 print_fatal (const char *format, ...)
 {
   va_list args;
@@ -43,7 +44,7 @@ print_fatal (const char *format, ...)
   fatal_error_occurred = TRUE;
 }
 
-void
+static void
 print_warning (const char *format, ...)
 {
   va_list args;
@@ -62,7 +63,7 @@ print_warning (const char *format, ...)
   g_free (str);
 }
 
-void
+static void
 validate_string (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   const char *p;
@@ -92,7 +93,7 @@ validate_string (const char *value, const char *key, const char *locale, const c
     }
 }
 
-void
+static void
 validate_strings (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   const char *p;
@@ -138,7 +139,7 @@ validate_strings (const char *value, const char *key, const char *locale, const 
     }
 }
 
-void
+static void
 validate_only_show_in (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   char **vals;
@@ -181,7 +182,7 @@ validate_only_show_in (const char *value, const char *key, const char *locale, c
   g_strfreev (vals);
 }
 
-void
+static void
 validate_localestring (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   char *k;
@@ -248,7 +249,7 @@ validate_localestring (const char *value, const char *key, const char *locale, c
   g_free (k);
 }
 
-void
+static void
 validate_regexps (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   const char *p;
@@ -278,7 +279,7 @@ validate_regexps (const char *value, const char *key, const char *locale, const 
     }
 }
 
-void
+static void
 validate_boolean (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   if (strcmp (value, "true") != 0 &&
@@ -287,7 +288,7 @@ validate_boolean (const char *value, const char *key, const char *locale, const 
   
 }
 
-void
+static void
 validate_boolean_or_01 (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   if (strcmp (value, "true") != 0 &&
@@ -301,7 +302,7 @@ validate_boolean_or_01 (const char *value, const char *key, const char *locale, 
     print_warning ("Warning in file %s, boolean key %s has value %s. Boolean values should be \"false\" or \"true\", although 0 and 1 is allowed in this field for backwards compatibility.\n", filename, key, value);
 }
 
-void
+static void
 validate_numeric (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   float d;
@@ -352,7 +353,7 @@ struct {
   { "StartupWMClass", validate_string }
 };
 
-void
+static void
 enum_keys (GnomeDesktopFile *df,
 	   const char       *key, /* If NULL, value is comment line */
 	   const char       *locale,
@@ -407,13 +408,13 @@ enum_keys (GnomeDesktopFile *df,
     }
 #endif
 
-  for (i = 0; i < G_N_ELEMENTS (key_table); i++)
+  for (i = 0; i < (int) G_N_ELEMENTS (key_table); i++)
     {
       if (strcmp (key_table[i].keyname, key) == 0)
 	break;
     }
 
-  if (i < G_N_ELEMENTS (key_table))
+  if (i < (int) G_N_ELEMENTS (key_table))
     {
       if (key_table[i].validate_type)
 	(*key_table[i].validate_type) (value, key, locale, data->filename, df);
@@ -481,7 +482,7 @@ enum_hash_keys (gpointer       key,
   
 }
 
-void
+static void
 generic_keys (GnomeDesktopFile *df, const char *filename)
 {
   struct KeyData data = {0 };
@@ -506,7 +507,7 @@ struct SectionData {
   const char *filename;
 };
 
-void
+static void
 enum_sections (GnomeDesktopFile *df,
 	       const char       *name,
 	       gpointer          data)
@@ -529,7 +530,7 @@ enum_sections (GnomeDesktopFile *df,
     }
 }
 
-gboolean
+static gboolean
 required_section (GnomeDesktopFile *df, const char *filename)
 {
   struct SectionData section = {FALSE, FALSE};
@@ -554,7 +555,7 @@ required_section (GnomeDesktopFile *df, const char *filename)
   return TRUE;
 }
 
-gboolean
+static gboolean
 required_keys (GnomeDesktopFile *df, const char *filename)
 {
   const char *val;
@@ -634,7 +635,9 @@ desktop_file_fixup (GnomeDesktopFile *df,
 {
   const char *val;
   gboolean fix_encoding;
-
+  const char *string_list_keys[] = { "Actions", "SortOrder", "Categories" };
+  int i;
+  
   if (gnome_desktop_file_has_section (df, "KDE Desktop Entry"))
     {
       g_printerr (_("Changing deprecated [KDE Desktop Entry] to plain [Desktop Entry]\n"));
@@ -685,5 +688,35 @@ desktop_file_fixup (GnomeDesktopFile *df,
         }
     }
 
+  /* Fix string lists to have a ';' at the end if they don't */
+  i = 0;
+  while (i < (int) G_N_ELEMENTS (string_list_keys))
+    {
+      if (gnome_desktop_file_get_raw (df, NULL,
+                                      string_list_keys[i],
+                                      NULL, &val))
+        {
+          int len;
+
+          len = strlen (val);
+
+          if (len > 0 && val[len-1] != ';')
+            {
+              char *str;
+
+              g_printerr ("File \"%s\" key \"%s\" string list not semicolon-terminated, fixing\n",
+                          filename, string_list_keys[i]);
+              
+              str = g_strconcat (val, ";", NULL);
+              gnome_desktop_file_set_raw (df, NULL,
+                                          string_list_keys[i],
+                                          NULL, str);
+              g_free (str);
+            }
+        }
+      
+      ++i;
+    }
+  
   return TRUE;
 }

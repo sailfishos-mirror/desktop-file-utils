@@ -170,7 +170,7 @@ struct poptOption options[] = {
     '\0',
     POPT_ARG_STRING,
     NULL,
-    0,
+    OPTION_VENDOR,
     N_("Specify the vendor prefix to be applied to the desktop file. If the file already has this prefix, nothing happens."),
     NULL
   },
@@ -179,7 +179,7 @@ struct poptOption options[] = {
     '\0',
     POPT_ARG_STRING,
     NULL,
-    0,
+    OPTION_DIR,
     N_("Specify the directory where files should be installed."),
     NULL
   },
@@ -188,7 +188,7 @@ struct poptOption options[] = {
     '\0',
     POPT_ARG_STRING,
     NULL,
-    0,
+    OPTION_ADD_CATEGORY,
     N_("Specify a category to be added to the Categories field."),
     NULL
   },
@@ -197,7 +197,7 @@ struct poptOption options[] = {
     '\0',
     POPT_ARG_STRING,
     NULL,
-    0,
+    OPTION_REMOVE_CATEGORY,
     N_("Specify a category to be removed from the Categories field."),
     NULL
   },
@@ -206,7 +206,7 @@ struct poptOption options[] = {
     '\0',
     POPT_ARG_STRING,
     NULL,
-    0,
+    OPTION_ADD_ONLY_SHOW_IN,
     N_("Specify a product name to be added to the OnlyShowIn field."),
     NULL
   },
@@ -215,7 +215,7 @@ struct poptOption options[] = {
     '\0',
     POPT_ARG_STRING,
     NULL,
-    0,
+    OPTION_REMOVE_ONLY_SHOW_IN,
     N_("Specify a product name to be removed from the OnlyShowIn field."),
     NULL
   },
@@ -224,7 +224,7 @@ struct poptOption options[] = {
     '\0',
     POPT_ARG_NONE,
     NULL,
-    0,
+    OPTION_DELETE_ORIGINAL,
     N_("Delete the source desktop file, leaving only the target file. Effectively \"renames\" a desktop file."),
     NULL
   },
@@ -233,7 +233,7 @@ struct poptOption options[] = {
     'm',
     POPT_ARG_STRING,
     NULL,
-    0,
+    OPTION_MODE,
     N_("Set the given permissions on the destination file."),
     NULL
   },
@@ -268,7 +268,7 @@ parse_options_callback (poptContext              ctx,
           g_printerr (_("Can only specify --vendor once\n"));
           exit (1);
         }
-
+      
       str = poptGetOptArg (ctx);
       vendor_name = g_strdup (str);
       break;

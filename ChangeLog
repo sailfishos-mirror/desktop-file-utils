@@ -1,3 +1,7 @@
+2004-03-24  Dan Williams  <dcbw@redhat.com>
+
+	* configure.in: Version 0.6.
+	
 2004-03-21  Dan Williams  <dcbw@redhat.com>
 
 	* src/gen-compat-tree.c

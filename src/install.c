@@ -18,6 +18,8 @@
 #define N_(x) x
 
 static gboolean delete_original = FALSE;
+static gboolean copy_generic_name_to_name = FALSE;
+static gboolean copy_name_to_generic_name = FALSE;
 static char *vendor_name = NULL;
 static char *target_dir = NULL;
 static GSList *added_categories = NULL;
@@ -113,6 +115,12 @@ process_one_file (const char *filename,
 
   if (!desktop_file_fixup (df, filename))
     exit (1);
+
+  if (copy_name_to_generic_name)
+    gnome_desktop_file_copy_key (df, NULL, "Name", "GenericName");
+
+  if (copy_generic_name_to_name)
+    gnome_desktop_file_copy_key (df, NULL, "GenericName", "Name");
   
   /* Mark file as having been processed by us, so automated
    * tools can check that desktop files went through our
@@ -207,6 +215,8 @@ enum {
   OPTION_REMOVE_ONLY_SHOW_IN,
   OPTION_DELETE_ORIGINAL,
   OPTION_MODE,
+  OPTION_COPY_NAME_TO_GENERIC_NAME,
+  OPTION_COPY_GENERIC_NAME_TO_NAME,
   OPTION_LAST
 };
 
@@ -299,6 +309,24 @@ struct poptOption options[] = {
     NULL,
     OPTION_MODE,
     N_("Set the given permissions on the destination file."),
+    NULL
+  },
+  {
+    "copy-name-to-generic-name",
+    '\0',
+    POPT_ARG_NONE,
+    &copy_name_to_generic_name,
+    OPTION_COPY_NAME_TO_GENERIC_NAME,
+    N_("Copy the contents of the \"Name\" field to the \"GenericName\" field."),
+    NULL
+  },
+  {
+    "copy-generic-name-to-name",
+    '\0',
+    POPT_ARG_NONE,
+    &copy_generic_name_to_name,
+    OPTION_COPY_GENERIC_NAME_TO_NAME,
+    N_("Copy the contents of the \"GenericName\" field to the \"Name\" field."),
     NULL
   },
   {
@@ -434,6 +462,12 @@ main (int argc, char **argv)
       return 1;
     }
 
+  if (copy_generic_name_to_name && copy_name_to_generic_name)
+    {
+      g_printerr (_("Specifying both --copy-name-to-generic-name and --copy-generic-name-to-name at once doesn't make much sense.\n"));
+      return 1;
+    }
+  
   if (target_dir == NULL)
     target_dir = g_strdup (g_getenv ("DESKTOP_FILE_INSTALL_DIR"));
 

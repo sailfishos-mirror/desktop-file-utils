@@ -1,3 +1,11 @@
+2002-06-21  Havoc Pennington  <hp@redhat.com>
+
+	* src/install.c (process_one_file): implement
+	--copy-name-to-generic-name, --copy-generic-name-to-name
+
+	* src/desktop_file.c (gnome_desktop_file_copy_key): new function
+	(gnome_desktop_file_unset): new
+
 2002-06-16  Havoc Pennington  <hp@pobox.com>
 
 	* src/install.c: fix delete_original flag so it actually gets

@@ -773,7 +773,15 @@ lookup_section (GnomeDesktopFile  *df,
   GnomeDesktopFileSection *section;
   GQuark section_quark;
   int i;
-
+  
+  if (section_name == NULL)
+    {
+      if (df->main_section < 0)
+        return NULL;
+      else
+        return &df->sections[df->main_section];
+    }
+  
   section_quark = g_quark_try_string (section_name);
   if (section_quark == 0)
     return NULL;
@@ -827,18 +835,9 @@ gnome_desktop_file_get_raw (GnomeDesktopFile  *df,
 
   *val = NULL;
 
-  if (section_name == NULL &&
-      df->main_section < 0)
+  section = lookup_section (df, section_name);
+  if (!section)
     return FALSE;
-  
-  if (section_name == NULL)
-    section = &df->sections[df->main_section];
-  else
-    {
-      section = lookup_section (df, section_name);
-      if (!section)
-	return FALSE;
-    }
 
   line = lookup_line (df,
 		      section,
@@ -880,15 +879,10 @@ gnome_desktop_file_foreach_key (GnomeDesktopFile            *df,
   GnomeDesktopFileSection *section;
   GnomeDesktopFileLine *line;
   int i;
-
-  if (section_name == NULL)
-    section = &df->sections[df->main_section];
-  else
-    {
-      section = lookup_section (df, section_name);
-      if (!section)
-	return;
-    }
+  
+  section = lookup_section (df, section_name);
+  if (!section)
+    return;
   
   for (i = 0; i < section->n_lines; i++)
     {
@@ -1268,21 +1262,17 @@ gnome_desktop_file_set_raw (GnomeDesktopFile  *df,
 {
   GnomeDesktopFileSection *section;
   GnomeDesktopFileLine *line;
+  
 
   if (section_name == NULL &&
       df->main_section < 0)
     section_name = "Desktop Entry";
-  
-  if (section_name == NULL)
-    section = &df->sections[df->main_section];
-  else
+
+  section = lookup_section (df, section_name);
+  if (section == NULL)
     {
-      section = lookup_section (df, section_name);
-      if (section == NULL)
-        {
-          section = new_section (df, section_name, NULL);
-          g_assert (section);
-        }
+      section = new_section (df, section_name, NULL);
+      g_assert (section);
     }
 
   line = lookup_line (df,
@@ -1558,4 +1548,111 @@ desktop_file_get_encoding_for_locale (const char *locale)
     }
   
   return get_encoding_from_lang (locale);
+}
+
+static void
+gnome_desktop_file_unset_internal (GnomeDesktopFile *df,
+                                   const char       *section_name,
+                                   const char       *keyname,
+                                   const char       *locale,
+                                   gboolean          all_locales)
+{
+  GnomeDesktopFileLine *line;
+  GnomeDesktopFileSection *section;
+  GQuark key_quark;
+  int i;
+
+  section = lookup_section (df, section_name);
+  if (section == NULL)
+    return;
+  
+  key_quark = g_quark_try_string (keyname);
+  if (key_quark == 0)
+    return;
+  
+  i = 0;
+  while (i < section->n_lines)
+    {
+      line = &section->lines[i];
+      
+      if (line->key == key_quark &&
+          (all_locales ||
+           ((locale == NULL && line->locale == NULL) ||
+            (locale != NULL && line->locale != NULL && strcmp (locale, line->locale) == 0))))
+        {
+          g_free (line->locale);
+          g_free (line->value);
+
+          if ((i+1) < section->n_lines)
+            g_memmove (&section->lines[i], &section->lines[i+1],
+                       section->n_lines - i - 1);
+
+          section->n_lines -= 1;
+        }
+      else
+        {
+          ++i;
+        }
+    }
+}
+
+void
+gnome_desktop_file_unset (GnomeDesktopFile *df,
+                          const char       *section,
+                          const char       *keyname)
+{
+  gnome_desktop_file_unset_internal (df, section, keyname, NULL, TRUE);
+}
+
+void
+gnome_desktop_file_unset_for_locale (GnomeDesktopFile *df,
+                                     const char       *section,
+                                     const char       *keyname,
+                                     const char       *locale)
+{
+  gnome_desktop_file_unset_internal (df, section, keyname, locale, FALSE);
+}
+
+void
+gnome_desktop_file_copy_key (GnomeDesktopFile *df,
+                             const char       *section_name,
+                             const char       *source_key,
+                             const char       *dest_key)
+{
+  GnomeDesktopFileLine *line;
+  GnomeDesktopFileSection *section;
+  GQuark key_quark;
+  int i;
+
+  g_return_if_fail (source_key != NULL);
+  g_return_if_fail (dest_key != NULL);
+  g_return_if_fail (strcmp (source_key, dest_key) != 0);
+  
+  gnome_desktop_file_unset (df, section_name, dest_key);
+
+  section = lookup_section (df, section_name);
+  if (section == NULL)
+    return;
+  
+  key_quark = g_quark_try_string (source_key);
+  if (key_quark == 0)
+    return;
+
+  i = 0;
+  while (i < section->n_lines)
+    {
+      line = &section->lines[i];
+      
+      if (line->key == key_quark)
+        {
+          /* Mmmm, modify the array we're iterating over...
+           * should be safe as it just appends.
+           */
+          
+          gnome_desktop_file_set_raw (df, section_name, dest_key,
+                                      line->locale, line->value); 
+        }
+
+      ++i;
+    }
 }

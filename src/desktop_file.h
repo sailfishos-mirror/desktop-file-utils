@@ -140,6 +140,19 @@ void gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
 
 const char* desktop_file_get_encoding_for_locale (const char *locale);
 
+void gnome_desktop_file_unset            (GnomeDesktopFile *df,
+                                          const char       *section,
+                                          const char       *keyname);
+void gnome_desktop_file_unset_for_locale (GnomeDesktopFile *df,
+                                          const char       *section,
+                                          const char       *keyname,
+                                          const char       *locale);
+
+void gnome_desktop_file_copy_key (GnomeDesktopFile *df,
+                                  const char       *section,
+                                  const char       *source_key,
+                                  const char       *dest_key);
+
 /* ... More setters ... */
 
 #endif

@@ -35,8 +35,8 @@
 #include "glib.h"
 #include "eggintl.h"
 
-#define EGG_DESKTOP_ENTRIES_DEFAULT_GROUP "Desktop Entry"
-#define EGG_DESKTOP_ENTRIES_LEGACY_GROUP "KDE Desktop Entry"
+#define EGG_DESKTOP_ENTRIES_DEFAULT_START_GROUP "Desktop Entry"
+#define EGG_DESKTOP_ENTRIES_LEGACY_START_GROUP "KDE Desktop Entry"
 
 typedef struct _EggDesktopEntriesGroup EggDesktopEntriesGroup;
 
@@ -49,6 +49,8 @@ typedef enum
 
 struct _EggDesktopEntries
 {
+  char **legal_start_groups;
+
   GList *groups;
   gchar **locales;
   char *default_group_name;
@@ -82,10 +84,10 @@ typedef struct
 } EggDesktopEntry;
 
 
-static gint egg_find_file_in_user_data_dir       (const char  *file, 
-					          GError     **error);
-static gint egg_find_file_in_secondary_data_dirs (const char  *file,
-						  GError     **error);
+
+static gint egg_find_file_in_data_dirs (const gchar  *file,
+                                        gchar **data_dirs,
+				        GError      **error);
 static gint egg_find_file_in_data_dir            (const gchar *file,
 						  GError **error);
 
@@ -149,9 +151,13 @@ egg_desktop_entries_error_quark (void)
 }
 
 EggDesktopEntries *
-egg_desktop_entries_new (EggDesktopEntriesFlags flags)
+egg_desktop_entries_new (gchar                  **legal_start_groups,
+                         EggDesktopEntriesFlags   flags)
 {
   EggDesktopEntries *entries;
+  int i, length;
+  static gchar *default_legal_start_groups[] = { EGG_DESKTOP_ENTRIES_DEFAULT_START_GROUP,
+                                                   EGG_DESKTOP_ENTRIES_LEGACY_START_GROUP, NULL };
 
   entries = g_new (EggDesktopEntries, 1);
 
@@ -164,6 +170,17 @@ egg_desktop_entries_new (EggDesktopEntriesFlags flags)
   entries->flags = flags;
   entries->approximate_size = 0;
 
+  if (legal_start_groups == NULL)
+    legal_start_groups = default_legal_start_groups;
+
+  for (i = 0, length = 1; legal_start_groups[i] != NULL; i++, length++);
+
+  entries->legal_start_groups = g_new (char *, length);
+
+  for (i = 0; legal_start_groups[i] != NULL; i++)
+    entries->legal_start_groups[i] = g_strdup (legal_start_groups[i]);
+  entries->legal_start_groups[i] = NULL;
+
   if (entries->flags & EGG_DESKTOP_ENTRIES_DISCARD_TRANSLATIONS)
     {
       gchar *locales[] = { NULL };
@@ -175,38 +192,11 @@ egg_desktop_entries_new (EggDesktopEntriesFlags flags)
 }
 
 static gint
-egg_find_file_in_user_data_dir (const char *file, GError **error)
+egg_find_file_in_data_dirs (const gchar  *file,
+                            gchar       **data_dirs,
+                            GError      **error)
 {
   gchar *data_dir, *path;
-  gint fd;
-
-  path = NULL;
-  fd = -1;
-
-  data_dir = egg_get_user_data_dir ();
-
-  if (data_dir) 
-    {
-      path = g_build_filename (data_dir, file, NULL);
-      g_free (data_dir);
-      data_dir = NULL;
-    }
-
-  fd = open (path, O_RDONLY);
-
-  if (fd < 0)
-    g_set_error (error, G_FILE_ERROR,
-                 g_file_error_from_errno (errno),
-		 _("File could not be opened: %s"),
-                 g_strerror (errno));
-
-  return fd;
-}
-
-static gint
-egg_find_file_in_secondary_data_dirs (const char *file, GError **error)
-{
-  gchar *data_dir, *path, **secondary_data_dirs;
   int i, fd;
   GError *file_error;
 
@@ -214,24 +204,47 @@ egg_find_file_in_secondary_data_dirs (const char *file, GError **error)
   path = NULL;
   fd = -1;
 
-  secondary_data_dirs = egg_get_secondary_data_dirs ();
-
   i = 0;
-  while (secondary_data_dirs && (data_dir = secondary_data_dirs[i]) && fd < 0)
+  while (data_dirs && (data_dir = data_dirs[i]) && fd < 0)
     {
-        path = g_build_filename (data_dir, file, NULL);
+      char *candidate_file, *sub_dir;
 
-        fd = open (path, O_RDONLY);
+      candidate_file = (gchar *) file;
+      sub_dir = g_strdup ("");
+      while (candidate_file != NULL && fd < 0)
+        {
+          char *p;
 
-        if (fd < 0 && !file_error)
-          g_set_error (error, G_FILE_ERROR,
-                       g_file_error_from_errno (errno),
-                       _("File could not be opened: %s"),
-                       g_strerror (errno));
-        i++;
+          path = g_build_filename (data_dir, sub_dir,
+                                   candidate_file, NULL);
+
+          fd = open (path, O_RDONLY);
+
+          if (fd < 0 && file_error == NULL)
+            g_set_error (&file_error, G_FILE_ERROR,
+                         g_file_error_from_errno (errno),
+                         _("File could not be opened: %s"),
+                         g_strerror (errno));
+
+          candidate_file = strchr (candidate_file, '-');
+
+          if (candidate_file == NULL)
+            break;
+
+          candidate_file++;
+
+          g_free (sub_dir);
+          sub_dir = g_strndup (file, candidate_file - file - 1);
+
+          for (p = sub_dir; *p != '\0'; p++) 
+            {
+              if (*p == '-')
+                *p = G_DIR_SEPARATOR;
+            }
+        }
+      g_free (sub_dir);
+      i++;
     }
-
-  g_strfreev (secondary_data_dirs);
 
   if (file_error)
     g_propagate_error (error, file_error);
@@ -243,17 +256,24 @@ static gint
 egg_find_file_in_data_dir (const gchar *file, GError **error)
 {
   gint fd;
+  gchar **data_dirs;
   GError *file_error;
   GError *secondary_error;
 
   file_error = NULL;
   secondary_error = NULL;
 
-  fd = egg_find_file_in_user_data_dir (file, &file_error);
+
+  data_dirs = g_new0 (char *, 2);
+  data_dirs[0] = egg_get_user_data_dir ();
+  fd = egg_find_file_in_data_dirs (file, data_dirs, &file_error);
+  g_strfreev (data_dirs);
 
   if (fd < 0)
     { 
-      fd = egg_find_file_in_secondary_data_dirs (file, &secondary_error);
+      data_dirs = egg_get_secondary_data_dirs ();
+      fd = egg_find_file_in_data_dirs (file, data_dirs, &secondary_error);
+      g_strfreev (data_dirs);
 
       if (fd >= 0)
        {
@@ -271,7 +291,8 @@ egg_find_file_in_data_dir (const gchar *file, GError **error)
 }
 
 EggDesktopEntries *
-egg_desktop_entries_new_from_file (EggDesktopEntriesFlags   flags,
+egg_desktop_entries_new_from_file (gchar                  **legal_start_groups,
+                                   EggDesktopEntriesFlags   flags,
   	                         const gchar           *file,
                                  GError               **error)
 {
@@ -318,7 +339,7 @@ egg_desktop_entries_new_from_file (EggDesktopEntriesFlags   flags,
       return NULL;
     }
 
-  entries = egg_desktop_entries_new (flags);
+  entries = egg_desktop_entries_new (legal_start_groups, flags);
 
   entries_error = NULL;
   bytes_read = 0;
@@ -525,20 +546,20 @@ g_deskop_entries_locale_is_interesting (EggDesktopEntries  *entries,
 
 static void
 egg_desktop_entries_parse_line (EggDesktopEntries  *entries,
-	                      const char       *line,
+	                      const gchar       *line,
 			      gsize             length,
 			      GError          **error)
 {
   GError *parse_error;
-  const gchar *line_start;
+  gchar *line_start;
 
   g_return_if_fail (entries != NULL);
   g_return_if_fail (line != NULL);
 
   parse_error = NULL;
 
-  line_start = line;
-  while (isspace (*line_start))
+  line_start = (gchar *) line;
+  while (g_ascii_isspace (*line_start))
     line_start++;
 
   if (line_is_comment (line_start))
@@ -584,6 +605,19 @@ egg_desktop_entries_parse_comment (EggDesktopEntries  *entries,
   entries->current_group->entries = g_list_prepend (entries->current_group->entries, entry);
 }
 
+static gboolean
+egg_desktop_entries_group_is_legal_start_group (EggDesktopEntries *entries,
+                                                const char *group)
+{
+  int i;
+
+  for (i = 0; entries->legal_start_groups[i] != NULL; i++)
+    if (strcmp (group, entries->legal_start_groups[i]) == 0)
+      return TRUE;
+
+  return FALSE;
+}
+
 static void
 egg_desktop_entries_parse_group (EggDesktopEntries  *entries,
 	                       const char       *line,
@@ -610,15 +644,12 @@ egg_desktop_entries_parse_group (EggDesktopEntries  *entries,
 
   if (!entries->default_group_name)
     {
-      if (strcmp (EGG_DESKTOP_ENTRIES_DEFAULT_GROUP, group_name) != 0
-          && strcmp (EGG_DESKTOP_ENTRIES_LEGACY_GROUP, group_name))
+      if (!egg_desktop_entries_group_is_legal_start_group (entries, group_name))
 	{
           g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
-  		       EGG_DESKTOP_ENTRIES_ERROR_BAD_DEFAULT_GROUP,
+  		       EGG_DESKTOP_ENTRIES_ERROR_BAD_START_GROUP,
 		       _("desktop entries file does not start with "
-                         "'%s' or '%s'"),
-		       EGG_DESKTOP_ENTRIES_DEFAULT_GROUP,
-                       EGG_DESKTOP_ENTRIES_LEGACY_GROUP);
+                         "legal start group"));
 	  g_free (group_name);
 	  return;
 	}
@@ -635,10 +666,10 @@ egg_desktop_entries_parse_entry (EggDesktopEntries  *entries,
 			       gsize             length,
 			       GError          **error)
 {
-  char *key, *value, *key_end, *value_start, *locale;
-  gulong key_len, value_len;
+  gchar *key, *value, *key_end, *value_start, *locale;
+  gsize key_len, value_len;
 
-  key_end = value_start = index (line, '=');
+  key_end = value_start = strchr (line, '=');
 
   g_assert (key_end != NULL);
 
@@ -647,7 +678,7 @@ egg_desktop_entries_parse_entry (EggDesktopEntries  *entries,
 
   /* Pull the key name from the line (chomping trailing whitespace)
    */
-  while (isspace (*key_end))
+  while (g_ascii_isspace (*key_end))
     key_end--;
 
   key_len = key_end - line + 2;
@@ -660,7 +691,7 @@ egg_desktop_entries_parse_entry (EggDesktopEntries  *entries,
 
   /* Pull the value from the line (chugging leading whitespace)
    */
-  while (isspace (*value_start))
+  while (g_ascii_isspace (*value_start))
     value_start++;
 
   value_len = line + length - value_start + 1; 
@@ -685,7 +716,7 @@ egg_desktop_entries_parse_entry (EggDesktopEntries  *entries,
   if (entries->encoding == EGG_DESKTOP_ENTRIES_ENCODING_GUESS
         && entries->current_group 
         && entries->current_group->name 
-        && strcmp (egg_desktop_entries_get_default_group (entries),
+        && strcmp (egg_desktop_entries_get_start_group (entries),
                    entries->current_group->name) == 0
         && strcmp (key, "Encoding") == 0)
     {
@@ -914,7 +945,7 @@ egg_desktop_entries_get_keys (EggDesktopEntries  *entries,
 }
 
 /**
- * egg_desktop_entries_get_default_group: 
+ * egg_desktop_entries_get_start_group: 
  * @entries: a #EggDesktopEntries
  * 
  * Returns the name of the default group of the file.  This will
@@ -925,7 +956,7 @@ egg_desktop_entries_get_keys (EggDesktopEntries  *entries,
  *               not available yet.
  **/
 const gchar *
-egg_desktop_entries_get_default_group (EggDesktopEntries  *entries)
+egg_desktop_entries_get_start_group (EggDesktopEntries  *entries)
 {
   g_return_val_if_fail (entries != NULL, NULL);
 
@@ -1054,7 +1085,8 @@ egg_desktop_entries_get_string (EggDesktopEntries  *entries,
       return NULL;
     }
 
-  string_value = egg_desktop_entries_parse_value_as_string (entries, value, &entries_error);
+  string_value = egg_desktop_entries_parse_value_as_string (entries, value, 
+                                                            &entries_error);
   g_free (value);
 
   if (entries_error)
@@ -1591,7 +1623,7 @@ egg_desktop_entries_get_integer_list (EggDesktopEntries  *entries,
  **/
 gboolean
 egg_desktop_entries_has_group (EggDesktopEntries  *entries,
-			     const char       *group_name)
+			     const gchar       *group_name)
 {
   GList *tmp;
 
@@ -1609,6 +1641,40 @@ egg_desktop_entries_has_group (EggDesktopEntries  *entries,
     }
 
   return FALSE;
+}
+
+/**
+ * egg_desktop_entries_has_key: 
+ * @entries: a #EggDesktopEntries
+ * @group: a group name
+ * @key: a key name
+ * 
+ * Looks whether the .desktop file has the key @key in the group @group.
+ * 
+ * Return value: %TRUE if @key is a part of @group, %FALSE otherwise.
+ **/
+gboolean
+egg_desktop_entries_has_key (EggDesktopEntries  *entries,
+			     const gchar       *group_name,
+                             const gchar       *key)
+{
+  EggDesktopEntry *entry;
+  EggDesktopEntriesGroup *group;
+
+  g_return_val_if_fail (entries != NULL, FALSE);
+  g_return_val_if_fail (group_name != NULL, FALSE);
+  g_return_val_if_fail (key != NULL, FALSE);
+
+  entry = NULL;
+
+  group = egg_desktop_entries_lookup_group (entries, group_name);
+
+  if (!group)
+    return FALSE;
+
+  entry = egg_desktop_entries_lookup_entry (entries, group, key);
+
+  return entry != NULL;
 }
 
 void
@@ -2087,7 +2153,7 @@ egg_desktop_entries_key_to_utf8 (EggDesktopEntries *entries,
 
 static gchar *
 egg_desktop_entries_parse_value_as_string (EggDesktopEntries  *entries,
-					 const gchar      *value,
+  					 const gchar      *value,
 					 GError          **error)
 {
   GError *parse_error;

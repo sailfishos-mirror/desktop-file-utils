@@ -106,7 +106,7 @@ egg_get_secondary_data_dirs (void)
   data_dirs = (gchar *) g_getenv ("XDG_DATA_DIRS");
 
   if (!data_dirs || !data_dirs[0])
-    data_dirs = (char *) "/usr/local/share/:/usr/share/";
+    data_dirs = "/usr/local/share/:/usr/share/";
 
   data_dir_vector = g_strsplit (data_dirs, ":", 0);
 
@@ -132,7 +132,7 @@ egg_get_secondary_configuration_dirs (void)
   conf_dirs = (gchar *) g_getenv ("XDG_CONFIG_DIRS");
 
   if (!conf_dirs || !conf_dirs[0])
-    conf_dirs = (char *) "/etc/xdg";
+    conf_dirs = "/etc/xdg";
 
   conf_dir_vector = g_strsplit (conf_dirs, ":", 0);
 

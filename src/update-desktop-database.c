@@ -98,7 +98,8 @@ process_desktop_file (const char  *desktop_file,
 
   load_error = NULL;
   entries = 
-    egg_desktop_entries_new_from_file (EGG_DESKTOP_ENTRIES_DISCARD_COMMENTS |
+    egg_desktop_entries_new_from_file (NULL,
+                                       EGG_DESKTOP_ENTRIES_DISCARD_COMMENTS |
                                        EGG_DESKTOP_ENTRIES_DISCARD_TRANSLATIONS,
                                        desktop_file, &load_error);
 
@@ -108,7 +109,7 @@ process_desktop_file (const char  *desktop_file,
   }
 
   mime_types = egg_desktop_entries_get_string_list (entries, 
-                                              egg_desktop_entries_get_default_group (entries),
+                                              egg_desktop_entries_get_start_group (entries),
                                               "MimeType", NULL, &load_error);
 
   if (load_error != NULL) 

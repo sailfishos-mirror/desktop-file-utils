@@ -1,3 +1,10 @@
+2004-07-22  Ray Strode  <rstrode@redhat.com>
+
+	* src/egg*.[ch]: sync with libegg
+
+	* src/update-desktop-database.c: fix calls to work 
+	with changed api
+
 2004-07-22  Mark McLoughlin  <mark@skynet.ie>
 
 	* configure.in: post-release bump to 0.8.

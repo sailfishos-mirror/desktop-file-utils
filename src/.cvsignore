@@ -1,0 +1,10 @@
+.deps
+.libs
+Makefile
+Makefile.in
+*.lo
+*.la
+desktop-file-install
+desktop-file-validate
+desktop-menu-tool
+dfu-test

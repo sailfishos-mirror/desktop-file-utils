@@ -638,6 +638,48 @@ menu_node_menu_get_name (MenuNode *node)
 }
 
 const char*
+menu_node_move_get_old (MenuNode *node)
+{
+  MenuNode *iter;
+  
+  iter = node->children;
+  while (iter != NULL)
+    {
+      MenuNode *next;
+      
+      next = NODE_NEXT (iter);
+      
+      if (iter->type == MENU_NODE_OLD)
+        return iter->content;
+
+      iter = next;
+    }
+
+  return NULL;
+}
+
+const char*
+menu_node_move_get_new (MenuNode *node)
+{
+  MenuNode *iter;
+  
+  iter = node->children;
+  while (iter != NULL)
+    {
+      MenuNode *next;
+      
+      next = NODE_NEXT (iter);
+      
+      if (iter->type == MENU_NODE_NEW)
+        return iter->content;
+
+      iter = next;
+    }
+
+  return NULL;
+}
+
+const char*
 menu_node_legacy_dir_get_prefix (MenuNode   *node)
 {
   MenuNodeLegacyDir *nld;

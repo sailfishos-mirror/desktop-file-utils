@@ -108,9 +108,12 @@ void        menu_node_root_set_name         (MenuNode   *node,
 void        menu_node_root_set_entry_cache  (MenuNode   *node,
                                              EntryCache *entry_cache);
 
-const char*         menu_node_menu_get_name              (MenuNode *node);
-EntryDirectoryList* menu_node_menu_get_app_entries       (MenuNode *node);
-EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);
+const char*         menu_node_menu_get_name              (MenuNode   *node);
+EntryDirectoryList* menu_node_menu_get_app_entries       (MenuNode   *node);
+EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode   *node);
+
+const char* menu_node_move_get_old (MenuNode *node);
+const char* menu_node_move_get_new (MenuNode *node);
 
 void menu_node_debug_print (MenuNode *node);
 

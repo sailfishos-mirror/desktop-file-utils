@@ -555,6 +555,151 @@ start_element_handler (GMarkupParseContext *context,
   add_context_to_error (error, context);
 }
 
+/* we want to a) check that we have old-new pairs and b) canonicalize
+ * such that each <Move> has exactly one old-new pair
+ */
+static gboolean
+fixup_move_node (GMarkupParseContext *context,
+                 MenuParser          *parser,
+                 MenuNode            *node,
+                 GError             **error)
+{
+  MenuNode *child;
+  int n_old;
+  int n_new;
+  MenuNode *prev;
+  MenuNode *parent;
+  MenuNode *append_after;
+
+  n_old = 0;
+  n_new = 0;
+  
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      switch (menu_node_get_type (child))
+        {
+        case MENU_NODE_OLD:
+          if (n_new != n_old)
+            {
+              set_error (error, context, G_MARKUP_ERROR,
+                         G_MARKUP_ERROR_PARSE,
+                         _("<Old>/<New> elements not paired properly\n"));
+              return FALSE;
+            }
+
+          n_old += 1;
+          
+          break;
+
+        case MENU_NODE_NEW:
+          n_new += 1;
+          
+          if (n_new != n_old)
+            {
+              set_error (error, context, G_MARKUP_ERROR,
+                         G_MARKUP_ERROR_PARSE,
+                         _("<Old>/<New> elements not paired properly\n"));
+              return FALSE;
+            }
+          
+          break;
+
+        default:
+          g_assert_not_reached ();
+          break;
+        }
+      
+      child = menu_node_get_next (child);
+    }
+
+  if (n_new == 0 || n_old == 0)
+    {
+      set_error (error, context, G_MARKUP_ERROR,
+                 G_MARKUP_ERROR_PARSE,
+                 _("<Old>/<New> elements missing under <Move>\n"));
+      return FALSE;
+    }
+
+  g_assert (n_new == n_old);
+  g_assert ((n_new + n_old) % 2 == 0);
+
+  if (n_new == 1)
+    return TRUE; /* Nothing more to do */
+
+  /* Need to split the <Move> into multiple <Move> */
+
+  n_old = 0;
+  n_new = 0;
+  prev = NULL;
+  parent = menu_node_get_parent (node);
+  append_after = node;
+
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      MenuNode *next;
+
+      next = menu_node_get_next (child);
+      
+      switch (menu_node_get_type (child))
+        {
+        case MENU_NODE_OLD:
+          n_old += 1;
+          break;
+
+        case MENU_NODE_NEW:
+          n_new += 1;          
+          break;
+
+        default:
+          g_assert_not_reached ();
+          break;
+        }
+
+      if (n_old == n_new &&
+          n_old > 1)
+        {
+          /* Move the just-completed pair */
+          MenuNode *new_move;
+
+          g_assert (prev != NULL);
+
+          new_move = menu_node_new (MENU_NODE_MOVE);
+          menu_verbose ("inserting new_move after append_after\n");
+          menu_node_insert_after (append_after, new_move);
+          append_after = new_move;
+
+          menu_node_steal (prev);
+          menu_node_steal (child);
+
+          menu_verbose ("appending prev to new_move\n");
+          menu_node_append_child (new_move, prev);
+          menu_verbose ("appending child to new_move\n");
+          menu_node_append_child (new_move, child);
+
+          menu_verbose ("Created new move element old = %s new = %s\n",
+                        menu_node_move_get_old (new_move),
+                        menu_node_move_get_new (new_move));
+          
+          menu_node_unref (new_move);
+          menu_node_unref (prev);
+          menu_node_unref (child);
+          
+          prev = NULL;
+        }
+      else
+        {
+          prev = child;
+        }
+
+      prev = child;
+      child = next;
+    }
+
+  return TRUE;
+}                
+
 static void
 end_element_handler (GMarkupParseContext *context,
                      const gchar         *element_name,
@@ -584,6 +729,7 @@ end_element_handler (GMarkupParseContext *context,
                      G_MARKUP_ERROR_INVALID_CONTENT,
                      _("Element <%s> is required to contain text and was empty\n"),
                      element_name);
+          goto out;
         }
       break;
       
@@ -602,15 +748,18 @@ end_element_handler (GMarkupParseContext *context,
     case MENU_NODE_OR:
     case MENU_NODE_NOT:
     case MENU_NODE_KDE_LEGACY_DIRS:
-    case MENU_NODE_MOVE:
     case MENU_NODE_DELETED:
     case MENU_NODE_NOT_DELETED:
       break;
-    }
-  
-  parser->stack_top = menu_node_get_parent (parser->stack_top);
 
-  add_context_to_error (error, context);
+    case MENU_NODE_MOVE:
+      if (!fixup_move_node (context, parser, parser->stack_top, error))
+        goto out;
+      break;
+    }
+
+ out:
+  parser->stack_top = menu_node_get_parent (parser->stack_top);
 }
 
 static gboolean

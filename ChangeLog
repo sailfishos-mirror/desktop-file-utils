@@ -1,5 +1,19 @@
 2003-10-23  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-process.c: implement <Move> operation
+	
+	* src/menu-process.c (menu_node_strip_duplicate_children): fix
+	to keep later rather than earlier <Menu> nodes
+	(move_children): drop the <Name> node from the source <Menu>
+
+	* src/menu-parser.c (end_element_handler): don't add context to
+	error messages that already have it
+
+	* src/menu-parser.c (fixup_move_node): new code to canonicalize
+	and verify move nodes
+
+2003-10-23  Havoc Pennington  <hp@redhat.com>
+
 	* src/menu-process.c (process_only_unallocated)
 	(tree_node_from_menu_node): add support for OnlyUnallocated
 	element, passes 1 more test

@@ -33,9 +33,15 @@
 #define _(x) gettext ((x))
 #define N_(x) x
 
-static void menu_node_resolve_files (MenuCache  *menu_cache,
-                                     EntryCache *entry_cache,
-                                     MenuNode   *node);
+static void      menu_node_resolve_files            (MenuCache  *menu_cache,
+                                                     EntryCache *entry_cache,
+                                                     MenuNode   *node);
+static void      menu_node_strip_duplicate_children (MenuNode   *node);
+static MenuNode* menu_node_find_submenu             (MenuNode   *node,
+                                                     const char *name,
+                                                     gboolean    create_if_not_found);
+
+
 
 static MenuNode*
 find_menu_child (MenuNode *node)
@@ -514,6 +520,25 @@ node_menu_compare_func (const void *a,
                              menu_node_menu_get_name (node_b));
 }
 
+/* Sort to remove move nodes with the same "old" field */
+static int
+node_move_compare_func (const void *a,
+                        const void *b)
+{
+  MenuNode *node_a = (MenuNode*) a;
+  MenuNode *node_b = (MenuNode*) b;
+  MenuNode *parent_a = menu_node_get_parent (node_a);
+  MenuNode *parent_b = menu_node_get_parent (node_b);
+  
+  if (parent_a < parent_b)
+    return -1;
+  else if (parent_a > parent_b)
+    return 1;
+  else
+    return null_safe_strcmp (menu_node_move_get_old (node_a),
+                             menu_node_move_get_old (node_b));
+}
+
 static void
 move_children (MenuNode *from,
                MenuNode *to)
@@ -531,7 +556,9 @@ move_children (MenuNode *from,
       next = menu_node_get_next (from_child);
 
       menu_node_steal (from_child);
-      if (insert_before)
+      if (menu_node_get_type (from_child) == MENU_NODE_NAME)
+        ; /* just drop the Name in the old <Menu> */
+      else if (insert_before)
         {
           menu_node_insert_before (insert_before, from_child);
           g_assert (menu_node_get_next (from_child) == insert_before);
@@ -546,6 +573,101 @@ move_children (MenuNode *from,
       
       from_child = next;
     }
+}
+
+/* To call this you first have to strip duplicate children once,
+ * otherwise when you move a menu Foo to Bar then you may only
+ * move one of Foo, not all the merged Foo.
+ */
+static void
+menu_node_execute_moves (MenuNode *node,
+                         gboolean *need_remove_dups_p)
+{
+  GSList *move_nodes;
+  GSList *prev;
+  GSList *tmp;
+  MenuNode *child;
+  gboolean need_remove_dups;
+
+  need_remove_dups = FALSE;
+  
+  move_nodes = NULL;  
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      switch (menu_node_get_type (child))
+        {
+        case MENU_NODE_MENU:
+          /* Recurse - we recurse first and process the current node
+           * second, as the spec dictates.
+           */
+          menu_node_execute_moves (child, &need_remove_dups);
+          break;
+          
+        case MENU_NODE_MOVE:
+          move_nodes = g_slist_prepend (move_nodes, child);
+          break;
+          
+        default:
+          break;
+        }
+      
+      child = menu_node_get_next (child);
+    }
+  
+  prev = NULL;
+  tmp = move_nodes;
+  while (tmp != NULL)
+    {
+      GSList *next = tmp->next;
+      MenuNode *move_node = tmp->data;
+      const char *old;
+      const char *new;
+      MenuNode *old_node;
+
+      old = menu_node_move_get_old (move_node);
+      new = menu_node_move_get_new (move_node);
+      g_assert (old && new);
+
+      menu_verbose ("executing <Move> old = \"%s\" new = \"%s\"\n",
+                    old, new);
+      
+      old_node = menu_node_find_submenu (node, old, FALSE);
+      if (old_node != NULL)
+        {
+          MenuNode *new_node;
+
+          /* here we can create duplicates anywhere below the
+           * node
+           */
+          need_remove_dups = TRUE;
+          
+          /* look up new node creating it and its parents if
+           * required
+           */
+          new_node = menu_node_find_submenu (node, new, TRUE);
+          g_assert (new_node != NULL);
+          
+          move_children (old_node, new_node);
+
+          menu_node_unlink (old_node);
+        }
+      
+      menu_node_unlink (move_node);
+      
+      tmp = next;
+    }
+
+  g_slist_free (move_nodes);
+
+  /* This oddness is to ensure we only remove dups once,
+   * at the root, instead of recursing the tree over
+   * and over.
+   */
+  if (need_remove_dups_p)
+    *need_remove_dups_p = need_remove_dups;
+  else if (need_remove_dups)
+    menu_node_strip_duplicate_children (node);
 }
 
 static void
@@ -630,7 +752,8 @@ menu_node_strip_duplicate_children (MenuNode *node)
   simple_nodes = NULL;
   
   /* stable sort the menu nodes (the sort includes the
-   * parents of the nodes in the comparison)
+   * parents of the nodes in the comparison). Remember
+   * the list is backward.
    */
   menu_nodes = g_slist_sort (menu_nodes,
                              node_menu_compare_func);
@@ -661,20 +784,52 @@ menu_node_strip_duplicate_children (MenuNode *node)
   g_slist_free (menu_nodes);
   menu_nodes = NULL;
   
-  /* move nodes are pretty much annoying as hell */
+  /* Remove duplicate <Move> nodes */
 
-  /* FIXME */
-  
-  g_slist_free (move_nodes);
-  move_nodes = NULL;
-  
-  /* Finally, recursively clean up our children */
+  if (move_nodes != NULL)
+    {
+      /* stable sort the move nodes by <Old> (the sort includes the
+       * parents of the nodes in the comparison)
+       */
+      move_nodes = g_slist_sort (move_nodes,
+                                 node_move_compare_func);
+
+      prev = NULL;
+      tmp = move_nodes;
+      while (tmp != NULL)
+        {
+          if (prev)
+            {
+              MenuNode *p = prev->data;
+              MenuNode *n = tmp->data;
+
+              if (node_move_compare_func (p, n) == 0)
+                {
+                  /* Same <Old>, so delete the first one */
+                  menu_verbose ("Removing duplicate move old = %s new = %s leaving old = %s new = %s\n",
+                                menu_node_move_get_old (n),
+                                menu_node_move_get_new (n),
+                                menu_node_move_get_old (p),
+                                menu_node_move_get_new (p));
+                  menu_node_unlink (n);
+                }
+            }
+      
+          prev = tmp;
+          tmp = tmp->next;
+        }      
+      
+      g_slist_free (move_nodes);
+      move_nodes = NULL;
+    }  
+
+  /* Recursively clean up all children */
   child = menu_node_get_children (node);
   while (child != NULL)
     {
       if (menu_node_get_type (child) == MENU_NODE_MENU)
         menu_node_strip_duplicate_children (child);
-
+      
       child = menu_node_get_next (child);
     }
 }
@@ -765,7 +920,8 @@ desktop_entry_tree_load (const char  *filename,
   menu_node_resolve_files (menu_cache, entry_cache, resolved_node);
   
   menu_node_strip_duplicate_children (resolved_node);
-
+  menu_node_execute_moves (resolved_node, NULL);
+  
 #if 0
   menu_node_debug_print (resolved_node);
 #endif
@@ -1617,8 +1773,11 @@ tree_node_from_menu_node (TreeNode   *parent,
     }
 
   if (deleted)
-    goto out; /* skip computation of node's entries */
-
+    {
+      tree_node_free (tree_node);
+      return NULL;
+    }
+  
   tree_node->only_unallocated = only_unallocated;
   
   tree_node->entries = entry_set_list_entries (entries);
@@ -1638,13 +1797,7 @@ tree_node_from_menu_node (TreeNode   *parent,
         }
     }
 
- out:
-  if (deleted)
-    {
-      tree_node_free (tree_node);
-      return NULL;
-    }
-  else if (tree_node_free_if_broken (tree_node))
+  if (tree_node_free_if_broken (tree_node))
     return NULL;
   else
     return tree_node;
@@ -1933,6 +2086,90 @@ menu_node_find_immediate_submenu (MenuNode    *parent,
 
   return NULL;
 }
+
+#if 0
+/* Alternate implementation of menu_node_find_submenu */
+MenuNode*
+menu_node_menu_find_child (MenuNode   *node,
+                           const char *path,
+                           gboolean    create_if_not_found)
+{
+  MenuNode *child;
+  const char *slash;
+  const char *next_path;
+  char *name;
+
+  g_return_val_if_fail (*path != '\0', NULL);
+  g_return_val_if_fail (*path != '/', NULL);
+  
+  slash = path;
+  while (*slash && *slash != '/')
+    ++slash;
+
+  if (slash == path)
+    return NULL;
+  
+  name = g_strndup (path, slash - path);
+  next_path = slash + 1;
+  
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      switch (menu_node_get_type (child))
+        {
+        case MENU_NODE_MENU:
+          {
+            if (strcmp (name,
+                        menu_node_menu_get_name (child)) == 0)
+              {
+                g_free (name);
+                if (*next_path == '\0')
+                  return child;
+                else
+                  return menu_node_menu_find_child (child,
+                                                    next_path,
+                                                    create_if_not_found);
+              }
+          }
+          break;
+          
+        default:
+          break;
+        }
+      
+      child = menu_node_get_next (child);
+    }
+
+  /* Not found */
+  if (create_if_not_found)
+    {
+      MenuNode *name_node;
+      
+      child = menu_node_new (MENU_NODE_MENU);
+      menu_node_append_child (node, child);
+
+      name_node = menu_node_new (MENU_NODE_NAME);
+      menu_node_set_content (name_node, name);
+      menu_node_append_child (child, name_node);
+      menu_node_unref (name_node);
+
+      menu_node_unref (child);
+      g_free (name);
+
+      if (*next_path == '\0')
+        return child;
+      else
+        return menu_node_menu_find_child (child,
+                                          next_path,
+                                          create_if_not_found);
+    }
+  else
+    {
+      g_free (name);
+      return NULL;
+    }
+}
+#endif /* End of alternate implementation */
 
 /* Get node if it's a dir and return TRUE if it's an entry */
 static MenuNode*

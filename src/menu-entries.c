@@ -66,6 +66,7 @@ static void        entry_cache_clear_unused (EntryCache  *cache);
 
 static CachedDir*  cached_dir_load          (EntryCache  *cache,
                                              const char  *canonical_path,
+                                             gboolean	  is_legacy,
                                              GError     **err);
 static void        cached_dir_mark_used     (CachedDir   *dir);
 static void        cached_dir_mark_unused   (CachedDir   *dir);
@@ -76,6 +77,7 @@ static Entry*      cached_dir_find_entry    (CachedDir   *dir,
                                              const char  *name);
 static int         cached_dir_count_entries (CachedDir   *dir);
 static EntryCache* cached_dir_get_cache     (CachedDir   *dir);
+static gboolean    cached_dir_is_legacy     (CachedDir   *dir);
 
 static Entry*
 entry_new (EntryType   type,
@@ -148,7 +150,7 @@ entry_get_name (Entry *entry)
     return entry->relative_path;
 }
 
-static gboolean
+gboolean
 entry_has_category (Entry      *entry,
                     EntryCache *cache,
                     const char *category)
@@ -264,7 +266,7 @@ entry_get_by_absolute_path (EntryCache *cache,
 
   basename = g_path_get_dirname (path);
   
-  dir = cached_dir_load (cache, dirname, NULL);
+  dir = cached_dir_load (cache, dirname, 0, NULL);
 
   if (dir != NULL)
     retval = cached_dir_find_entry (dir, basename);
@@ -301,7 +303,7 @@ entry_directory_load  (EntryCache     *cache,
       return NULL;
     }
 
-  cd = cached_dir_load (cache, canonical, err);
+  cd = cached_dir_load (cache, canonical, flags & ENTRY_LOAD_LEGACY, err);
   if (cd == NULL)
     {
       g_free (canonical);
@@ -376,7 +378,7 @@ entry_from_cached_entry (EntryDirectory *ed,
     }
 
   n_categories_total = n_categories_to_copy;
-  if (ed->flags & ENTRY_LOAD_LEGACY)
+  if (ed->flags & ENTRY_LOAD_LEGACY && n_categories_total > 0)
     n_categories_total += 1;
   
   if (n_categories_total > 0)
@@ -472,6 +474,7 @@ entry_directory_foreach_recursive (EntryDirectory           *ed,
   while (tmp != NULL)
     {
       Entry *src;
+      char *path;
 
       src = tmp->data;
 
@@ -486,7 +489,13 @@ entry_directory_foreach_recursive (EntryDirectory           *ed,
       strcpy (child_path_start,
               src->relative_path);
 
-      if (!(* func) (ed, src, parent_path,
+      if (cached_dir_is_legacy(cd)) {	      
+         path = child_path_start;
+      } else {
+         path = parent_path;
+      }
+
+      if (!(* func) (ed, src, path,
                      data1, data2))
         return FALSE;
 
@@ -1200,6 +1209,7 @@ struct CachedDir
   GSList *subdirs;
   guint have_read_entries : 1;
   guint use_count : 27;
+  guint is_legacy : 1;
 };
 
 struct EntryCache
@@ -1229,6 +1239,7 @@ cached_dir_new (EntryCache *cache,
 
   dir->cache = cache;
   dir->name = g_strdup (name);
+  dir->is_legacy = 0;
 
   menu_verbose ("New cached dir \"%s\"\n", name);
   
@@ -1287,6 +1298,11 @@ cached_dir_free (CachedDir *dir)
   
   g_free (dir->name);
   g_free (dir);
+}
+
+static gboolean
+cached_dir_is_legacy (CachedDir *cd) {
+  return cd->is_legacy;
 }
 
 static void
@@ -1443,6 +1459,7 @@ cached_dir_ensure (EntryCache *cache,
 static CachedDir*
 cached_dir_load (EntryCache *cache,
                  const char *canonical_path,
+                 gboolean    is_legacy,
                  GError    **err)
 {
   CachedDir *retval;
@@ -1454,6 +1471,8 @@ cached_dir_load (EntryCache *cache,
   retval = cached_dir_ensure (cache,
                               canonical_path);
   g_assert (retval != NULL);
+
+  retval->is_legacy = retval->is_legacy || is_legacy;
 
   cached_dir_scan_recursive (retval, canonical_path);
   
@@ -1826,6 +1845,7 @@ load_entries_recursive (CachedDir  *dir,
 
   menu_verbose ("Reading entries for %s (full path %s)\n",
                 dir ? dir->name : "(not created yet)", dirname);
+  menu_verbose( "basename %s\n", basename);
   
   dp = opendir (dirname);
   if (dp == NULL)
@@ -1840,6 +1860,7 @@ load_entries_recursive (CachedDir  *dir,
       g_assert (parent != NULL);
       
       dir = cached_dir_new (parent->cache, basename);
+      dir->is_legacy = parent->is_legacy;
       dir->parent = parent;
       parent->subdirs = g_slist_prepend (parent->subdirs,
                                          dir);

@@ -82,6 +82,7 @@ desktop_menu_tool_LDADD=$(DESKTOP_FILE_UTILS_LIBS) libmenu_sources.la
 dfu_test_LDADD=$(DESKTOP_FILE_UTILS_LIBS) libmenu_sources.la
 
 EXTRA_DIST =			\
+	$(dfu_test_SOURCES)	\
 	menu-modules.conf
 
 if HAVE_GNOME_VFS

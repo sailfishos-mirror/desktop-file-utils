@@ -338,6 +338,10 @@ start_menu_child_element (MenuParser          *parser,
         {
           push_node (parser, MENU_NODE_APP_DIR);
         }
+      else if (ELEMENT_IS ("LegacyDir"))
+        {
+          push_node (parser, MENU_NODE_LEGACY_DIR);
+        }
       else if (ELEMENT_IS ("DefaultAppDirs"))
         {
           push_node (parser, MENU_NODE_DEFAULT_APP_DIRS);
@@ -402,6 +406,14 @@ start_menu_child_element (MenuParser          *parser,
       else if (ELEMENT_IS ("NotDeleted"))
         {
           push_node (parser, MENU_NODE_NOT_DELETED);
+        }
+      else if (ELEMENT_IS ("Layout"))
+        {
+          push_node (parser, MENU_NODE_LAYOUT);
+        }
+      else if (ELEMENT_IS ("DefaultLayout"))
+        {
+          push_node (parser, MENU_NODE_DEFAULT_LAYOUT);
         }
       else
         {
@@ -491,6 +503,55 @@ start_move_child_element (MenuParser          *parser,
 }
 
 static void
+start_layout_child_element (MenuParser          *parser,
+                          GMarkupParseContext *context,
+                          const gchar         *element_name,
+                          const gchar        **attribute_names,
+                          const gchar        **attribute_values,
+                          GError             **error)
+{
+  if (ELEMENT_IS ("Merge"))
+    {
+	const char *type;
+	
+	push_node (parser, MENU_NODE_MERGE);
+	if (!locate_attributes (context, element_name,
+			        attribute_names, attribute_values,
+			        error, "type", &type,
+			        NULL))
+	    return;
+		    
+    }
+  else {
+  if (!check_no_attributes (context, element_name,
+                            attribute_names, attribute_values,
+                            error))
+    return;
+
+  if (ELEMENT_IS ("Filename"))
+    {
+      push_node (parser, MENU_NODE_FILENAME); 
+    }
+  else if (ELEMENT_IS ("Menuname"))
+    {
+      push_node (parser, MENU_NODE_MENUNAME); 
+    }
+  else if (ELEMENT_IS ("Separator"))
+    {
+      push_node (parser, MENU_NODE_SEPARATOR); 
+    }
+  else
+    {
+      set_error (error, context, G_MARKUP_ERROR,
+                 G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                 _("Element <%s> may not appear below <%s>\n"),
+                 element_name, "Move");
+    }
+  }
+}
+
+
+static void
 start_element_handler (GMarkupParseContext *context,
                        const gchar         *element_name,
                        const gchar        **attribute_names,
@@ -543,6 +604,13 @@ start_element_handler (GMarkupParseContext *context,
       start_move_child_element (parser, context, element_name,
                                 attribute_names, attribute_values,
                                 error);
+    }
+  else if (menu_node_get_type (parser->stack_top) == MENU_NODE_LAYOUT ||
+           menu_node_get_type (parser->stack_top) == MENU_NODE_DEFAULT_LAYOUT)
+    {
+      start_layout_child_element (parser, context, element_name,
+                                  attribute_names, attribute_values,
+                                  error);
     }
   else
     {
@@ -723,6 +791,7 @@ end_element_handler (GMarkupParseContext *context,
     case MENU_NODE_LEGACY_DIR:
     case MENU_NODE_OLD:
     case MENU_NODE_NEW:
+    case MENU_NODE_MENUNAME:
       if (menu_node_get_content (parser->stack_top) == NULL)
         {
           set_error (error, context, G_MARKUP_ERROR,
@@ -750,6 +819,10 @@ end_element_handler (GMarkupParseContext *context,
     case MENU_NODE_KDE_LEGACY_DIRS:
     case MENU_NODE_DELETED:
     case MENU_NODE_NOT_DELETED:
+    case MENU_NODE_LAYOUT:
+    case MENU_NODE_DEFAULT_LAYOUT:
+    case MENU_NODE_SEPARATOR:
+    case MENU_NODE_MERGE:
       break;
 
     case MENU_NODE_MOVE:
@@ -805,6 +878,7 @@ text_handler (GMarkupParseContext *context,
     case MENU_NODE_LEGACY_DIR:
     case MENU_NODE_OLD:
     case MENU_NODE_NEW:
+    case MENU_NODE_MENUNAME:
       g_assert (menu_node_get_content (parser->stack_top) == NULL);
       
       menu_node_set_content (parser->stack_top, text);
@@ -828,6 +902,10 @@ text_handler (GMarkupParseContext *context,
     case MENU_NODE_MOVE:
     case MENU_NODE_DELETED:
     case MENU_NODE_NOT_DELETED:
+    case MENU_NODE_LAYOUT:
+    case MENU_NODE_DEFAULT_LAYOUT:
+    case MENU_NODE_SEPARATOR:
+    case MENU_NODE_MERGE:
       if (!all_whitespace (text, text_len))
         {
           set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,

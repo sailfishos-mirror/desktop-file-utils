@@ -266,6 +266,7 @@ resolve_kde_legacy_dirs (MenuNode *node)
                             "applnk",
                             NULL);
       menu_node_set_content (n, f);
+      menu_node_legacy_dir_set_prefix (n, "kde");
       menu_node_insert_before (node, n);
 
       menu_verbose ("Adding <LegacyDir>%s</LegacyDir> in <KDELegacyDirs/>\n",
@@ -389,13 +390,157 @@ resolve_default_merge_dirs (MenuCache  *menu_cache,
 }
 
 static void
+resolve_legacy_dir (MenuCache  *menu_cache,
+                    EntryCache *entry_cache,
+                    MenuNode   *node)
+{
+      MenuNode *menu, *to_merge;
+      MenuNode *n, *fake_root, *fake_menu, *tmp_node;
+      EntryDirectoryList *directories;
+      EntrySet *set;
+      GSList *entries;
+
+      to_merge = menu_node_new (MENU_NODE_ROOT);
+
+      menu = menu_node_new (MENU_NODE_MENU);
+      menu_node_append_child (to_merge, menu);
+
+      n = menu_node_new (MENU_NODE_APP_DIR);
+      menu_node_set_content (n, menu_node_get_content (node));
+      menu_node_append_child (menu, n);
+      menu_node_unref (n);
+      
+      n = menu_node_new (MENU_NODE_DIRECTORY_DIR);
+      menu_node_set_content (n, menu_node_get_content (node));
+      menu_node_append_child (menu, n);
+      menu_node_unref (n);
+
+      n = menu_node_new (MENU_NODE_INCLUDE);
+      menu_node_append_child (menu, n);
+
+      set = entry_set_new ();
+      fake_root = menu_node_new (MENU_NODE_ROOT);
+      menu_node_root_set_entry_cache (fake_root, entry_cache);
+      fake_menu =  menu_node_new (MENU_NODE_MENU);
+      menu_node_append_child (fake_root, fake_menu);
+
+      tmp_node = menu_node_new (MENU_NODE_LEGACY_DIR);
+      menu_node_set_content (tmp_node, menu_node_get_content (node));
+      menu_node_append_child (fake_menu, tmp_node);
+      menu_node_unref (tmp_node);
+
+      directories = menu_node_menu_get_app_entries (fake_menu);
+
+      entry_directory_list_get_all_desktops (directories, set);
+
+      entries = entry_set_list_entries (set);
+
+      while (entries != NULL)
+        {
+          Entry *e = entries->data;
+	  gint abs_path_len, start_path_len, rel_path_len;
+
+
+	  if (entry_has_category (e, entry_cache, "Legacy")) {
+		  entries = entries->next;
+		  continue;
+	  }
+
+	  abs_path_len = strlen (entry_get_absolute_path (e));
+	  start_path_len = strlen (menu_node_get_content(node)) 
+		  + 1 - g_str_has_suffix (menu_node_get_content (node), "/");
+	  rel_path_len = strlen (entry_get_relative_path (e));
+
+	  if (abs_path_len <= (start_path_len + rel_path_len + 1)) { /* file in current dir */
+	    MenuNode *f = menu_node_new (MENU_NODE_FILENAME);
+
+	    menu_node_set_content (f, entry_get_relative_path (e));
+
+	    menu_node_append_child (n, f);
+	    menu_node_unref (f);
+	  } else {
+		MenuNode *subdir, *include, *f, *top_dir;
+		char *path, *dir_path;
+		char **path_elements;
+		int i;
+
+		path = g_strndup (entry_get_absolute_path (e) + start_path_len,  
+				abs_path_len - start_path_len - 1 - rel_path_len);
+		dir_path = g_build_filename (menu_node_get_content (node), path, NULL);
+
+		path_elements = g_strsplit (path, "/", 0);
+		top_dir = menu;
+		subdir = NULL;
+		i = 0;
+
+		while (path_elements[i] != NULL) {
+  			subdir = menu_node_new (MENU_NODE_MENU);
+			menu_node_append_child (top_dir, subdir);
+
+			f = menu_node_new (MENU_NODE_NAME);
+			menu_node_set_content (f, path_elements[i]);
+			menu_node_append_child (subdir, f);
+			menu_node_unref (f);
+			/*menu_node_unref (top_dir);*/ /* FIXME*/ 
+			top_dir = subdir;
+			i++;
+		} 
+
+		g_strfreev (path_elements);
+
+		f = menu_node_new (MENU_NODE_APP_DIR);
+		menu_node_set_content (f, dir_path);
+		menu_node_append_child (subdir, f);
+		menu_node_unref (f);
+
+		f = menu_node_new (MENU_NODE_DIRECTORY_DIR);
+		menu_node_set_content (f, dir_path);
+		menu_node_append_child (subdir, f);
+		menu_node_unref (f);
+
+		include = menu_node_new (MENU_NODE_INCLUDE);
+	        menu_node_append_child (subdir, include);
+		
+		f = menu_node_new (MENU_NODE_FILENAME);
+
+		menu_node_set_content (f, g_strdup (entry_get_relative_path (e)));
+		menu_node_append_child (include, f);
+
+		g_free (path);
+		g_free (dir_path);
+
+		menu_node_unref (f);
+		menu_node_unref (include);
+		menu_node_unref (subdir);
+        	menu_node_strip_duplicate_children (to_merge);
+	  }
+
+          entries = entries->next;
+        }
+
+      menu_node_unref (n);
+
+
+      merge_resolved_copy_of_children (menu_cache, entry_cache,
+                                       node, to_merge);
+
+      menu_node_unref (menu);
+
+      menu_node_unref (to_merge);
+
+      menu_node_unref (fake_menu);
+      menu_node_unref (fake_root);
+}
+
+
+static void
 menu_node_resolve_files_recursive (MenuCache  *menu_cache,
                                    EntryCache *entry_cache,
                                    MenuNode   *node)
 {
   MenuNode *child;
 
-  menu_verbose ("Resolving files in node %p\n", node);
+  menu_verbose ("Resolving files in node %p %s\n", node, menu_node_get_content(node));
       
   switch (menu_node_get_type (node))
     {
@@ -417,7 +562,10 @@ menu_node_resolve_files_recursive (MenuCache  *menu_cache,
     case MENU_NODE_DEFAULT_MERGE_DIRS:
       resolve_default_merge_dirs (menu_cache, entry_cache, node);
       break;
-      
+    case MENU_NODE_LEGACY_DIR:
+      resolve_legacy_dir (menu_cache, entry_cache, node);
+      /* FIXME break; */
+
     case MENU_NODE_PASSTHROUGH:
       /* Just get rid of this, we don't need the memory usage */
       menu_node_unlink (node);
@@ -1060,7 +1208,14 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
       ++i;
     }
 
-  if (iter == NULL && prev != NULL && split[i] != NULL)
+  if (iter == NULL && prev != NULL && split[i] != NULL) {
+    if (strcmp (split[i], ".directory") == 0) {
+        menu_verbose ("Return directory entry for entry named \"%s\"\n",
+                      split[i]);
+        entry = prev->dir_entry;
+        iter = prev;
+    }
+  else 
     {
       /* The last element was not a dir; see if it's one
        * of the entries.
@@ -1090,6 +1245,7 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
           tmp = tmp->next;
         }
     }
+  }
 
   g_strfreev (split);
 
@@ -1351,8 +1507,9 @@ foreach_dir (DesktopEntryTree            *tree,
              void                        *user_data)
 {
   GSList *tmp;
-  char *p;
+  char *p, tmpchar;
   DesktopEntryForeachInfo info;
+  TreeNode *node;
 
   p = path_for_node (dir);
 
@@ -1361,7 +1518,15 @@ foreach_dir (DesktopEntryTree            *tree,
   
   info.is_dir = TRUE;
   info.depth = depth;
-  info.menu_id = dir->name; /* FIXME ! */
+  info.menu_id = g_strdelimit (g_strdup(dir->name), "/", '-');
+  /* FIXME.. I'm not sure of that code */
+  if ((node = tree_node_find_subdir (tree->root, p) != NULL) 
+		  && (menu_node_legacy_dir_get_prefix (node) != NULL)) {
+	  tmpchar = info.menu_id;
+	  info.menu_id = g_strconcat (menu_node_legacy_dir_get_prefix (node), 
+			  "-", tmpchar, NULL);
+	  g_free (tmpchar);
+  }
   info.menu_basename = dir->name;
   info.menu_fullpath = p;
   info.filesystem_path_to_entry = dir->dir_entry ? entry_get_absolute_path (dir->dir_entry) : NULL;
@@ -1373,18 +1538,21 @@ foreach_dir (DesktopEntryTree            *tree,
       g_free (p);
       return FALSE;
     }
+  g_free (info.menu_id);
   g_free (p);
   
   tmp = dir->entries;
   while (tmp != NULL)
     {
       Entry *e = tmp->data;
+      char *root_path;
 
       p = path_for_entry (dir, e);
 
       info.is_dir = FALSE;
       info.depth = depth + 1;
-      info.menu_id = entry_get_relative_path (e); /* FIXME */
+      root_path = g_strndup (entry_get_absolute_path (e), strlen (entry_get_absolute_path (e)) - strlen (entry_get_relative_path (e)) - 1);
+      info.menu_id = g_strdelimit (g_strdup (entry_get_relative_path (e)), "/", '-');
       info.menu_basename = entry_get_name (e);
       info.menu_fullpath = p;
       info.filesystem_path_to_entry = entry_get_absolute_path (e);
@@ -1399,6 +1567,7 @@ foreach_dir (DesktopEntryTree            *tree,
           g_free (p);
           return FALSE;
         }
+      g_free (info.menu_id);
       g_free (p);
 
       tmp = tmp->next;
@@ -2040,7 +2209,7 @@ foreach_print (DesktopEntryTree        *tree,
           
           g_print ("%s\t%s\t%s\n",
                    s,
-                   info->menu_basename,
+                   info->menu_id,
                    info->filesystem_path_to_entry);
 
           g_free (s);

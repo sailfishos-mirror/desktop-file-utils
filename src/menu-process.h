@@ -39,7 +39,7 @@ typedef struct
 {
   gboolean is_dir;
   int depth;
-  const char *menu_id;
+  char *menu_id;
   const char *menu_basename;
   const char *menu_fullpath;
   const char *menu_fullpath_localized;

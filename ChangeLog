@@ -1,5 +1,22 @@
 2004-03-21  Dan Williams  <dcbw@redhat.com>
 
+	* src/gen-compat-tree.c
+	  src/menu-entries.c
+	  src/menu-entries.h
+	  src/menu-layout.h
+	  src/menu-method.c
+	  src/menu-modules.conf
+	  src/menu-parser.c
+	  src/menu-process.c
+	  src/menu-process.h
+	  src/Makefile.am
+	  
+	  Apply Frederic Crozat's patch to bring d-f-u up
+	  to the freedesktop.org Menu Spec 0.8.  Approved
+	  by havoc.
+
+2004-03-21  Dan Williams  <dcbw@redhat.com>
+
 	* src/menu-entries.c: Don't crash when a .desktop
 	file is a symlink pointing to a nonexistent file.
 	

@@ -16,6 +16,7 @@
 #include "vfolder-query.h"
 #include "menu-process.h"
 #include "menu-tree-cache.h"
+#include "menu-util.h"
 
 #include <libintl.h>
 #include <stdlib.h>
@@ -266,9 +267,20 @@ main (int argc, char **argv)
       ++i;
     }
 
-  if (i == 0)
-    {
-      g_printerr (_("Must specify one menu file to parse\n"));
+  if (i == 0) 
+    { 
+	    if ( do_print_test_results) {
+		    XdgPathInfo xdg;
+		    char * menufile;
+
+		    init_xdg_paths (&xdg);
+		    menufile = g_build_filename (xdg.first_system_config,
+                                           "menus", "applications.menu", NULL);
+		    process_one_file (menufile);
+		    g_free (menufile);
+	    } else {
+	      g_printerr (_("Must specify one menu file to parse\n"));
+	    }
 
       return 1;
     }

@@ -886,6 +886,8 @@ menu_method_resolve_uri (MenuMethod            *method,
 	if (retval != GNOME_VFS_OK)
 		return retval;
 
+	g_return_val_if_fail (menu_path != NULL, GNOME_VFS_ERROR_NOT_FOUND);
+
 	tmp_error = NULL;
         tree = menu_method_get_tree (method, menu_file, &tmp_error);
         if (tree == NULL) {
@@ -903,11 +905,11 @@ menu_method_resolve_uri (MenuMethod            *method,
 	res = desktop_entry_tree_resolve_path (tree, menu_path, &node,
 					       real_path_p, NULL);
 	if (res == PATH_RESOLUTION_NOT_FOUND) {		
-                desktop_entry_tree_unref (tree);
-                g_free (menu_path);
-
 		menu_verbose ("Failed to resolve path %s in desktop entry tree\n",
 			      menu_path);
+
+                desktop_entry_tree_unref (tree);
+                g_free (menu_path);
 		
                 return GNOME_VFS_ERROR_NOT_FOUND;
         }

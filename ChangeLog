@@ -1,3 +1,10 @@
+2003-10-20  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.c (tree_node_from_menu_node): change to alloc
+	the TreeNode in here instead of separately then
+	fill_tree_node_from_menu_node
+	(tree_node_from_menu_node): handle <Deleted>/<NotDeleted>
+
 2003-10-16  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-process.c (foreach_dir): include full menu paths

@@ -1455,20 +1455,26 @@ compare_entries_func (const void *a,
                  entry_get_relative_path (be));
 }
 
-static void
-fill_tree_node_from_menu_node (TreeNode *tree_node,
-                               MenuNode *menu_node)
+static TreeNode*
+tree_node_from_menu_node (TreeNode *parent,
+                          MenuNode *menu_node)
 {
   MenuNode *child;
   EntryDirectoryList *app_dirs;
   EntryDirectoryList *dir_dirs;
   EntrySet *entries;
+  gboolean deleted;
+  TreeNode *tree_node;
   
-  g_return_if_fail (menu_node_get_type (menu_node) == MENU_NODE_MENU);
+  g_return_val_if_fail (menu_node_get_type (menu_node) == MENU_NODE_MENU, NULL);
 
   menu_verbose ("=== Menu name = %s\n",
                 menu_node_menu_get_name (menu_node) ?
                 menu_node_menu_get_name (menu_node) : "(none)");
+
+  tree_node = tree_node_new (parent);
+  
+  deleted = FALSE;
   
   app_dirs = menu_node_menu_get_app_entries (menu_node);
   dir_dirs = menu_node_menu_get_directory_entries (menu_node);
@@ -1484,10 +1490,10 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
           /* recurse */
           {
             TreeNode *child_tree;
-            
-            child_tree = tree_node_new (tree_node);
-            fill_tree_node_from_menu_node (child_tree, child);
-            if (!tree_node_free_if_broken (child_tree))
+
+            child_tree = tree_node_from_menu_node (tree_node,
+                                                   child);
+            if (child_tree)
               tree_node->subdirs = g_slist_prepend (tree_node->subdirs,
                                                     child_tree);
           }
@@ -1572,6 +1578,12 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
             menu_verbose ("Processed <Directory> new dir_entry = %p\n", tree_node->dir_entry);
           }
           break;
+        case MENU_NODE_DELETED:
+          deleted = TRUE;
+          break;
+        case MENU_NODE_NOT_DELETED:
+          deleted = FALSE;
+          break;
         default:
           break;
         }
@@ -1579,6 +1591,9 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
       child = menu_node_get_next (child);
     }
 
+  if (deleted)
+    goto out; /* skip computation of node's entries */
+  
   tree_node->entries = entry_set_list_entries (entries);
   entry_set_unref (entries);
 
@@ -1587,6 +1602,17 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
    */
   tree_node->entries = g_slist_sort (tree_node->entries,
                                      compare_entries_func);
+
+ out:
+  if (deleted)
+    {
+      tree_node_free (tree_node);
+      return NULL;
+    }
+  else if (tree_node_free_if_broken (tree_node))
+    return NULL;
+  else
+    return tree_node;
 }
 
 static void
@@ -1595,14 +1621,11 @@ build_tree (DesktopEntryTree *tree)
   if (tree->root != NULL)
     return;
   
-  tree->root = tree_node_new (NULL);
-  fill_tree_node_from_menu_node (tree->root,
-                                 find_menu_child (tree->resolved_node));
-  if (tree_node_free_if_broken (tree->root))
-    {
-      tree->root = NULL;
-      menu_verbose ("Broken root node!\n");
-    }
+  tree->root = tree_node_from_menu_node (NULL,
+                                         find_menu_child (tree->resolved_node));
+
+  if (tree->root == NULL)
+    menu_verbose ("Broken root node!\n");
 }
 
 typedef struct

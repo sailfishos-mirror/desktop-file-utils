@@ -27,6 +27,7 @@
 #include "menu-util.h"
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #include <libintl.h>
 #define _(x) gettext ((x))
@@ -82,8 +83,10 @@ merge_resolved_copy_of_children (MenuCache  *menu_cache,
       g_assert (next != from_child);
 
       menu_verbose ("Merging %p after %p\n", from_child, insert_after);
+#if 0
       menu_node_debug_print (from_child);
       menu_node_debug_print (insert_after);
+#endif
       
       switch (menu_node_get_type (from_child))
         {
@@ -473,11 +476,14 @@ desktop_entry_tree_load (const char  *filename,
   EntryCache *entry_cache;
   MenuCache *menu_cache;
 
-  menu_verbose ("Loading desktop entry tree at \"%s\"\n", filename);
+  menu_verbose ("Loading desktop entry tree at \"%s\" chaining to \"%s\"\n",
+                filename, create_chaining_to ? create_chaining_to : "(none)");
   
   canonical = g_canonicalize_file_name (filename, create_chaining_to != NULL);
   if (canonical == NULL)
     {
+      menu_verbose ("  (failed to canonicalize: %s)\n",
+                    g_strerror (errno));
       g_set_error (error, G_FILE_ERROR,
                    G_FILE_ERROR_FAILED,
                    _("Could not canonicalize filename \"%s\"\n"),
@@ -552,6 +558,10 @@ desktop_entry_tree_unref (DesktopEntryTree *tree)
         tree_node_free (tree->root);
       entry_cache_unref (tree->entry_cache);
       menu_cache_unref (tree->menu_cache);
+#if 1
+      /* debugging, to make memory stuff fail */
+      memset (tree, 0xff, sizeof (*tree));
+#endif
       g_free (tree);
     }
 }
@@ -585,7 +595,7 @@ find_subdir (TreeNode    *parent,
 }
 
 /* Get node if it's a dir and return TRUE if it's an entry */
-static gboolean
+static PathResolution
 tree_node_find_subdir_or_entry (TreeNode   *node,
                                 const char *name,
                                 TreeNode  **subdir_p,
@@ -679,6 +689,8 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
 
   if (entry != NULL)
     {
+      g_assert (iter != NULL);
+      
       if (real_fs_absolute_path_p)
         *real_fs_absolute_path_p = g_strdup (entry_get_absolute_path (entry));
       if (entry_relative_name_p)
@@ -686,14 +698,14 @@ tree_node_find_subdir_or_entry (TreeNode   *node,
     }
   
   if (subdir_p)
-    {
-      *subdir_p = iter;
-      return TRUE;
-    }
-  else if (entry != NULL)
-    return TRUE;
+    *subdir_p = iter;
+
+  if (iter && entry)
+    return PATH_RESOLUTION_IS_ENTRY;
+  else if (iter)
+    return PATH_RESOLUTION_IS_DIR;
   else
-    return FALSE;
+    return PATH_RESOLUTION_NOT_FOUND;
 }
 
 
@@ -722,7 +734,7 @@ desktop_entry_tree_get_node (DesktopEntryTree      *tree,
   return *node != NULL;
 }
 
-gboolean
+PathResolution
 desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
                                  const char             *path,
                                  DesktopEntryTreeNode  **node_p,
@@ -1587,7 +1599,7 @@ menu_node_find_submenu (MenuNode   *node,
       ++i;
     }
 
-  g_assert (iter == NULL || menu_node_get_parent (iter) == prev);
+  g_assert (iter == NULL || prev == NULL || menu_node_get_parent (iter) == prev);
   
   g_strfreev (split);
 
@@ -1596,7 +1608,7 @@ menu_node_find_submenu (MenuNode   *node,
   return iter;
 }
 
-static void
+static MenuNode*
 menu_node_ensure_child_at_end (MenuNode    *parent,
                                MenuNodeType child_type,
                                const char  *child_content,
@@ -1650,12 +1662,15 @@ menu_node_ensure_child_at_end (MenuNode    *parent,
       menu_node_steal (already_there);
       menu_node_append_child (parent, already_there);
       menu_node_unref (already_there);
+
+      return already_there;
     }
   else    
     {
       MenuNode *node;
       
-      menu_verbose ("Node not found, adding it\n");
+      menu_verbose ("Node not found, adding it with content \"%s\"\n",
+                    child_content ? child_content : "(none)");
       
       node = menu_node_new (child_type);
       menu_node_set_content (node, child_content);
@@ -1663,6 +1678,8 @@ menu_node_ensure_child_at_end (MenuNode    *parent,
       menu_node_append_child (parent, node);
 
       menu_node_unref (node);
+
+      return node;
     }
 }
 
@@ -1676,6 +1693,7 @@ desktop_entry_tree_include (DesktopEntryTree *tree,
   gboolean retval;
   MenuNode *node;
   MenuNode *submenu;
+  MenuNode *include;
   
   retval = FALSE;
 
@@ -1686,6 +1704,10 @@ desktop_entry_tree_include (DesktopEntryTree *tree,
   if (node == NULL)
     goto out;
 
+  /* Find root <Menu> */
+  node = find_menu_child (node);
+  if (node == NULL)
+    goto out;
 
   /* Create submenu */
   submenu = menu_node_find_submenu (node, menu_path_dirname, TRUE);
@@ -1697,7 +1719,14 @@ desktop_entry_tree_include (DesktopEntryTree *tree,
   menu_node_ensure_child_at_end (submenu, MENU_NODE_APP_DIR,
                                  override_fs_dirname,
                                  TRUE);
-  menu_node_ensure_child_at_end (submenu, MENU_NODE_INCLUDE,
+
+  /* Find <Include> at the end */
+  include = menu_node_ensure_child_at_end (submenu,
+                                           MENU_NODE_INCLUDE,
+                                           NULL, FALSE);
+
+  /* Add <Filename> to it */
+  menu_node_ensure_child_at_end (include, MENU_NODE_FILENAME,
                                  relative_entry_name,
                                  FALSE);
   
@@ -1728,6 +1757,7 @@ desktop_entry_tree_exclude (DesktopEntryTree *tree,
   gboolean retval;
   MenuNode *node;
   MenuNode *submenu;
+  MenuNode *exclude;
   
   retval = FALSE;
 
@@ -1738,7 +1768,11 @@ desktop_entry_tree_exclude (DesktopEntryTree *tree,
   if (node == NULL)
     goto out;
 
-
+  /* Find root <Menu> */
+  node = find_menu_child (node);
+  if (node == NULL)
+    goto out;
+  
   /* Create submenu */
   submenu = menu_node_find_submenu (node, menu_path_dirname, TRUE);
 
@@ -1747,6 +1781,16 @@ desktop_entry_tree_exclude (DesktopEntryTree *tree,
   /* Add the given stuff to it */
   
   menu_node_ensure_child_at_end (submenu, MENU_NODE_EXCLUDE,
+                                 relative_entry_name,
+                                 FALSE);
+
+  /* Find <Exclude> at the end */
+  exclude = menu_node_ensure_child_at_end (submenu,
+                                           MENU_NODE_EXCLUDE,
+                                           NULL, FALSE);
+
+  /* Add <Filename> to it */
+  menu_node_ensure_child_at_end (exclude, MENU_NODE_FILENAME,
                                  relative_entry_name,
                                  FALSE);
   
@@ -1787,13 +1831,17 @@ ensure_menu_with_child_node (DesktopEntryTree *tree,
   if (node == NULL)
     goto out;
 
+  /* Find root <Menu> */
+  node = find_menu_child (node);
+  if (node == NULL)
+    goto out;
+
   /* Create submenu */
   submenu = menu_node_find_submenu (node, menu_path_dirname, TRUE);
 
   g_assert (submenu != NULL);
 
   /* Add the given stuff to it */
-
   menu_node_ensure_child_at_end (submenu, child_node_type,
                                  NULL, FALSE);
   

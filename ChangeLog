@@ -1,3 +1,29 @@
+2003-06-02  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-tree-cache.c (try_create_overrides): put
+	applications-edits under "menus"
+	(desktop_entry_tree_cache_create): can't create a menu with 
+	same name as a directory; and don't create random mktmp names, 
+	that was just crack
+
+	* src/menu-layout.c
+	(menu_node_remove_redundancy): fix this function to be able to
+	remove redundancy despite intervening nodes.
+
+	* src/menu-process.c (desktop_entry_tree_exclude)
+	(desktop_entry_tree_include): add new nodes in root <Menu>, not to
+	root of layout tree
+	(menu_node_find_submenu): fix assertion
+	(tree_node_find_subdir_or_entry): fix to return the right value
+
+	* src/menu-tree-cache.c (reload_entry): fix unref/free of NULL
+	fields.
+	(lookup_canonical_entry): fix bug where we didn't fill 
+	in entry->create_chaining_to correctly
+
+	* src/menu-method.c (menu_method_resolve_uri): fix bug where 
+	we passed wrong args to menu_method_get_tree
+
 2003-05-31  Havoc Pennington  <hp@pobox.com>
 
 	* src/menu-tree-cache.c (desktop_entry_tree_cache_rmdir):

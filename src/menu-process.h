@@ -27,6 +27,13 @@
 typedef struct DesktopEntryTree     DesktopEntryTree;
 typedef struct DesktopEntryTreeNode DesktopEntryTreeNode;
 
+typedef enum
+{
+  PATH_RESOLUTION_NOT_FOUND,
+  PATH_RESOLUTION_IS_DIR,
+  PATH_RESOLUTION_IS_ENTRY
+} PathResolution;
+
 typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree *tree,
                                                   gboolean          is_dir,
                                                   int               depth,
@@ -58,11 +65,12 @@ void              desktop_entry_tree_invalidate (DesktopEntryTree *tree,
 gboolean desktop_entry_tree_get_node     (DesktopEntryTree       *tree,
                                           const char             *path,
                                           DesktopEntryTreeNode  **node);
-gboolean desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
-                                          const char             *path,
-                                          DesktopEntryTreeNode  **node,
-                                          char                  **real_fs_absolute_path_p,
-                                          char                  **entry_relative_name_p);
+
+PathResolution desktop_entry_tree_resolve_path (DesktopEntryTree       *tree,
+                                                const char             *path,
+                                                DesktopEntryTreeNode  **node,
+                                                char                  **real_fs_absolute_path_p,
+                                                char                  **entry_relative_name_p);
 void     desktop_entry_tree_list_subdirs (DesktopEntryTree       *tree,
                                           DesktopEntryTreeNode   *parent_node,
                                           DesktopEntryTreeNode ***subdirs,

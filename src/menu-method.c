@@ -145,7 +145,9 @@ do_open (GnomeVFSMethod        *vtable,
         MenuMethod *method;
         GnomeVFSResult result;
         FileHandle *handle;
-        
+
+	menu_verbose ("method: Opening %s\n", uri->text);
+	
         method = method_checkout ();
 
         handle = NULL;
@@ -163,26 +165,25 @@ do_create (GnomeVFSMethod        *vtable,
            GnomeVFSURI           *uri,
            GnomeVFSOpenMode       mode,
            gboolean               exclusive,
-           guint                  perm,
+           guint                  perms,
            GnomeVFSContext       *context)
 {
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
-#if 0
         MenuMethod *method;
         GnomeVFSResult result;
         FileHandle *handle;
-        
+
+	menu_verbose ("method: Creating %s\n", uri->text);
+	
         method = method_checkout ();
 
         handle = NULL;
-        result = file_handle_create (method, uri, mode, exclusive,
-				     perms, &handle);
+        result = file_handle_create (method, uri, mode, &handle,
+				     exclusive, perms);
         *method_handle = (GnomeVFSMethodHandle*) handle;
                 
         method_return (method);
         
         return result;
-#endif
 }
 
 static GnomeVFSResult
@@ -192,7 +193,9 @@ do_close (GnomeVFSMethod       *vtable,
 {
 	/* No thread locks since FileHandle is threadsafe */
 	FileHandle *handle;
-         
+
+	menu_verbose ("method: Closing\n");
+	
         handle = (FileHandle*) method_handle;
 
         file_handle_unref (handle);
@@ -210,6 +213,8 @@ do_read (GnomeVFSMethod       *vtable,
 {
 	/* No thread locks since FileHandle is threadsafe */
 	FileHandle *handle;
+
+	menu_verbose ("method: Reading\n");
 	
 	handle = (FileHandle *) method_handle;
 
@@ -227,6 +232,8 @@ do_write (GnomeVFSMethod       *vtable,
 {
 	/* No thread locks since FileHandle is threadsafe */
 	FileHandle *handle;
+
+	menu_verbose ("method: Writing\n");
 	
 	handle = (FileHandle *) method_handle;
 
@@ -243,6 +250,8 @@ do_seek (GnomeVFSMethod       *vtable,
 {
 	/* No thread locks since FileHandle is threadsafe */
 	FileHandle *handle;
+
+	menu_verbose ("method: Seeking\n");
 	
 	handle = (FileHandle *) method_handle;
 
@@ -256,6 +265,8 @@ do_tell (GnomeVFSMethod       *vtable,
 {
 	/* No thread locks since FileHandle is threadsafe */
 	FileHandle *handle;
+
+	menu_verbose ("method: Telling\n");
 	
 	handle = (FileHandle *) method_handle;
 
@@ -271,6 +282,8 @@ do_truncate_handle (GnomeVFSMethod       *vtable,
 {
 	/* No thread locks since FileHandle is threadsafe */
 	FileHandle *handle;
+
+	menu_verbose ("method: Truncate handle\n");
 	
 	handle = (FileHandle *) method_handle;
 
@@ -285,7 +298,9 @@ do_truncate (GnomeVFSMethod   *vtable,
 {
         MenuMethod *method;
         GnomeVFSResult result;
-        
+
+	menu_verbose ("method: Truncate %s\n", uri->text);
+	
         method = method_checkout ();
 
 	result = menu_method_truncate (method, uri, where, context);
@@ -305,7 +320,9 @@ do_open_directory (GnomeVFSMethod           *vtable,
         MenuMethod *method;
         GnomeVFSResult result;
         DirHandle *handle;
-        
+
+	menu_verbose ("method: Open directory %s\n", uri->text);
+	
         method = method_checkout ();
 
         handle = NULL;
@@ -325,6 +342,8 @@ do_close_directory (GnomeVFSMethod       *vtable,
         MenuMethod *method;
         DirHandle *handle;
 
+	menu_verbose ("method: Close directory\n");
+	
         method = method_checkout ();
         
         handle = (DirHandle*) method_handle;
@@ -345,7 +364,9 @@ do_read_directory (GnomeVFSMethod       *vtable,
         MenuMethod *method;
         DirHandle *handle;
         GnomeVFSResult result;
-        
+
+	menu_verbose ("method: Read directory\n");
+	
         method = method_checkout ();
         
         handle = (DirHandle*) method_handle;
@@ -367,6 +388,9 @@ do_get_file_info (GnomeVFSMethod         *vtable,
         MenuMethod *method;
         GnomeVFSResult result;
 
+	menu_verbose ("method: Get file info on %s\n",
+		      uri->text);
+	
         method = method_checkout ();
 
 	result = menu_method_get_info (method, uri, file_info, options);
@@ -385,6 +409,8 @@ do_get_file_info_from_handle (GnomeVFSMethod         *vtable,
 {
 	/* No thread locks since FileHandle is threadsafe */
 	FileHandle *handle;
+
+	menu_verbose ("method: Get file info from handle\n");
 	
         handle = (FileHandle*) method_handle;
 
@@ -395,7 +421,8 @@ static gboolean
 do_is_local (GnomeVFSMethod    *vtable,
              const GnomeVFSURI *uri)
 {
-
+	menu_verbose ("method: Is local?\n");
+	
         return TRUE;
 }
 
@@ -408,7 +435,9 @@ do_make_directory (GnomeVFSMethod  *vtable,
 {
         MenuMethod *method;
         GnomeVFSResult result;
-        
+
+	menu_verbose ("method: Make directory %s\n", uri->text);
+	
         method = method_checkout ();
 
         result = menu_method_mkdir (method, uri, perm, context);
@@ -425,7 +454,9 @@ do_remove_directory (GnomeVFSMethod  *vtable,
 {
         MenuMethod *method;
         GnomeVFSResult result;
-        
+
+	menu_verbose ("method: Remove directory %s\n", uri->text);
+	
         method = method_checkout ();
 
         result = menu_method_rmdir (method, uri, context);
@@ -458,6 +489,8 @@ do_move (GnomeVFSMethod  *vtable,
 {
         MenuMethod *method;
         GnomeVFSResult result;
+
+	menu_verbose ("method: Move %s -> %s\n", old_uri->text, new_uri->text);
         
         method = method_checkout ();
 
@@ -476,7 +509,9 @@ do_unlink (GnomeVFSMethod  *vtable,
 {
         MenuMethod *method;
         GnomeVFSResult result;
-        
+
+	menu_verbose ("method: Unlink %s\n", uri->text);
+	
         method = method_checkout ();
 
         result = menu_method_unlink (method, uri, context);
@@ -492,7 +527,8 @@ do_create_symbolic_link (GnomeVFSMethod  *vtable,
                          const char      *target_reference,
                          GnomeVFSContext *context)
 {
-
+	menu_verbose ("method: Create symlink %s\n", uri->text);
+	
         return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
@@ -503,8 +539,10 @@ do_check_same_fs (GnomeVFSMethod  *vtable,
                   gboolean        *same_fs_return,
                   GnomeVFSContext *context)
 {
-
-        return GNOME_VFS_ERROR_NOT_SUPPORTED;
+	menu_verbose ("method: Check same fs %s and %s\n",source_uri->text,
+		      target_uri->text);
+	
+	return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
 static GnomeVFSResult
@@ -514,7 +552,8 @@ do_set_file_info (GnomeVFSMethod          *vtable,
                   GnomeVFSSetFileInfoMask  mask,
                   GnomeVFSContext         *context)
 {
-
+	menu_verbose ("method: Set file info %s\n", uri->text);
+	
         return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
@@ -524,7 +563,8 @@ do_monitor_add (GnomeVFSMethod        *vtable,
                 GnomeVFSURI           *uri,
                 GnomeVFSMonitorType    monitor_type)
 {
-
+	menu_verbose ("method: Monitor add %s\n", uri->text);
+	
         return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
@@ -532,7 +572,8 @@ static GnomeVFSResult
 do_monitor_cancel (GnomeVFSMethod       *vtable,
                    GnomeVFSMethodHandle *method_handle)
 {
-
+	menu_verbose ("method: Monitor cancel\n");
+	
         return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
@@ -543,7 +584,8 @@ do_file_control (GnomeVFSMethod       *vtable,
                  gpointer              operation_data,
                  GnomeVFSContext      *context)
 {
-
+	menu_verbose ("method: File control\n");
+	
         return GNOME_VFS_ERROR_NOT_SUPPORTED;
 }
 
@@ -732,6 +774,7 @@ menu_method_resolve_uri (MenuMethod            *method,
 	char *menu_path;
         DesktopEntryTree *tree;
         DesktopEntryTreeNode *node;
+	PathResolution res;
         
         if (tree_p)
                 *tree_p = NULL;
@@ -743,7 +786,7 @@ menu_method_resolve_uri (MenuMethod            *method,
 	if (!unpack_uri (uri, &menu_file, &menu_path, error))
 		return FALSE;
 
-        tree = menu_method_get_tree (method, menu_path, error);
+        tree = menu_method_get_tree (method, menu_file, error);
         if (tree == NULL) {
 		menu_verbose ("Got NULL tree from menu method\n");
 		g_free (menu_path);
@@ -754,8 +797,9 @@ menu_method_resolve_uri (MenuMethod            *method,
          * directory, which is very possible. resolve_path returns
 	 * TRUE if the path is an entry.
          */
-        if (!desktop_entry_tree_resolve_path (tree, menu_path, &node,
-                                              real_path_p, NULL)) {
+	res = desktop_entry_tree_resolve_path (tree, menu_path, &node,
+					       real_path_p, NULL);
+	if (res == PATH_RESOLUTION_NOT_FOUND) {		
                 desktop_entry_tree_unref (tree);
                 g_set_error (error, G_FILE_ERROR,
                              G_FILE_ERROR_EXIST,
@@ -763,7 +807,8 @@ menu_method_resolve_uri (MenuMethod            *method,
                              menu_path);
                 g_free (menu_path);
 
-		menu_verbose ("Failed to resolve path in desktop entry tree\n");
+		menu_verbose ("Failed to resolve path %s in desktop entry tree\n",
+			      menu_path);
 		
                 return FALSE;
         }
@@ -1416,9 +1461,6 @@ file_handle_create (MenuMethod        *method,
 	if (exclusive)
 		unix_flags |= O_EXCL;
 
-	/* FIXME this can't possibly work since it doesn't
-	 * create an item in the DesktopEntryTree
-	 */
 	return unix_open (method, uri, unix_flags, perms, handle);
 }
 

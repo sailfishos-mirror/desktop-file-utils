@@ -196,6 +196,10 @@ free_cache_entry (void *data)
     desktop_entry_tree_unref (entry->tree);
   if (entry->load_failure_reason)
     g_error_free (entry->load_failure_reason);
+
+#if 1
+  memset (entry, 0xff, sizeof (*entry));
+#endif
   
   g_free (entry);
 }
@@ -260,9 +264,11 @@ reload_entry (DesktopEntryTreeCache *cache,
                                           NULL, /* FIXME only show in desktop */
                                           entry->create_chaining_to,
                                           &tmp_error);
-      
-      desktop_entry_tree_unref (entry->tree);
-      g_error_free (entry->load_failure_reason);
+
+      if (entry->tree)
+        desktop_entry_tree_unref (entry->tree);
+      if (entry->load_failure_reason)
+        g_error_free (entry->load_failure_reason);
       
       entry->load_failure_reason = tmp_error;
       entry->tree = reloaded;
@@ -301,7 +307,7 @@ lookup_canonical_entry (DesktopEntryTreeCache *cache,
       
       entry = g_new0 (CacheEntry, 1);
       entry->canonical_path = g_strdup (canonical);
-      entry->create_chaining_to = g_strdup (entry->create_chaining_to);
+      entry->create_chaining_to = g_strdup (create_chaining_to);
 
       entry->needs_reload = TRUE;
       
@@ -498,7 +504,7 @@ try_create_overrides (CacheEntry *entry,
       g_string_truncate (menu_type, menu_type->len - strlen (".menu"));
       g_string_append (menu_type, "-edits");
       
-      d = g_build_filename (info.config_home,
+      d = g_build_filename (info.config_home, "menus",
                             menu_type->str, NULL);
       
       entry->overrides = menu_override_dir_create (d, error);
@@ -526,6 +532,7 @@ desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
   char *menu_path_dirname;
   char *menu_entry_relative_path;
   char *override_dir;
+  PathResolution res;
   
   menu_verbose ("Creating \"%s\" in menu %s\n",
                 menu_path, menu_file);
@@ -547,26 +554,29 @@ desktop_entry_tree_cache_create (DesktopEntryTreeCache *cache,
 
   retval = FALSE;
   override_dir = NULL;
-  
+
+  menu_path_dirname = NULL;
   current_fs_path = NULL;
-  desktop_entry_tree_resolve_path (tree, menu_path,
-                                   NULL, &current_fs_path,
-                                   &menu_entry_relative_path);
+  menu_entry_relative_path = NULL;
+  res = desktop_entry_tree_resolve_path (tree, menu_path,
+                                         NULL, &current_fs_path,
+                                         &menu_entry_relative_path);
+  if (res == PATH_RESOLUTION_IS_DIR)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   G_FILE_ERROR_ISDIR,
+                   _("%s is a directory\n"), menu_path);
+      goto out;
+    }
 
   /* if there's no existing .desktop file we're based on,
-   * we invent a random name to avoid collisions
+   * we use the simplest possible basename
    */
   if (menu_entry_relative_path == NULL)
     {
-      GString *str;
-
-      str = g_string_new ("menuitem-");
-      g_string_append_random_ascii (str, 10);
-      g_string_append (str, ".desktop");
+      menu_entry_relative_path = g_path_get_basename (menu_path);
       
-      menu_entry_relative_path = g_string_free (str, FALSE);
-      
-      menu_verbose ("Generated new entry name \"%s\"\n",
+      menu_verbose ("Using new entry name \"%s\"\n",
                     menu_entry_relative_path);
     }
 

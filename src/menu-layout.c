@@ -928,32 +928,29 @@ nodes_have_same_content (MenuNode *a,
 }
 
 void
-menu_node_remove_redundancy (MenuNode *node)
+remove_redundant_nodes (MenuNode    *node,
+                        MenuNodeType type1,
+                        gboolean     have_type2,
+                        MenuNodeType type2)
 {
   MenuNode *child;
   MenuNode *prev;
 
-  menu_verbose ("Removing redundancy in menu node %p\n",
-                node);
-  
+  menu_verbose ("Removing redundancy in menu node %p for types %d and %d\n",
+                node, type1, type2);
+
   prev = NULL;
   child = menu_node_get_children (node);
   while (child != NULL)
     {
-      switch (menu_node_get_type (child))
+      MenuNodeType t;
+      
+      t = menu_node_get_type (child);
+
+      if (t == type1 ||
+          (have_type2 && t == type2))
         {
-          /* These are dups if their content is the same */
-        case MENU_NODE_APP_DIR:
-        case MENU_NODE_DIRECTORY_DIR:
-        case MENU_NODE_DIRECTORY:
-        case MENU_NODE_INCLUDE:
-        case MENU_NODE_EXCLUDE:
           if (prev &&
-              ((prev->type == child->type) ||
-               (prev->type == MENU_NODE_EXCLUDE &&
-                child->type == MENU_NODE_INCLUDE) ||
-               (prev->type == MENU_NODE_INCLUDE &&
-                child->type == MENU_NODE_EXCLUDE)) &&
               nodes_have_same_content (prev, child))
             {
               menu_verbose ("Consolidating two adjacent nodes with types %d %d content %s\n",
@@ -962,29 +959,146 @@ menu_node_remove_redundancy (MenuNode *node)
                             menu_node_get_content (child) : "(none)");
               menu_node_unlink (prev);
             }
-          break;
+          prev = child;
+        }
+      else if (t == MENU_NODE_MERGE_FILE ||
+               t == MENU_NODE_MERGE_DIR)
+        {
+          /* merging in a file means we can't consolidate as we don't
+           * know what's in between
+           */
+          menu_verbose ("Can't consolidate nodes across MergeFile/MergeDir\n");
+          prev = NULL;
+        }
 
-        case MENU_NODE_DELETED:
-        case MENU_NODE_NOT_DELETED:
+      child = menu_node_get_next (child);
+    }
+}
+
+void
+remove_redundant_match_rule (MenuNode    *node,
+                             MenuNodeType type1)
+{
+  MenuNode *child;
+  MenuNode *prev;
+
+  menu_verbose ("Removing redundant match rules in menu node %p for type %d\n",
+                node, type1);
+
+  prev = NULL;
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      MenuNodeType t;
+      
+      t = menu_node_get_type (child);
+
+      if (t == type1)
+        {
           if (prev &&
-              (prev->type == MENU_NODE_DELETED ||
-               prev->type == MENU_NODE_NOT_DELETED))
+              nodes_have_same_content (prev, child))
             {
-              menu_verbose ("Consolidating two adjacent Deleted/NotDeleted nodes\n");
+              menu_verbose ("Consolidating two adjacent nodes with types %d %d content %s\n",
+                            prev->type, child->type,
+                            menu_node_get_content (child) ?
+                            menu_node_get_content (child) : "(none)");
               menu_node_unlink (prev);
             }
-          break;
-          
+          prev = child;
+        }
+      else
+        {
+          /* Can't merge across intervening stuff */
+          menu_verbose ("Can't consolidate nodes across node of type %d\n", t);
+          switch (t)
+            {
+            case MENU_NODE_MERGE_FILE:
+            case MENU_NODE_MERGE_DIR:
+            case MENU_NODE_ALL:
+            case MENU_NODE_AND:
+            case MENU_NODE_OR:
+            case MENU_NODE_NOT:
+            case MENU_NODE_CATEGORY:
+            case MENU_NODE_FILENAME:
+              prev = NULL;
+            }
+        }
+
+      child = menu_node_get_next (child);
+    }
+}
+
+void
+remove_empty_containers (MenuNode    *node)
+{
+  MenuNode *child;
+
+  menu_verbose ("Removing empty container nodes in %p\n", node);
+
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      MenuNodeType t;
+      MenuNode *next;
+
+      next = menu_node_get_next (child);
+      
+      t = menu_node_get_type (child);
+
+      switch (t)
+        {
         case MENU_NODE_MENU:
-          /* recurse */
-          menu_node_remove_redundancy (child);
+        case MENU_NODE_INCLUDE:
+        case MENU_NODE_EXCLUDE:
+        case MENU_NODE_AND:
+        case MENU_NODE_OR:
+        case MENU_NODE_NOT:
+        case MENU_NODE_MOVE:
+          if (menu_node_get_children (child) == NULL)
+            menu_node_unlink (child);
           break;
           
         default:
           break;
         }
+      
+      child = next;
+    }
+}
 
-      prev = child;
+void
+menu_node_remove_redundancy (MenuNode *node)
+{
+  MenuNode *child;
+
+  menu_verbose ("Removing redundancy in menu node %p\n",
+                node);
+  
+  remove_redundant_match_rule (node, MENU_NODE_FILENAME);
+  remove_redundant_match_rule (node, MENU_NODE_CATEGORY);
+  
+  remove_redundant_nodes (node, MENU_NODE_DELETED,
+                          TRUE, MENU_NODE_NOT_DELETED);
+
+  remove_redundant_nodes (node, MENU_NODE_APP_DIR,
+                          FALSE, 0);
+
+  remove_redundant_nodes (node, MENU_NODE_DIRECTORY_DIR,
+                          FALSE, 0);
+
+  remove_redundant_nodes (node, MENU_NODE_DIRECTORY,
+                          FALSE, 0);
+
+  remove_empty_containers (node);
+  
+  /* Recurse */
+  
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      if (menu_node_get_type (child) == MENU_NODE_MENU)
+        menu_node_remove_redundancy (child);
+
       child = menu_node_get_next (child);
     }
 }
@@ -1181,6 +1295,9 @@ menu_cache_get_menu_for_canonical_file (MenuCache  *cache,
 {
   MenuFile *file;
   MenuNode *node;
+
+  menu_verbose ("menu_cache_get_menu_for_canonical_file(): \"%s\" chaining to \"%s\"\n",
+                canonical, create_chaining_to ? create_chaining_to : "(none)");
   
   file = find_file_by_name (cache, canonical);
   
@@ -1240,6 +1357,9 @@ menu_cache_get_menu_for_file (MenuCache  *cache,
   char *canonical;
   MenuNode *node;
 
+  menu_verbose ("menu_cache_get_menu_for_file(): \"%s\" chaining to \"%s\"\n",
+                filename, create_chaining_to ? create_chaining_to : "(none)");
+  
   canonical = g_canonicalize_file_name (filename, create_chaining_to != NULL);
   if (canonical == NULL)
     {

@@ -29,6 +29,7 @@ typedef struct _DesktopEntryTree DesktopEntryTree;
 typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree *tree,
                                                   gboolean          is_dir,
                                                   int               depth,
+                                                  const char       *menu_dirname,
                                                   const char       *menu_path,
                                                   const char       *filesystem_path_to_entry,
                                                   void             *data);

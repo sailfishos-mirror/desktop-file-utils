@@ -31,5 +31,7 @@ main (int argc, char **argv)
   if (!dfu_test_menu_nodes (test_data_dir))
     g_error ("Menu nodes test failed\n");
 
+  g_print ("All tests passed.\n");
+  
   return 0;
 }

@@ -385,7 +385,7 @@ menu_node_strip_duplicate_children (MenuNode *node)
 typedef struct
 {
   char   *name;
-  Entry  *dir_entry;
+  Entry  *dir_entry; /* may be NULL, name should be used as user-visible dirname */
   GSList *entries;
   GSList *subdirs;
 } TreeNode;
@@ -607,7 +607,10 @@ desktop_entry_tree_get_directory (DesktopEntryTree *tree,
   if (dir == NULL)
     return NULL;
 
-  return g_strdup (entry_get_absolute_path (dir->dir_entry));
+  if (dir->dir_entry)
+    return g_strdup (entry_get_absolute_path (dir->dir_entry));
+  else
+    return NULL;
 }
 
 static gboolean
@@ -622,8 +625,9 @@ foreach_dir (DesktopEntryTree            *tree,
   if (! (* func) (tree,
                   TRUE,
                   depth,
+                  dir->name,
                   NULL, /* FIXME */
-                  entry_get_absolute_path (dir->dir_entry),
+                  dir->dir_entry ? entry_get_absolute_path (dir->dir_entry) : NULL,
                   user_data))
     return FALSE;
   
@@ -634,7 +638,8 @@ foreach_dir (DesktopEntryTree            *tree,
 
       if (! (* func) (tree,
                       FALSE,
-                      depth,
+                      depth + 1,
+                      entry_get_name (e),
                       NULL, /* FIXME */
                       entry_get_absolute_path (e),
                       user_data))
@@ -722,11 +727,9 @@ tree_node_free (TreeNode *node)
 static gboolean
 tree_node_free_if_broken (TreeNode *node)
 {
-  if (node->name == NULL ||
-      node->dir_entry == NULL)
+  if (node->name == NULL)
     {
-      menu_verbose ("Broken node name = %p dir_entry = %p for <Menu>\n",
-                    node->name, node->dir_entry);
+      menu_verbose ("Broken node is missing <Name>\n");
       tree_node_free (node);
       return TRUE;
     }
@@ -900,6 +903,9 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
             if (tree_node->name)
               g_free (tree_node->name); /* should not happen */
             tree_node->name = g_strdup (menu_node_get_content (child));
+
+            menu_verbose ("Processed <Name> new name = %p (%s)\n",
+                          tree_node->name, tree_node->name ? tree_node->name : "none");
           }
           break;
           
@@ -967,6 +973,8 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
                   entry_unref (tree_node->dir_entry);
                 tree_node->dir_entry = e; /* pass ref ownership */
               }
+
+            menu_verbose ("Processed <Directory> new dir_entry = %p\n", tree_node->dir_entry);
           }
           break;
         default:
@@ -1006,6 +1014,7 @@ static gboolean
 foreach_print (DesktopEntryTree *tree,
                gboolean          is_dir,
                int               depth,
+               const char       *menu_dirname,
                const char       *menu_path,
                const char       *filesystem_path_to_entry,
                void             *data)
@@ -1016,20 +1025,58 @@ foreach_print (DesktopEntryTree *tree,
   GnomeDesktopFile *df;
   GError *error;
   char *fields[MAX_FIELDS] = { NULL, NULL, NULL };
-  char *s;
+  char *name;
+  char *generic_name;
+  char *comment;
+
+  g_assert (menu_dirname != NULL);
   
   pd = data;
 
+  name = NULL;
+  generic_name = NULL;
+  comment = NULL;
+  
+  df = NULL;
   error = NULL;
-  df = gnome_desktop_file_load (filesystem_path_to_entry, &error);
-  if (df == NULL)
+  if (filesystem_path_to_entry != NULL)
     {
-      g_printerr ("Warning: failed to load desktop file \"%s\": %s\n",
-                  filesystem_path_to_entry, error->message);
-      g_error_free (error);
-      return TRUE;
+      df = gnome_desktop_file_load (filesystem_path_to_entry, &error);
+      if (df == NULL)
+        {
+          g_printerr ("Warning: failed to load desktop file \"%s\": %s\n",
+                      filesystem_path_to_entry, error->message);
+          g_error_free (error);
+        }
+      g_assert (error == NULL);
     }
-  g_assert (error == NULL);
+
+  if (df != NULL)
+    {
+      gnome_desktop_file_get_locale_string (df,
+                                            NULL,
+                                            "Name",
+                                            &name);
+      gnome_desktop_file_get_locale_string (df,
+                                            NULL,
+                                            "GenericName",
+                                            &generic_name);
+      gnome_desktop_file_get_locale_string (df,
+                                            NULL,
+                                            "Comment",
+                                            &comment);
+      gnome_desktop_file_free (df);
+      df = NULL;
+    }
+
+  if (name == NULL)
+    name = g_strdup (menu_dirname);
+
+  if (generic_name == NULL)
+    generic_name = g_strdup (_("<missing GenericName>"));    
+
+  if (comment == NULL)
+    comment = g_strdup (_("<missing Comment>"));
   
   i = depth;
   while (i > 0)
@@ -1041,37 +1088,19 @@ foreach_print (DesktopEntryTree *tree,
   i = 0;
   if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_NAME)
     {
-      if (!gnome_desktop_file_get_locale_string (df,
-                                                 NULL,
-                                                 "Name",
-                                                 &s))
-        s = g_strdup (_("<missing Name>"));
-
-      fields[i] = s;      
+      fields[i] = name;  
       ++i;
     }
   
   if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME)
-    {
-      if (!gnome_desktop_file_get_locale_string (df,
-                                                 NULL,
-                                                 "GenericName",
-                                                 &s))
-        s = g_strdup (_("<missing GenericName>"));
-      
-      fields[i] = s;
+    {      
+      fields[i] = generic_name;
       ++i;
     }
 
   if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_COMMENT)
-    {
-      if (!gnome_desktop_file_get_locale_string (df,
-                                                 NULL,
-                                                 "Comment",
-                                                 &s))
-        s = g_strdup (_("<missing Comment>"));
-      
-      fields[i] = s;
+    {      
+      fields[i] = comment;
       ++i;
     }
 
@@ -1091,14 +1120,9 @@ foreach_print (DesktopEntryTree *tree,
       break;
     }
 
-  --i;
-  while (i >= 0)
-    {
-      g_free (fields[i]);
-      --i;
-    }
-
-  gnome_desktop_file_free (df);
+  g_free (name);
+  g_free (generic_name);
+  g_free (comment);
   
   return TRUE;
 }

@@ -1,3 +1,10 @@
+2003-05-05  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.c (tree_node_free_if_broken): allow nodes with
+	NULL dir_entry, the menu spec allows that.
+	(foreach_dir, foreach_print): assorted fixes, can now print a
+	trivial two-item menu.
+
 2003-05-02  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-layout.c (menu_node_menu_ensure_entry_lists): create

@@ -1,3 +1,21 @@
+2003-05-28  Havoc Pennington  <hp@redhat.com>
+
+	* src/canonicalize.c (g_canonicalize_file_name): add
+	allow_missing_basename argument
+
+	* src/menu-tree-cache.c (init_xdg_paths): hack to pass in 
+	the create_chaining_to to desktop_entry_tree_load()
+
+	* src/menu-method.c (menu_method_get_tree): adapt to new API
+
+	* src/menu-process.c (desktop_entry_tree_load): take 
+	an argument which is the menu file to chain to 
+	in a newly-created menu file
+	
+	* src/menu-layout.c (menu_cache_get_menu_for_file): 
+	same, allow specifying a file to chain to if we 
+	create a new menu file
+
 2003-05-21  Havoc Pennington  <hp@redhat.com>
 
         Enough bugfixes to be able to view a sample menu in nautilus and 

@@ -146,6 +146,7 @@ menu_node_resolve_files (MenuCache  *menu_cache,
             
             to_merge = menu_cache_get_menu_for_file (menu_cache,
                                                      filename,
+                                                     NULL,
                                                      NULL); /* missing files ignored */
             if (to_merge == NULL)
               goto done;
@@ -421,6 +422,7 @@ static void tree_node_free (TreeNode *node);
 DesktopEntryTree*
 desktop_entry_tree_load (const char  *filename,
                          const char  *only_show_in_desktop,
+                         const char  *create_chaining_to,
                          GError     **error)
 {
   DesktopEntryTree *tree;
@@ -432,7 +434,7 @@ desktop_entry_tree_load (const char  *filename,
 
   menu_verbose ("Loading desktop entry tree at \"%s\"\n", filename);
   
-  canonical = g_canonicalize_file_name (filename);
+  canonical = g_canonicalize_file_name (filename, create_chaining_to != NULL);
   if (canonical == NULL)
     {
       g_set_error (error, G_FILE_ERROR,
@@ -448,6 +450,7 @@ desktop_entry_tree_load (const char  *filename,
   
   orig_node = menu_cache_get_menu_for_canonical_file (menu_cache,
                                                       canonical,
+                                                      create_chaining_to,
                                                       error);
   if (orig_node == NULL)    
     {

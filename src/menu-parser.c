@@ -743,7 +743,11 @@ menu_load (const char *filename,
                             &text,
                             &length,
                             err))
-    return NULL;
+    {
+      menu_verbose ("Failed to load \"%s\"\n",
+                    filename);
+      return NULL;
+    }
   
   g_assert (text);
 

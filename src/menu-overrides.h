@@ -43,4 +43,8 @@ char*            menu_override_dir_get_fs_path (MenuOverrideDir  *override,
                                                 const char       *menu_path,
                                                 const char       *name_to_unoverride);
 
+gboolean g_create_dir (const char    *dir,
+                       unsigned int   mode,
+                       GError       **err);
+
 #endif /* MENU_OVERRIDES_H */

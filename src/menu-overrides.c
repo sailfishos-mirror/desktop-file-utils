@@ -23,23 +23,29 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-static gboolean
-create_fs_dir (const char    *dir,
-               unsigned int   mode,
-               GError       **err)
+#include <libintl.h>
+#define _(x) gettext ((x))
+#define N_(x) x
+
+gboolean
+g_create_dir (const char    *dir,
+              unsigned int   mode,
+              GError       **err)
 {
   char *parent;
   
-  menu_verbose ("Creating directory \"%s\" mode %o", dir, mode);
+  menu_verbose ("Creating directory \"%s\" mode %o\n", dir, mode);
   
   parent = g_path_get_dirname (dir);
 
-  menu_verbose ("Parent dir is \"%s\"", parent);
+  menu_verbose ("Parent dir is \"%s\"\n", parent);
 
   if (!g_file_test (parent, G_FILE_TEST_IS_DIR))
     {
-      if (!create_fs_dir (parent, mode, err))
+      if (!g_create_dir (parent, mode, err))
         {
           menu_verbose ("Failed to create parent dir\n");
           g_free (parent);
@@ -78,7 +84,7 @@ menu_override_dir_create (const char       *path,
 {
   MenuOverrideDir *override;
 
-  if (!create_fs_dir (path, 0755, error))
+  if (!g_create_dir (path, 0755, error))
     return NULL;
 
   override = g_new0 (MenuOverrideDir, 1);
@@ -120,11 +126,13 @@ menu_override_dir_add (MenuOverrideDir  *override,
   char *fs_dir_path;
   char *fs_file_path;
   gboolean retval;
+
+  retval = FALSE;
   
   fs_dir_path =
     menu_override_dir_get_fs_path (override, menu_path, NULL);
 
-  if (!create_fs_dir (fs_dir_path, 0755, error))
+  if (!g_create_dir (fs_dir_path, 0755, error))
     {
       g_free (fs_dir_path);
       return FALSE;
@@ -142,12 +150,18 @@ menu_override_dir_add (MenuOverrideDir  *override,
 
       if (!g_file_get_contents (based_on_fs_path, &contents, &len,
                                 error))
-        goto out;
+        {
+          menu_verbose ("Failed to get contents of \"%s\"\n",
+                        based_on_fs_path);
+          goto out;
+        }
       
       if (!g_file_save_atomically (fs_file_path,
                                    contents, len,
                                    error))
         {
+          menu_verbose ("Failed to save \"%s\"\n",
+                        fs_file_path);
           g_free (contents);
           goto out;
         }
@@ -168,8 +182,30 @@ menu_override_dir_remove (MenuOverrideDir  *override,
                           const char       *name_to_unoverride,
                           GError          **error)
 {
+  char *fs_dir_path;
+  char *fs_file_path;  
+  
+  fs_file_path =
+    menu_override_dir_get_fs_path (override, menu_path, name_to_unoverride);
+  if (unlink (fs_file_path) < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to remove file \"%s\": %s\n"),
+                   fs_file_path, g_strerror (errno));
+      g_free (fs_file_path);
+      return FALSE;
+    }
 
+  /* always try removing the directory, it will fail if the dir isn't
+   * empty and succeed if the directory has nothing worthwhile in it.
+   */
+  fs_dir_path =
+    menu_override_dir_get_fs_path (override, menu_path, NULL);
+  rmdir (fs_dir_path);
+  g_free (fs_dir_path);
 
+  return TRUE;
 }
 
 char*
@@ -179,11 +215,11 @@ menu_override_dir_get_fs_path (MenuOverrideDir  *override,
 {
   char *path;
 
-  g_return_val_if_fail (override != NULL);
-  g_return_val_if_fail (override->refcount > 0);
-  g_return_val_if_fail (menu_path != NULL);
+  g_return_val_if_fail (override != NULL, NULL);
+  g_return_val_if_fail (override->refcount > 0, NULL);
+  g_return_val_if_fail (menu_path != NULL, NULL);
   
-  /* name_to_override is allowed to be NULL */
+  /* name_to_unoverride is allowed to be NULL */
   
   path = g_build_filename (override->root_dir,
                            menu_path,

@@ -234,7 +234,7 @@ entry_get_by_absolute_path (EntryCache *cache,
   retval = NULL;
   dirname = g_path_get_basename (path);
 
-  canonical = g_canonicalize_file_name (dirname);
+  canonical = g_canonicalize_file_name (dirname, FALSE);
   if (canonical == NULL)
     {
       menu_verbose ("Error %d getting entry \"%s\": %s\n", errno, path,
@@ -270,7 +270,7 @@ entry_directory_load  (EntryCache     *cache,
 
   menu_verbose ("Loading entry directory \"%s\"\n", path);
   
-  canonical = g_canonicalize_file_name (path);
+  canonical = g_canonicalize_file_name (path, FALSE);
   if (canonical == NULL)
     {
       g_set_error (err, ENTRY_ERROR,

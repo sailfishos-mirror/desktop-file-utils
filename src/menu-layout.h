@@ -125,9 +125,11 @@ const char* menu_cache_get_filename_for_node (MenuCache *cache,
  */
 MenuNode* menu_cache_get_menu_for_file           (MenuCache   *cache,
                                                   const char  *filename,
+                                                  const char  *create_chaining_to,
                                                   GError     **error);
 MenuNode* menu_cache_get_menu_for_canonical_file (MenuCache   *cache,
                                                   const char  *filename,
+                                                  const char  *create_chaining_to,
                                                   GError     **error);
 gboolean  menu_cache_sync_for_file               (MenuCache   *cache,
                                                   const char  *filename,

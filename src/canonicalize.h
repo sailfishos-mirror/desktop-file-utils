@@ -22,7 +22,8 @@
 #ifndef G_CANONICALIZE_H
 #define G_CANONICALIZE_H
 
-char* g_canonicalize_file_name (const char *name);
+char* g_canonicalize_file_name (const char *name,
+                                gboolean    allow_missing_basename);
 
 #endif
 

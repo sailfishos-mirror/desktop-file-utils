@@ -538,11 +538,15 @@ menu_method_get_tree (MenuMethod  *method,
 {
         DesktopEntryTree *tree;
 
+	menu_verbose ("Getting scheme %s tree\n", scheme);
+	
         if (strcmp (scheme, "menu-test") == 0) {
                 tree = desktop_entry_tree_cache_lookup (method->cache,
                                                         "applications.menu",
+							TRUE,
                                                         error);
         } else {
+		menu_verbose ("Unknown protocol %s\n", scheme);
                 g_set_error (error, G_FILE_ERROR,
                              G_FILE_ERROR_FAILED,
                              _("Unknown protocol \"%s\"\n"),
@@ -577,8 +581,10 @@ menu_method_resolve_uri (MenuMethod            *method,
         g_assert (scheme != NULL);
         
         tree = menu_method_get_tree (method, scheme, error);
-        if (tree == NULL)
+        if (tree == NULL) {
+		menu_verbose ("Got NULL tree from menu method\n");
                 return FALSE;
+	}
         
         unescaped = gnome_vfs_unescape_string (uri->text, "");
 
@@ -593,6 +599,9 @@ menu_method_resolve_uri (MenuMethod            *method,
                              _("No such file or directory \"%s\"\n"),
                              unescaped);
                 g_free (unescaped);
+
+		menu_verbose ("Failed to resolve path in desktop entry tree\n");
+		
                 return FALSE;
         }
 

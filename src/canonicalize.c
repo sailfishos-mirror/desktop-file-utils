@@ -220,8 +220,35 @@ error:
 }
 
 char *
-g_canonicalize_file_name (const char *name)
+g_canonicalize_file_name (const char *name,
+                          gboolean    allow_missing_basename)
 {
-  return g_realpath (name, NULL);
+  char *retval;
+  
+  retval = g_realpath (name, NULL);
+
+  /* We could avoid some system calls by using the second
+   * argument to g_realpath() instead of doing realpath
+   * all over again, but who cares really. we'll see if
+   * it's ever in a profile.
+   */
+  if (allow_missing_basename && retval == NULL)
+    {
+      char *dirname;
+      char *canonical_dirname;
+      dirname = g_path_get_dirname (name);
+      canonical_dirname = g_realpath (dirname, NULL);
+      g_free (dirname);
+      if (canonical_dirname)
+        {
+          char *basename;
+          basename = g_path_get_basename (name);
+          retval = g_build_filename (canonical_dirname, basename, NULL);
+          g_free (basename);
+          g_free (canonical_dirname);
+        }
+    }
+
+  return retval;
 }
 

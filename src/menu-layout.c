@@ -997,9 +997,50 @@ drop_menu_file (MenuCache *cache,
   g_free (file);
 }
 
+static gboolean
+create_menu_file (const char *canonical,
+                  const char *create_chaining_to,
+                  GError    **error)
+{
+  GString *str;
+  char *escaped;
+  gboolean retval;
+
+  menu_verbose ("Creating new menu file \"%s\" chaining to \"%s\"\n",
+                canonical, create_chaining_to);
+  
+  str = g_string_new (NULL);
+
+  g_string_append (str,
+                   "<!DOCTYPE Menu PUBLIC \"-//freedesktop//DTD Menu 1.0//EN\"\n"
+                   "\"http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd\">\n"
+                   "\n"
+                   "<!-- File created by desktop-file-utils version " VERSION " -->\n"
+                   "<Menu>\n"
+                   "  <Name>Applications</Name>\n"
+                   "  <MergeFile>");
+
+  escaped = g_markup_escape_text (create_chaining_to, -1);
+
+  g_string_append (str, escaped);
+
+  g_free (escaped);
+  
+  g_string_append (str,
+                   "</MergeFile>\n"
+                   "</Menu>\n");
+
+  retval = g_file_save_atomically (canonical, str->str, str->len, error);
+
+  g_string_free (str, TRUE);
+
+  return retval;
+}
+
 MenuNode*
 menu_cache_get_menu_for_canonical_file (MenuCache  *cache,
                                         const char *canonical,
+                                        const char *create_chaining_to,
                                         GError    **error)
 {
   MenuFile *file;
@@ -1017,6 +1058,26 @@ menu_cache_get_menu_for_canonical_file (MenuCache  *cache,
   menu_verbose ("File \"%s\" not in cache\n", canonical);
   
   node = menu_load (canonical, error);
+
+  if (node == NULL &&
+      create_chaining_to)
+    {
+      GError *tmp_error;
+      tmp_error = NULL;
+      if (!create_menu_file (canonical, create_chaining_to,
+                             &tmp_error))
+        {
+          menu_verbose ("Failed to create file \"%s\": %s\n",
+                        canonical, tmp_error->message);
+          g_error_free (tmp_error);
+        }
+      else
+        {
+          g_clear_error (error);
+          node = menu_load (canonical, error);
+        }
+    }
+
   if (node == NULL)
     return NULL; /* FIXME - cache failures? */
 
@@ -1037,12 +1098,13 @@ menu_cache_get_menu_for_canonical_file (MenuCache  *cache,
 MenuNode*
 menu_cache_get_menu_for_file (MenuCache  *cache,
                               const char *filename,
+                              const char *create_chaining_to,
                               GError    **error)
 {
   char *canonical;
   MenuNode *node;
 
-  canonical = g_canonicalize_file_name (filename);
+  canonical = g_canonicalize_file_name (filename, create_chaining_to != NULL);
   if (canonical == NULL)
     {
       g_set_error (error, G_FILE_ERROR,
@@ -1054,6 +1116,7 @@ menu_cache_get_menu_for_file (MenuCache  *cache,
   
   node = menu_cache_get_menu_for_canonical_file (cache,
                                                  canonical,
+                                                 create_chaining_to,
                                                  error);
 
   g_free (canonical);
@@ -1389,7 +1452,7 @@ menu_cache_sync_for_file (MenuCache   *cache,
   retval = FALSE;
   str = NULL;
   
-  canonical = g_canonicalize_file_name (filename);
+  canonical = g_canonicalize_file_name (filename, TRUE);
   if (canonical == NULL)
     {
       g_set_error (error, G_FILE_ERROR,

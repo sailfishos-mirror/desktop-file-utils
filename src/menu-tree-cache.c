@@ -21,6 +21,7 @@
 #include "menu-tree-cache.h"
 #include "menu-process.h"
 #include "menu-layout.h"
+#include "menu-overrides.h"
 #include "canonicalize.h"
 #include <glib.h>
 #include <string.h>
@@ -38,6 +39,8 @@ struct XdgPathInfo
   char  *config_home;
   char **data_dirs;
   char **config_dirs;
+  const char *first_system_data;
+  const char *first_system_config;
 };
 
 static char**
@@ -112,7 +115,7 @@ init_xdg_paths (XdgPathInfo *info_p)
       const char *p;
 
       p = g_getenv ("XDG_DATA_HOME");
-      if (p != NULL)
+      if (p != NULL && *p != '\0')
         info.data_home = g_strdup (p);
       else
         info.data_home = g_build_filename (g_get_home_dir (),
@@ -120,21 +123,24 @@ init_xdg_paths (XdgPathInfo *info_p)
                                            NULL);
                 
       p = g_getenv ("XDG_CONFIG_HOME");
-      if (p != NULL)
+      if (p != NULL && *p != '\0')
         info.config_home = g_strdup (p);
       else
         info.config_home = g_build_filename (g_get_home_dir (),
                                              ".config", NULL);
                         
       p = g_getenv ("XDG_DATA_DIRS");
-      if (p == NULL)
+      if (p == NULL || *p == '\0')
         p = PREFIX"/local/share:"DATADIR;
       info.data_dirs = parse_search_path_and_prepend (p, info.data_home);
-                
+      info.first_system_data = info.data_dirs[1];
+      
       p = g_getenv ("XDG_CONFIG_DIRS");
-      if (p == NULL)
+      if (p == NULL || *p == '\0')
         p = SYSCONFDIR"/xdg";
       info.config_dirs = parse_search_path_and_prepend (p, info.config_home);
+      info.first_system_config = info.config_dirs[1];
+      
 #ifndef DFU_MENU_DISABLE_VERBOSE
       {
         int q;
@@ -236,6 +242,7 @@ desktop_entry_tree_cache_unref (DesktopEntryTreeCache *cache)
 static DesktopEntryTree*
 lookup_canonical (DesktopEntryTreeCache *cache,
                   const char            *canonical,
+                  const char            *create_chaining_to,
                   GError               **error)
 {
   CacheEntry *entry;
@@ -252,6 +259,7 @@ lookup_canonical (DesktopEntryTreeCache *cache,
       entry->canonical_path = g_strdup (canonical);
       entry->tree = desktop_entry_tree_load (canonical,
                                              NULL, /* FIXME only show in desktop */
+                                             create_chaining_to,
                                              &entry->load_failure_reason);
       g_hash_table_replace (cache->entries, entry->canonical_path,
                             entry);
@@ -285,6 +293,7 @@ lookup_canonical (DesktopEntryTreeCache *cache,
 static DesktopEntryTree*
 lookup_absolute (DesktopEntryTreeCache *cache,
                  const char            *absolute,
+                 const char            *create_chaining_to,
                  GError               **error)
 {
   DesktopEntryTree *tree;
@@ -300,25 +309,25 @@ lookup_absolute (DesktopEntryTreeCache *cache,
    */
   if (g_hash_table_lookup (cache->entries, absolute) != NULL)
     {
-      tree = lookup_canonical (cache, absolute, error);
+      tree = lookup_canonical (cache, absolute, create_chaining_to, error);
       if (tree != NULL)
         return tree;
     }
 
   /* Now really canonicalize it and try again */
-  canonical = g_canonicalize_file_name (absolute);
+  canonical = g_canonicalize_file_name (absolute, TRUE);
   if (canonical == NULL)
     {
       g_set_error (error, G_FILE_ERROR,
                    g_file_error_from_errno (errno),
                    _("Could not find or canonicalize the file \"%s\"\n"),
                    absolute);
-      menu_verbose ("Failed to canonicalize: \"%s\"\n",
-                    absolute);
+      menu_verbose ("Failed to canonicalize: \"%s\": %s\n",
+                    absolute, g_strerror (errno));
       return NULL;
     }
   
-  tree = lookup_canonical (cache, canonical, error);
+  tree = lookup_canonical (cache, canonical, create_chaining_to, error);
   g_free (canonical);
   return tree;
 }
@@ -330,14 +339,19 @@ lookup_absolute (DesktopEntryTreeCache *cache,
 DesktopEntryTree*
 desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
                                  const char            *menu_file,
+                                 gboolean               create_user_file,
                                  GError               **error)
 {
+  DesktopEntryTree *retval;
+
+  retval = NULL;
+  
   /* menu_file may be absolute, or if relative should be searched
    * for in the xdg dirs.
    */
   if (g_path_is_absolute (menu_file))
     {
-      return lookup_absolute (cache, menu_file, error);
+      retval = lookup_absolute (cache, menu_file, NULL, error);
     }
   else
     {
@@ -350,26 +364,57 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
       canonical = g_hash_table_lookup (cache->basename_to_canonical,
                                        menu_file);
       if (canonical != NULL)
-        return lookup_canonical (cache, canonical, error);
+        {
+          retval = lookup_canonical (cache, canonical, NULL, error);
+          goto out;
+        }
 
       /* Now look for the file in the path */
       init_xdg_paths (&info);
-
+      
       i = 0;
       while (info.config_dirs[i] != NULL)
         {
           char *absolute;
+          char *chain_to;
 
           absolute = g_build_filename (info.config_dirs[i],
                                        "menus", menu_file, NULL);
 
-          tree = lookup_absolute (cache, absolute, error);
+          if (i == 0 && create_user_file)
+            {
+              char *dirname;
+              
+              chain_to = g_build_filename (info.first_system_config,
+                                           "menus", menu_file, NULL);
+              
+              /* Create directory for the user menu file */
+              dirname = g_build_filename (info.config_dirs[i], "menus",
+                                          NULL);
+
+              menu_verbose ("Will chain to \"%s\" from user file \"%s\" in directory \"%s\"\n",
+                            chain_to, absolute, dirname);
+              
+              /* ignore errors, if it's a problem stuff will fail
+               * later.
+               */
+              g_create_dir (dirname, 0755, NULL);
+              g_free (dirname);
+            }
+          else
+            chain_to = NULL;
+          
+          tree = lookup_absolute (cache, absolute, chain_to, error);
           g_free (absolute);
+          g_free (chain_to);
+          
           if (tree != NULL)
             {
               /* in case an earlier lookup piled up */
+              menu_verbose ("Successfully got tree %p\n", tree);
               g_clear_error (error);
-              return tree;
+              retval = tree;
+              goto out;
             }
           
           ++i;
@@ -378,8 +423,10 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
       /* We didn't find anything; the error from the last lookup
        * should still be set.
        */
-
-      return NULL;
     }
+
+ out:
+  
+  return retval;
 }
 

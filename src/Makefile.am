@@ -32,6 +32,8 @@ menu_sources=					\
 	menu-entries.h				\
 	menu-layout.c				\
 	menu-layout.h				\
+	menu-overrides.c			\
+	menu-overrides.h			\
 	menu-parser.c				\
 	menu-parser.h				\
 	menu-process.c				\

@@ -2448,9 +2448,9 @@ egg_desktop_entries_get_locale_country (const gchar *locale)
     q = strstr (p, "@");
 
   if (!q)
-    country_len = q - p;
-  else
     country_len = strlen (p);
+  else
+    country_len = q - p;
 
   if (country_len <= 0)
     return NULL;

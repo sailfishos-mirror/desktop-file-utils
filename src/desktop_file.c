@@ -1451,8 +1451,11 @@ gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
               while (j < n_values && values[j] == NULL)
                 j++;
 
-              values[i] = values[j];
-              values[j] = NULL;
+              if (j < n_values)
+                {
+                  values[i] = values[j];
+                  values[j] = NULL;
+                }
             }
 
           ++i;

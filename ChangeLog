@@ -1,3 +1,15 @@
+2004-09-29  Ray Strode  <rstrode@redhat.com>
+
+	* src/desktop_file.c:
+	(gnome_desktop_file_remove_string_from_list):
+	Bounds check before doing array assignment
+
+	* src/eggdesktopentries 
+	(egg_desktop_entries_get_locale_country):
+	Don't put the if clause where the else clause should
+	go and vice versa (Spotted by Nicholas Miell, 
+	http://bugzilla.gnome.org/show_bug.cgi?id=153759)
+
 2004-09-23  Ray Strode  <rstrode@redhat.com>
 
 	* src/desktop_file.c:

@@ -1585,7 +1585,7 @@ gnome_desktop_file_unset_internal (GnomeDesktopFile *df,
 
           if ((i+1) < section->n_lines)
             g_memmove (&section->lines[i], &section->lines[i+1],
-                       section->n_lines - i - 1);
+                       (section->n_lines - i - 1) * sizeof (section->lines[0]));
 
           section->n_lines -= 1;
         }

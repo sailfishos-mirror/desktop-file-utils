@@ -1,3 +1,8 @@
+2002-07-09  Havoc Pennington  <hp@redhat.com>
+
+	* src/desktop_file.c (gnome_desktop_file_unset_internal): fix a
+	memmove to use bytes instead of number of lines, fixes a crash
+
 2002-06-21  Havoc Pennington  <hp@redhat.com>
 
 	* src/validate.c: validate that KDE/GNOME are spelled all-caps in 

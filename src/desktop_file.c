@@ -894,6 +894,39 @@ gnome_desktop_file_foreach_key (GnomeDesktopFile            *df,
   return;
 }
 
+void
+gnome_desktop_file_rename_section  (GnomeDesktopFile            *df,
+                                    const char                  *old_name,
+                                    const char                  *new_name)
+{
+  GnomeDesktopFileSection *section;  
+
+  g_return_if_fail (new_name != NULL);
+  
+  if (old_name == NULL &&
+      df->main_section < 0)
+    old_name = "Desktop Entry";
+
+  section = lookup_section (df, old_name);
+  if (section == NULL)
+    return;
+
+  section->section_name = g_quark_from_string (new_name);
+}
+
+gboolean
+gnome_desktop_file_has_section (GnomeDesktopFile *df,
+                                const char       *name)
+{
+  GnomeDesktopFileSection *section;  
+
+  g_return_val_if_fail (name != NULL, FALSE);  
+
+  section = lookup_section (df, name);
+
+  return section != NULL;
+}
+
 GnomeDesktopFile*
 gnome_desktop_file_load (const char    *filename,
                          GError       **error)

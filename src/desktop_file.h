@@ -61,6 +61,11 @@ gboolean                 gnome_desktop_file_add_section     (GnomeDesktopFile   
 							     const char                  *name);
 gboolean                 gnome_desktop_file_remove_section  (GnomeDesktopFile            *df,
 							     const char                  *name);
+void                     gnome_desktop_file_rename_section  (GnomeDesktopFile            *df,
+                                                             const char                  *old_name,
+                                                             const char                  *new_name);
+gboolean                 gnome_desktop_file_has_section     (GnomeDesktopFile            *df,
+                                                             const char                  *name);
 
 /* Gets the raw text of the key, unescaped */
 gboolean gnome_desktop_file_get_raw           (GnomeDesktopFile  *df,

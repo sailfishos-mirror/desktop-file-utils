@@ -629,7 +629,15 @@ desktop_file_fixup (GnomeDesktopFile *df,
   const char *val;
   gboolean fix_encoding;
 
-  fix_encoding = FALSE;
+  if (gnome_desktop_file_has_section (df, "KDE Desktop Entry"))
+    {
+      g_printerr (_("Changing deprecated [KDE Desktop Entry] to plain [Desktop Entry]\n"));
+      gnome_desktop_file_rename_section (df,
+                                         "KDE Desktop Entry",
+                                         "Desktop Entry");
+    }
+  
+  fix_encoding = FALSE;  
   
   if (gnome_desktop_file_get_raw (df, NULL,
 				  "Encoding",

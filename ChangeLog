@@ -1,5 +1,13 @@
 2002-07-09  Havoc Pennington  <hp@redhat.com>
 
+	* src/validate.c (desktop_file_fixup): fix up "KDE Desktop Entry"
+
+	* src/desktop_file.c (gnome_desktop_file_rename_section): new
+	function
+	(gnome_desktop_file_has_section): new function
+
+2002-07-09  Havoc Pennington  <hp@redhat.com>
+
 	* src/desktop_file.c (gnome_desktop_file_unset_internal): fix a
 	memmove to use bytes instead of number of lines, fixes a crash
 

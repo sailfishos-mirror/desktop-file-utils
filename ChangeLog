@@ -1,5 +1,9 @@
 2004-11-11  Mark McLoughlin  <mark@skynet.ie>
 
+	* configure.in: Version 0.10.
+	
+2004-11-11  Mark McLoughlin  <mark@skynet.ie>
+
 	* src/desktop_file.c: (gnome_desktop_file_remove_string_from_list):
 	fix uninitialized variable.
 	

@@ -1,3 +1,10 @@
+============
+Version 0.10
+============
+
+  o Remove all menus code (Mark McLoughlin)
+  o Don't try and add key/value pairs to comments (Miloslav Trmac)
+
 ===========
 Version 0.9
 ===========

@@ -1,7 +1,7 @@
 /* Desktop and directory entries */
 
 /*
- * Copyright (C) 2002, 2003 Red Hat, Inc.
+ * Copyright (C) 2002 - 2004 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,7 @@
 #include <config.h>
 
 #include "menu-entries.h"
+#include "menu-monitor.h"
 #include "menu-util.h"
 #include "canonicalize.h"
 #include <string.h>
@@ -65,20 +66,29 @@ static unsigned int entry_cache_get_atom    (EntryCache   *cache,
 
 static void        entry_cache_clear_unused (EntryCache  *cache) G_GNUC_UNUSED;
 
-static CachedDir*  cached_dir_load          (EntryCache  *cache,
-                                             const char  *canonical_path,
-                                             gboolean	  is_legacy,
-                                             GError     **err);
-static void        cached_dir_mark_used     (CachedDir   *dir);
-static void        cached_dir_mark_unused   (CachedDir   *dir);
-static GSList*     cached_dir_get_subdirs   (CachedDir   *dir);
-static GSList*     cached_dir_get_entries   (CachedDir   *dir);
-static const char* cached_dir_get_name      (CachedDir   *dir);
-static Entry*      cached_dir_find_entry    (CachedDir   *dir,
-                                             const char  *name);
-static int         cached_dir_count_entries (CachedDir   *dir);
-static EntryCache* cached_dir_get_cache     (CachedDir   *dir);
-static gboolean    cached_dir_is_legacy     (CachedDir   *dir);
+static CachedDir*  cached_dir_load           (EntryCache                 *cache,
+					      const char                 *canonical_path,
+					      gboolean                    is_legacy,
+					      GError                    **err);
+static void        cached_dir_mark_used      (CachedDir                  *dir);
+static void        cached_dir_mark_unused    (CachedDir                  *dir);
+static void        cached_dir_add_monitor    (CachedDir                  *dir,
+					      EntryDirectory             *ed,
+					      EntryDirectoryChangedFunc   callback,
+					      gpointer                    user_data);
+static void        cached_dir_remove_monitor (CachedDir                  *dir,
+					      EntryDirectory             *ed,
+					      EntryDirectoryChangedFunc   callback,
+					      gpointer                    user_data);
+static GSList*     cached_dir_get_subdirs    (CachedDir                  *dir);
+static GSList*     cached_dir_get_entries    (CachedDir                  *dir);
+static const char* cached_dir_get_name       (CachedDir                  *dir);
+static Entry*      cached_dir_find_entry     (CachedDir                  *dir,
+					      const char                 *name);
+static int         cached_dir_count_entries  (CachedDir                  *dir);
+static EntryCache* cached_dir_get_cache      (CachedDir                  *dir);
+static gboolean    cached_dir_is_legacy      (CachedDir                  *dir);
+
 
 static Entry*
 entry_new (EntryType   type,
@@ -630,6 +640,22 @@ entry_directory_get_by_category (EntryDirectory *ed,
                              GUINT_TO_POINTER (category_atom));
 }
 
+void
+entry_directory_add_monitor (EntryDirectory            *ed,
+			     EntryDirectoryChangedFunc  callback,
+			     gpointer                   user_data)
+{
+  cached_dir_add_monitor (ed->root, ed, callback, user_data);
+}
+
+void
+entry_directory_remove_monitor (EntryDirectory            *ed,
+				EntryDirectoryChangedFunc  callback,
+				gpointer                   user_data)
+{
+  cached_dir_remove_monitor (ed->root, ed, callback, user_data);
+}
+
 struct EntryDirectoryList
 {
   int refcount;
@@ -925,6 +951,36 @@ entry_directory_list_invert_set (EntryDirectoryList *list,
   entry_set_unref (inverse);
 }
 
+void
+entry_directory_list_add_monitors (EntryDirectoryList        *list,
+				   EntryDirectoryChangedFunc  callback,
+				   gpointer                   user_data)
+{
+  GSList *tmp;
+
+  tmp = list->dirs;
+  while (tmp != NULL)
+    {
+      entry_directory_add_monitor (tmp->data, callback, user_data);
+      tmp = tmp->next;
+    }
+}
+
+void
+entry_directory_list_remove_monitors (EntryDirectoryList        *list,
+				      EntryDirectoryChangedFunc  callback,
+				      gpointer                   user_data)
+{
+  GSList *tmp;
+
+  tmp = list->dirs;
+  while (tmp != NULL)
+    {
+      entry_directory_remove_monitor (tmp->data, callback, user_data);
+      tmp = tmp->next;
+    }
+}
+
 struct EntrySet
 {
   int refcount;
@@ -1218,6 +1274,8 @@ struct CachedDir
   char *name;
   GSList *entries;
   GSList *subdirs;
+  MenuMonitor *monitor;
+  GSList *monitors;
   guint have_read_entries : 1;
   guint use_count : 27;
   guint is_legacy : 1;
@@ -1233,11 +1291,19 @@ struct EntryCache
   unsigned int next_atom;
 };
 
+typedef struct
+{
+  EntryDirectory            *ed;
+  EntryDirectoryChangedFunc  callback;
+  gpointer                   user_data;
+} CachedDirMonitor;
+
 static CachedDir* cached_dir_ensure         (EntryCache  *cache,
                                              const char  *canonical);
 static void       cached_dir_scan_recursive (CachedDir   *dir,
                                              const char  *path);
-static void       cached_dir_free           (CachedDir *dir);
+static void       cached_dir_free           (CachedDir   *dir);
+static void       cached_dir_invalidate     (CachedDir   *dir);
 
 
 static CachedDir*
@@ -1292,6 +1358,8 @@ cached_dir_clear_all_children (CachedDir *dir)
 static void
 cached_dir_free (CachedDir *dir)
 {
+  GSList *tmp;
+
   cached_dir_clear_all_children (dir);
 
   if (dir->use_count > 0)
@@ -1306,6 +1374,17 @@ cached_dir_free (CachedDir *dir)
     }
 
   g_assert (dir->use_count == 0);
+
+  if (dir->monitor)
+    menu_monitor_remove (dir->monitor);
+
+  tmp = dir->monitors;
+  while (tmp != NULL)
+    {
+      g_free (tmp->data);
+      tmp = tmp->next;
+    }
+  g_slist_free (dir->monitors);
   
   g_free (dir->name);
   g_free (dir);
@@ -1488,6 +1567,61 @@ cached_dir_load (EntryCache *cache,
   cached_dir_scan_recursive (retval, canonical_path);
   
   return retval;
+}
+
+static void
+handle_cached_dir_changed (MenuMonitor      *monitor,
+			   const char       *path,
+			   MenuMonitorEvent  event,
+			   CachedDir        *dir)
+{
+  CachedDir *iter;
+
+  menu_verbose ("Notified of '%s' %s - invalidating cache\n",
+		path,
+		event == MENU_MONITOR_CREATED ? ("created") :
+		event == MENU_MONITOR_DELETED ? ("deleted") :
+		event == MENU_MONITOR_CHANGED ? ("changed") : ("unknown-event"));
+		
+
+  if (event == MENU_MONITOR_CREATED || event == MENU_MONITOR_DELETED)
+    {
+      /* FIXME:
+       *   we should just add an entry if its an entry or add a
+       *   subdir if its a subdir
+       */
+      cached_dir_invalidate (dir);
+    }
+
+  iter = dir;
+  while (iter != NULL)
+    {
+      GSList *tmp;
+
+      tmp = dir->monitors;
+      while (tmp != NULL)
+	{
+	  CachedDirMonitor *monitor = tmp->data;
+
+	  monitor->callback (monitor->ed, monitor->user_data);
+
+	  tmp = tmp->next;
+	}
+
+      iter = iter->parent;
+    }
+}
+
+static void
+cached_dir_ensure_monitor (CachedDir  *dir,
+			   const char *dirname)
+{
+  if (dir->monitor != NULL)
+    return;
+    
+  dir->monitor = menu_monitor_add_dir (dirname,
+				       (MenuMonitorCallback) handle_cached_dir_changed,
+				       dir);
 }
 
 static char*
@@ -1931,6 +2065,8 @@ load_entries_recursive (CachedDir  *dir,
 
   cached_dir_clear_entries (dir);
   g_assert (dir->entries == NULL);
+
+  cached_dir_ensure_monitor (dir, dirname);
   
   len = strlen (dirname);
   subdir_len = PATH_MAX - len;
@@ -2166,6 +2302,65 @@ entry_cache_clear_unused (EntryCache *cache)
           cached_dir_free (cache->root_dir);
           cache->root_dir = NULL;
         }
+    }
+}
+
+static void
+cached_dir_add_monitor (CachedDir                 *dir,
+			EntryDirectory            *ed,
+			EntryDirectoryChangedFunc  callback,
+			gpointer                   user_data)
+{
+  CachedDirMonitor *monitor;
+  GSList           *tmp;
+
+  tmp = dir->monitors;
+  while (tmp != NULL)
+    {
+      monitor = tmp->data;
+
+      if (monitor->ed == ed &&
+	  monitor->callback == callback &&
+	  monitor->user_data == user_data)
+	break;
+
+      tmp = tmp->next;
+    }
+
+  if (tmp == NULL)
+    {
+      monitor            = g_new0 (CachedDirMonitor, 1);
+      monitor->ed        = ed;
+      monitor->callback  = callback;
+      monitor->user_data = user_data;
+
+      dir->monitors = g_slist_append (dir->monitors, monitor);
+    }
+}
+
+static void
+cached_dir_remove_monitor (CachedDir                 *dir,
+			   EntryDirectory            *ed,
+			   EntryDirectoryChangedFunc  callback,
+			   gpointer                   user_data)
+{
+  GSList *tmp;
+
+  tmp = dir->monitors;
+  while (tmp != NULL)
+    {
+      CachedDirMonitor *monitor = tmp->data;
+      GSList           *next = tmp->next;
+
+      if (monitor->ed == ed &&
+	  monitor->callback == callback &&
+	  monitor->user_data == user_data)
+	{
+	  dir->monitors = g_slist_delete_link (dir->monitors, tmp);
+	  g_free (monitor);
+	}
+
+      tmp = next;
     }
 }
 

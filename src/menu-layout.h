@@ -1,7 +1,7 @@
 /* Menu layout in-memory data structure (a custom "DOM tree") */
 
 /*
- * Copyright (C) 2002 Red Hat, Inc.
+ * Copyright (C) 2002 - 2004 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -116,6 +116,16 @@ void        menu_node_root_set_entry_cache  (MenuNode   *node,
 const char*         menu_node_menu_get_name              (MenuNode   *node);
 EntryDirectoryList* menu_node_menu_get_app_entries       (MenuNode   *node);
 EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode   *node);
+
+typedef void (* MenuNodeMenuChangedFunc) (MenuNode *node,
+					  gpointer  user_data);
+
+void menu_node_menu_add_monitor    (MenuNode                *node,
+				    MenuNodeMenuChangedFunc  callback,
+				    gpointer                 user_data);
+void menu_node_menu_remove_monitor (MenuNode                *node,
+				    MenuNodeMenuChangedFunc  callback,
+				    gpointer                 user_data);
 
 const char* menu_node_move_get_old (MenuNode *node);
 const char* menu_node_move_get_new (MenuNode *node);

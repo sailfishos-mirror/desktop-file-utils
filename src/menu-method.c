@@ -1,7 +1,7 @@
 /* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 8; tab-width: 8 -*- */
 /* menu-method.c - Menu method for gnome-vfs
  *
- * Copyright (C) 2003 Red Hat Inc.
+ * Copyright (C) 2003, 2004 Red Hat Inc.
  * Developed by Havoc Pennington
  * Some bits from file-method.c in gnome-vfs
  * Copyright (C) 1999 Free Software Foundation
@@ -35,6 +35,7 @@
 #include <libgnomevfs/gnome-vfs-method.h>
 #include <libgnomevfs/gnome-vfs-module-shared.h>
 #include <libgnomevfs/gnome-vfs-module.h>
+#include <libgnomevfs/gnome-vfs-ops.h>
 #include <libgnomevfs/gnome-vfs-utils.h>
 
 #define READ_ONLY 1
@@ -46,6 +47,7 @@ void gnome_vfs_monitor_callback (GnomeVFSMethodHandle *method_handle,
 
 #include "menu-tree-cache.h"
 #include "menu-util.h"
+#include "menu-monitor.h"
 
 /* FIXME - we have a gettext domain problem while not included in libgnomevfs */
 #define _(x) x
@@ -733,9 +735,99 @@ static GnomeVFSMethod vtable = {
         do_file_control
 };
 
+/* Called from an idle handler in the main thread
+ */
+static void  
+menu_method_do_monitor_callback (GnomeVFSMonitorHandle    *handle,
+				 const char               *monitor_uri,
+				 const char               *info_uri,
+				 GnomeVFSMonitorEventType  event_type,
+				 MenuMonitor              *monitor)
+{
+	MenuMonitorEvent  event;
+	MenuMethod       *method;
+	char             *path;
+
+	switch (event_type) {
+	case GNOME_VFS_MONITOR_EVENT_CHANGED:
+		event = MENU_MONITOR_CHANGED;
+		break;
+	case GNOME_VFS_MONITOR_EVENT_CREATED:
+		event = MENU_MONITOR_CREATED;
+		break;
+	case GNOME_VFS_MONITOR_EVENT_DELETED:
+		event = MENU_MONITOR_DELETED;
+		break;
+	default:
+		/* not an interesting event type */
+		return;
+	}
+
+	path = gnome_vfs_get_local_path_from_uri (info_uri);
+	if (!path) {
+		g_warning ("Could not create path from uri: '%s'", info_uri);
+		return;
+	}
+
+	method = method_checkout ();
+
+	menu_monitor_do_callback (monitor, path, event);
+
+	method_return (method);
+
+	g_free (path);
+}
+
+static gpointer
+menu_method_do_monitor_add (MenuMonitor *monitor,
+			    const char  *path,
+			    gboolean     monitor_dir)
+{
+	GnomeVFSMonitorHandle *handle;
+	GnomeVFSResult         result;
+
+	g_return_val_if_fail (monitor != NULL, NULL);
+	g_return_val_if_fail (path != NULL, NULL);
+
+	handle = NULL;
+	result = gnome_vfs_monitor_add (&handle,
+					path,
+					monitor_dir ? GNOME_VFS_MONITOR_DIRECTORY : GNOME_VFS_MONITOR_FILE,
+					(GnomeVFSMonitorCallback) menu_method_do_monitor_callback,
+					monitor);
+
+	if (result != GNOME_VFS_OK) {
+		if (result == GNOME_VFS_ERROR_NOT_SUPPORTED) {
+			static gboolean warn_not_supported = TRUE;
+
+			if (warn_not_supported) {
+				g_warning ("VFS monitoring not supported (FAM not installed/disabled?) - menu method will not detect changes");
+				warn_not_supported = FALSE;
+			}
+		} else {
+			g_warning ("Error adding monitor for '%s': %s",
+				   path,
+				   gnome_vfs_result_to_string (result));
+		}
+	}
+
+	return handle;
+}
+
+static void
+menu_method_do_monitor_remove (gpointer handle)
+{
+	g_return_if_fail (handle != NULL);
+
+	gnome_vfs_monitor_cancel (handle);
+}
+
 GnomeVFSMethod *
 vfs_module_init (const char *method_name, const char *args)
 {
+	menu_monitor_init (menu_method_do_monitor_add,
+			   menu_method_do_monitor_remove);
+
         return &vtable;
 }
 

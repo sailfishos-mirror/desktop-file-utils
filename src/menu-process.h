@@ -1,7 +1,7 @@
 /* Tree of desktop entries */
 
 /*
- * Copyright (C) 2002 Red Hat, Inc.
+ * Copyright (C) 2002 - 2004 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -162,5 +162,15 @@ GSList* desktop_entry_tree_diff (DesktopEntryTree *old,
 
 void desktop_entry_tree_change_free (DesktopEntryTreeChange *change);
 
+/* Monitoring */
+typedef void (* DesktopEntryTreeChangedFunc) (DesktopEntryTree *tree,
+					      gpointer          user_data);
+
+void desktop_entry_tree_add_monitor    (DesktopEntryTree            *tree,
+					DesktopEntryTreeChangedFunc  callback,
+					gpointer                     user_data);
+void desktop_entry_tree_remove_monitor (DesktopEntryTree            *tree,
+					DesktopEntryTreeChangedFunc  callback,
+					gpointer                     user_data);
 
 #endif /* MENU_PROCESS_H */

@@ -1,5 +1,39 @@
 2004-08-29  Mark McLoughlin  <mark@skynet.ie>
 
+	Patch to make the menu method notice changes in the entry
+	directories and re-load the menus. Re-worked version of
+	a patch from Dan Williams <dcbw@redhat.com>
+
+	* src/Makefile.am: build menu-monitor.[ch]
+	
+	* src/menu-entries.[ch]:
+	(entry_directory_add_monitor),
+	(entry_directory_remove_monitor),
+	(entry_directory_list_add_monitors),
+	(entry_directory_list_remove_monitors): add API to support
+	monitoring the contents of entry directories.
+
+	* src/menu-layout.[ch]:
+	(menu_node_menu_add_monitor),
+	(menu_node_menu_remove_monitor): add API to support monitoring
+	menu nodes. 
+	
+	* src/menu-process.[ch]:
+	(desktop_entry_tree_add_monitor),
+	(desktop_entry_tree_remove_monitor): add API to support monitoring
+	the entry tree. Right now, only changes in the entry directories are
+	noticed and not the menu files themselves.
+	
+	* src/menu-tree-cache.c: use the entry tree monitoring API and
+	rebuild if it changes.
+	
+	* src/menu-monitor.[ch]: add silly monitor abstraction.
+	
+	* src/menu-method.c: implement the monitor abstraction with gnome-vfs
+	monitors.
+
+2004-08-29  Mark McLoughlin  <mark@skynet.ie>
+
 	* src/menu-process.c: (process_only_unallocated): remove
 	FIXME to disable removing empty submenus. menu-spec says
 	the default value for the "show_empty" attribute in

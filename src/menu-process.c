@@ -1,7 +1,7 @@
 /* Tree of desktop entries */
 
 /*
- * Copyright (C) 2002, 2003 Red Hat, Inc.
+ * Copyright (C) 2002 - 2004 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -1007,9 +1007,17 @@ struct DesktopEntryTree
   MenuNode   *orig_node;
   MenuNode   *resolved_node;
   TreeNode   *root;
+  GSList     *monitors;
 };
 
+typedef struct
+{
+  DesktopEntryTreeChangedFunc callback;
+  gpointer user_data;
+} DesktopEntryTreeMonitor;
+
 static void  build_tree               (DesktopEntryTree *tree);
+static void  remove_menu_monitors     (DesktopEntryTree *tree);
 static void  tree_node_free           (TreeNode         *node);
 static char* path_for_node            (TreeNode         *node);
 static char* path_for_entry           (TreeNode         *parent,
@@ -1108,6 +1116,8 @@ desktop_entry_tree_unref (DesktopEntryTree *tree)
 
   if (tree->refcount == 0)
     {
+      remove_menu_monitors (tree);
+
       g_free (tree->menu_file);
       g_free (tree->menu_file_dir);
       menu_node_unref (tree->orig_node);
@@ -1823,10 +1833,63 @@ compare_entries_func (const void *a,
 }
 #endif
 
+static void
+handle_menu_node_menu_changed (MenuNode         *menu_node,
+			       DesktopEntryTree *tree)
+			       
+{
+  GSList *tmp;
+
+  g_assert (menu_node_get_type (menu_node) == MENU_NODE_MENU);
+
+  tree_node_free (tree->root);
+  tree->root = NULL;
+
+  tmp = tree->monitors;
+  while (tmp != NULL)
+    {
+      DesktopEntryTreeMonitor *monitor = tmp->data;
+
+      monitor->callback (tree, monitor->user_data);
+
+      tmp = tmp->next;
+    }
+}
+
+static void
+remove_menu_monitors_recursive (DesktopEntryTree *tree,
+				MenuNode         *node)
+{
+  MenuNode *child;
+
+  g_assert (menu_node_get_type (node) == MENU_NODE_MENU);
+
+  menu_node_menu_remove_monitor (node,
+				 (MenuNodeMenuChangedFunc) handle_menu_node_menu_changed,
+				 tree);
+
+  child = menu_node_get_children (node);
+  while (child != NULL)
+    {
+      if (menu_node_get_type (child) == MENU_NODE_MENU)
+	remove_menu_monitors_recursive (tree, node);
+
+      child = menu_node_get_next (child);
+    }
+}
+
+static void
+remove_menu_monitors (DesktopEntryTree *tree)
+{
+  remove_menu_monitors_recursive (tree,
+				  find_menu_child (tree->resolved_node));
+}
+
 static TreeNode*
-tree_node_from_menu_node (TreeNode   *parent,
-                          MenuNode   *menu_node,
-                          GHashTable *allocated)
+tree_node_from_menu_node (DesktopEntryTree *tree,
+			  TreeNode         *parent,
+                          MenuNode         *menu_node,
+                          GHashTable       *allocated)
 {
   MenuNode *child;
   EntryDirectoryList *app_dirs;
@@ -1851,6 +1914,10 @@ tree_node_from_menu_node (TreeNode   *parent,
   app_dirs = menu_node_menu_get_app_entries (menu_node);
   dir_dirs = menu_node_menu_get_directory_entries (menu_node);
 
+  menu_node_menu_add_monitor (menu_node,
+			      (MenuNodeMenuChangedFunc) handle_menu_node_menu_changed,
+			      tree);
+
   entries = entry_set_new ();
   
   child = menu_node_get_children (menu_node);
@@ -1863,7 +1930,8 @@ tree_node_from_menu_node (TreeNode   *parent,
           {
             TreeNode *child_tree;
 
-            child_tree = tree_node_from_menu_node (tree_node,
+            child_tree = tree_node_from_menu_node (tree,
+						   tree_node,
                                                    child,
                                                    allocated);
             if (child_tree)
@@ -2064,7 +2132,8 @@ build_tree (DesktopEntryTree *tree)
 
   allocated = g_hash_table_new (NULL, NULL);
   
-  tree->root = tree_node_from_menu_node (NULL,
+  tree->root = tree_node_from_menu_node (tree,
+					 NULL,
                                          find_menu_child (tree->resolved_node),
                                          allocated);
   if (tree->root)
@@ -3091,4 +3160,56 @@ desktop_entry_tree_change_free (DesktopEntryTreeChange *change)
   
   g_free (change->path);
   g_free (change);
+}
+
+void
+desktop_entry_tree_add_monitor (DesktopEntryTree            *tree,
+				DesktopEntryTreeChangedFunc  callback,
+				gpointer                     user_data)
+{
+  GSList *tmp;
+  DesktopEntryTreeMonitor *monitor;
+
+  tmp = tree->monitors;
+  while (tmp != NULL)
+    {
+      monitor = tmp->data;
+
+      if (monitor->callback == callback &&
+	  monitor->user_data == user_data)
+	break;
+
+      tmp = tmp->next;
+    }
+
+  if (tmp == NULL)
+    {
+      monitor            = g_new0 (DesktopEntryTreeMonitor, 1);
+      monitor->callback  = callback;
+      monitor->user_data = user_data;
+    }
+}
+
+void
+desktop_entry_tree_remove_monitor (DesktopEntryTree            *tree,
+				   DesktopEntryTreeChangedFunc  callback,
+				   gpointer                     user_data)
+{
+  GSList *tmp;
+
+  tmp = tree->monitors;
+  while (tmp != NULL)
+    {
+      DesktopEntryTreeMonitor *monitor = tmp->data;
+      GSList                  *next = tmp->next;
+
+      if (monitor->callback == callback &&
+	  monitor->user_data == user_data)
+	{
+	  tree->monitors = g_slist_delete_link (tree->monitors, tmp);
+	  g_free (monitor);
+	}
+
+      tmp = next;
+    }
 }

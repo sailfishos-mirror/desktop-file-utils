@@ -1,6 +1,6 @@
 /* Cache of DesktopEntryTree */
 /*
- * Copyright (C) 2003 Red Hat, Inc.
+ * Copyright (C) 2003, 2004 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -121,6 +121,13 @@ desktop_entry_tree_cache_unref (DesktopEntryTreeCache *cache)
     }
 }
 
+static void
+handle_desktop_entry_tree_changed (DesktopEntryTree *tree,
+				   CacheEntry       *entry)
+{
+  entry->needs_reload = TRUE;
+}
+
 static gboolean
 reload_entry (DesktopEntryTreeCache *cache,
               CacheEntry            *entry,
@@ -150,6 +157,9 @@ reload_entry (DesktopEntryTreeCache *cache,
               entry->changes = g_slist_concat (entry->changes, changes);
             }
           
+	  desktop_entry_tree_remove_monitor (entry->tree,
+					     (DesktopEntryTreeChangedFunc) handle_desktop_entry_tree_changed,
+					     entry);
           desktop_entry_tree_unref (entry->tree);
         }
       
@@ -158,6 +168,10 @@ reload_entry (DesktopEntryTreeCache *cache,
       
       entry->load_failure_reason = tmp_error;
       entry->tree = reloaded;
+
+      desktop_entry_tree_add_monitor (entry->tree,
+				      (DesktopEntryTreeChangedFunc) handle_desktop_entry_tree_changed,
+				      entry);
 
       entry->needs_reload = FALSE;
     }

@@ -1,7 +1,7 @@
 /* Menu layout in-memory data structure (a custom "DOM tree") */
 
 /*
- * Copyright (C) 2002, 2003 Red Hat, Inc.
+ * Copyright (C) 2002 - 2004 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -76,6 +76,7 @@ struct MenuNodeMenu
   MenuNode *name_node; /* cache of the <Name> node */
   EntryDirectoryList *app_dirs;
   EntryDirectoryList *dir_dirs;
+  GSList *monitors;
 };
 
 struct MenuNodeLegacyDir
@@ -83,6 +84,12 @@ struct MenuNodeLegacyDir
   MenuNode node;
   char *prefix;
 };
+
+typedef struct
+{
+  MenuNodeMenuChangedFunc callback;
+  gpointer                user_data;
+} MenuNodeMenuMonitor;
 
 /* root nodes (no parent) never have siblings */
 #define NODE_NEXT(node)                                 \
@@ -102,6 +109,47 @@ null_safe_strcmp (const char *a,
     return 1;
   else
     return strcmp (a, b);
+}
+
+static void
+handle_entry_directory_changed (EntryDirectory *dir,
+				MenuNode       *node)
+{
+  MenuNodeMenu *nm;
+  GSList *tmp;
+
+  g_assert (node->type == MENU_NODE_MENU);
+
+  nm = (MenuNodeMenu *) node;
+
+  tmp = nm->monitors;
+  while (tmp != NULL)
+    {
+      MenuNodeMenuMonitor *monitor = tmp->data;
+
+      monitor->callback (node, monitor->user_data);
+
+      tmp = tmp->next;
+    }
+}
+
+static void
+remove_entry_directory_list (MenuNodeMenu *nm,
+			     gboolean      apps)
+{
+  EntryDirectoryList *list;
+
+  list = apps ? nm->app_dirs : nm->dir_dirs;
+
+  entry_directory_list_remove_monitors (list,
+					(EntryDirectoryChangedFunc) handle_entry_directory_changed,
+					nm);
+  entry_directory_list_unref (list);
+
+  if (apps)
+    nm->app_dirs = NULL;
+  else
+    nm->dir_dirs = NULL;
 }
 
 void
@@ -140,10 +188,23 @@ menu_node_unref (MenuNode *node)
             menu_node_unref (nm->name_node);
 
           if (nm->app_dirs)
-            entry_directory_list_unref (nm->app_dirs);
+	    remove_entry_directory_list (nm, TRUE);
 
           if (nm->dir_dirs)
-            entry_directory_list_unref (nm->dir_dirs);
+	    remove_entry_directory_list (nm, FALSE);
+
+	  if (nm->monitors)
+	    {
+	      GSList *tmp;
+
+	      tmp = nm->monitors;
+	      while (tmp != NULL)
+		{
+		  g_free (tmp->data);
+		  tmp = tmp->next;
+		}
+	      g_slist_free (nm->monitors);
+	    }
         }
       else if (node->type == MENU_NODE_LEGACY_DIR)
         {
@@ -492,31 +553,20 @@ recursive_clean_entry_directory_lists (MenuNode *node,
 {
   MenuNodeMenu *nm;
   MenuNode *iter;
+  EntryDirectoryList *dirs;
   
   if (node->type != MENU_NODE_MENU)
     return;
 
   nm = (MenuNodeMenu*) node;
 
-  if (apps)
-    {
-      if (nm->app_dirs == NULL ||
-          entry_directory_list_get_length (nm->app_dirs) == 0)
-        return; /* child menus continue to have valid lists */
+  dirs = apps ? nm->app_dirs : nm->dir_dirs;
+
+  if (dirs == NULL || entry_directory_list_get_length (dirs) == 0)
+    return; /* child menus continue to have valid lists */
+
+  remove_entry_directory_list (nm, apps);
       
-      entry_directory_list_unref (nm->app_dirs);
-      nm->app_dirs = NULL;
-    }
-  else
-    {
-      if (nm->dir_dirs == NULL ||
-          entry_directory_list_get_length (nm->dir_dirs) == 0)
-        return; /* child menus continue to have valid lists */
-      
-      entry_directory_list_unref (nm->dir_dirs);
-      nm->dir_dirs = NULL;
-    }
-  
   iter = node->children;
   while (iter != NULL)
     {
@@ -941,6 +991,10 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
               parent = parent->parent;
             }
         }
+
+      entry_directory_list_add_monitors (nm->app_dirs,
+					 (EntryDirectoryChangedFunc) handle_entry_directory_changed,
+					 nm);
     }
   else
     {
@@ -996,6 +1050,10 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
               parent = parent->parent;
             }
         }
+
+      entry_directory_list_add_monitors (nm->dir_dirs,
+					 (EntryDirectoryChangedFunc) handle_entry_directory_changed,
+					 nm);
     }
   else
     {
@@ -1029,6 +1087,70 @@ menu_node_menu_get_directory_entries (MenuNode *node)
   menu_node_menu_ensure_entry_lists (node);
   
   return nm->dir_dirs;
+}
+
+void
+menu_node_menu_add_monitor (MenuNode                *node,
+			    MenuNodeMenuChangedFunc  callback,
+			    gpointer                 user_data)
+{
+  MenuNodeMenu *nm;
+  GSList *tmp;
+  MenuNodeMenuMonitor *monitor;
+  
+  g_return_if_fail (node->type == MENU_NODE_MENU);
+
+  nm = (MenuNodeMenu *) node;
+
+  tmp = nm->monitors;
+  while (tmp != NULL)
+    {
+      monitor = tmp->data;
+
+      if (monitor->callback  == callback &&
+	  monitor->user_data == user_data)
+	break;
+
+      tmp = tmp->next;
+    }
+
+  if (tmp == NULL)
+    {
+      monitor            = g_new0 (MenuNodeMenuMonitor, 1);
+      monitor->callback  = callback;
+      monitor->user_data = user_data;
+
+      nm->monitors = g_slist_append (nm->monitors, monitor);
+    }
+}
+
+void
+menu_node_menu_remove_monitor (MenuNode                *node,
+			       MenuNodeMenuChangedFunc  callback,
+			       gpointer                 user_data)
+{
+  MenuNodeMenu *nm;
+  GSList *tmp;
+  
+  g_return_if_fail (node->type == MENU_NODE_MENU);
+
+  nm = (MenuNodeMenu *) node;
+
+  tmp = nm->monitors;
+  while (tmp != NULL)
+    {
+      MenuNodeMenuMonitor *monitor = tmp->data;
+      GSList              *next = tmp->next;
+
+      if (monitor->callback == callback &&
+	  monitor->user_data == user_data)
+	{
+	  nm->monitors = g_slist_delete_link (nm->monitors, tmp);
+	  g_free (monitor);
+	}
+
+      tmp = next;
+    }
 }
 
 /* Remove sequences of include/exclude of the same file, etc. */

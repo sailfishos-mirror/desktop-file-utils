@@ -1,7 +1,7 @@
 /* Desktop and directory entries */
 
 /*
- * Copyright (C) 2002 Red Hat, Inc.
+ * Copyright (C) 2002 - 2004 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -53,6 +53,9 @@ typedef enum
   ENTRY_LOAD_DIRECTORIES = 1 << 2
 } EntryLoadFlags;
 
+typedef void (*EntryDirectoryChangedFunc) (EntryDirectory *ed,
+					   gpointer        user_data);
+
 /* The EntryCache is sort of a global context containing all cached data etc. */
 EntryCache *entry_cache_new                   (void);
 void        entry_cache_ref                   (EntryCache *cache);
@@ -85,6 +88,13 @@ void entry_directory_get_by_category  (EntryDirectory *dir,
                                        const char     *category,
                                        EntrySet       *add_to_set);
 
+void entry_directory_add_monitor    (EntryDirectory            *dir,
+				     EntryDirectoryChangedFunc  callback,
+				     gpointer                   user_data);
+void entry_directory_remove_monitor (EntryDirectory            *dir,
+				     EntryDirectoryChangedFunc  callback,
+				     gpointer                   user_data);
+
 EntryDirectoryList* entry_directory_list_new (void);
 
 void entry_directory_list_ref     (EntryDirectoryList *list);
@@ -99,6 +109,12 @@ int  entry_directory_list_get_length  (EntryDirectoryList *list);
 void entry_directory_list_append_list (EntryDirectoryList *list,
                                        EntryDirectoryList *to_append);
 
+void entry_directory_list_add_monitors    (EntryDirectoryList        *list,
+					   EntryDirectoryChangedFunc  callback,
+					   gpointer                   user_data);
+void entry_directory_list_remove_monitors (EntryDirectoryList        *list,
+					   EntryDirectoryChangedFunc  callback,
+					   gpointer                   user_data);
 
 /* return a new ref */
 Entry* entry_directory_list_get_desktop   (EntryDirectoryList *list,

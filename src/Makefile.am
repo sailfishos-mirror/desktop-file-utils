@@ -42,6 +42,8 @@ menu_sources=					\
 	menu-tree-cache.h			\
 	menu-util.c				\
 	menu-util.h				\
+	menu-monitor.c				\
+	menu-monitor.h				\
 	dfu-test.h
 
 libmenu_sources_la_SOURCES=			\

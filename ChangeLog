@@ -1,5 +1,11 @@
 2004-07-22  Mark McLoughlin  <mark@skynet.ie>
 
+	* configure.in: post-release bump to 0.8.
+
+==================== 0.7 ====================
+
+2004-07-22  Mark McLoughlin  <mark@skynet.ie>
+
 	* configure.in: Version 0.7.
 
 Wed Jul 21 22:48:33 2004  Jonathan Blandford  <jrb@gnome.org>

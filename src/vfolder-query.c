@@ -516,8 +516,14 @@ add_or_free_desktop_file (GHashTable       *dirs_hash,
   
   if (g_hash_table_lookup (hash, basename))
     {
-      g_printerr (_("Warning: %s is a duplicate desktop file, ignoring\n"),
-                  full_path);
+      const char *dup_origin;
+
+      dup_origin = g_hash_table_lookup (origin_hash, basename);
+      if (dup_origin == NULL)
+        dup_origin = "???";
+      
+      g_printerr (_("Warning: %s is a duplicate desktop file, original at %s, ignoring\n"),
+                  full_path, dup_origin);
       gnome_desktop_file_free (df);
     }
   else

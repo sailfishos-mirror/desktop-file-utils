@@ -1,3 +1,8 @@
+2002-08-01  Havoc Pennington  <hp@redhat.com>
+
+	* src/vfolder-query.c (add_or_free_desktop_file): when complaining
+	about a duplicate, say where the other one is.
+
 2002-07-24  Havoc Pennington  <hp@redhat.com>
 
 	* src/vfolder-query.c (add_or_free_desktop_file): actually 

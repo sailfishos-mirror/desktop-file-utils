@@ -2139,7 +2139,73 @@ desktop_entry_tree_move (DesktopEntryTree *tree,
                          GError          **error)
 {
   
-  
+  /* FIXME */
   
   return TRUE;
+}
+
+static DesktopEntryTreeChange*
+change_new (DesktopEntryTreeChangeType  type,
+            const char                 *path)
+{
+  DesktopEntryTreeChange *change;
+
+  change = g_new0 (DesktopEntryTreeChange, 1);
+  change->type = type;
+  change->path = g_strdup (path);
+  return change;
+}
+
+static void
+tree_created (TreeNode *node)
+{
+
+}
+
+static void
+tree_deleted (TreeNode *node)
+{
+
+}
+
+
+static void
+recursive_diff (TreeNode  *old_node,
+                TreeNode  *new_node,
+                GSList   **changes_p)
+{
+  if (old_node && new_node == NULL)
+    {
+      tree_deleted (old_node);
+    }
+  else if (old_node == NULL && new_node)
+    {
+      tree_created (new_node);
+    }
+  else
+    {
+      
+    }
+}
+
+GSList*
+desktop_entry_tree_diff (DesktopEntryTree *old,
+                         DesktopEntryTree *new)
+{
+  GSList *changes;
+
+  changes = NULL;
+
+  recursive_diff (old->root, new->root, &changes);
+  
+  return changes;
+}
+
+void
+desktop_entry_tree_change_free (DesktopEntryTreeChange *change)
+{
+  g_return_if_fail (change != NULL);
+  
+  g_free (change->path);
+  g_free (change);
 }

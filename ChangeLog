@@ -1,3 +1,8 @@
+2003-06-11  Havoc Pennington  <hp@pobox.com>
+
+	* src/menu-process.c (desktop_entry_tree_diff): add but 
+	doesn't work yet, just syncing with work computer
+
 2003-06-06  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-method.c (do_set_file_info): make this return

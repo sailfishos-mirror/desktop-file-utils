@@ -127,4 +127,33 @@ gboolean desktop_entry_tree_move    (DesktopEntryTree *tree,
                                      const char       *override_fs_dirname_dest,
                                      GError          **error);
 
+
+/* Diff */
+
+/* If a dir is replaced by a file,
+ * we send DIR_DELETED and FILE_CREATED
+ * (and vice versa obviously)
+ */
+typedef enum
+{
+  DESKTOP_ENTRY_TREE_DIR_CREATED,
+  DESKTOP_ENTRY_TREE_DIR_DELETED,
+  DESKTOP_ENTRY_TREE_DIR_CHANGED,
+  DESKTOP_ENTRY_TREE_FILE_CREATED,
+  DESKTOP_ENTRY_TREE_FILE_DELETED,
+  DESKTOP_ENTRY_TREE_FILE_CHANGED
+} DesktopEntryTreeChangeType;
+
+typedef struct
+{
+  DesktopEntryTreeChangeType type;
+  char *path;
+} DesktopEntryTreeChange;
+
+GSList* desktop_entry_tree_diff (DesktopEntryTree *old,
+                                 DesktopEntryTree *new);
+
+void desktop_entry_tree_change_free (DesktopEntryTreeChange *change);
+
+
 #endif /* MENU_PROCESS_H */

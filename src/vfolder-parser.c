@@ -121,9 +121,6 @@ static void set_error (GError             **err,
                        const char          *format,
                        ...) G_GNUC_PRINTF (5, 6);
 
-static void add_context_to_error (GError             **err,
-                                  GMarkupParseContext *context);
-
 static void          parse_info_init        (ParseInfo    *info);
 static void          parse_info_free        (ParseInfo    *info);
 static Vfolder*      parse_info_push_folder (ParseInfo    *info);
@@ -211,24 +208,6 @@ set_error (GError             **err,
                line, ch, str);
 
   g_free (str);
-}
-
-static void
-add_context_to_error (GError             **err,
-                      GMarkupParseContext *context)
-{
-  int line, ch;
-  char *str;
-
-  if (err == NULL || *err == NULL)
-    return;
-
-  g_markup_parse_context_get_position (context, &line, &ch);
-
-  str = g_strdup_printf (_("Line %d character %d: %s"),
-                         line, ch, (*err)->message);
-  g_free ((*err)->message);
-  (*err)->message = str;
 }
 
 static void
@@ -329,116 +308,6 @@ peek_state (ParseInfo *info)
 }
 
 #define ELEMENT_IS(name) (strcmp (element_name, (name)) == 0)
-
-typedef struct
-{
-  const char  *name;
-  const char **retloc;
-} LocateAttr;
-
-static gboolean
-locate_attributes (GMarkupParseContext *context,
-                   const char  *element_name,
-                   const char **attribute_names,
-                   const char **attribute_values,
-                   GError     **error,
-                   const char  *first_attribute_name,
-                   const char **first_attribute_retloc,
-                   ...)
-{
-  va_list args;
-  const char *name;
-  const char **retloc;
-  int n_attrs;
-#define MAX_ATTRS 24
-  LocateAttr attrs[MAX_ATTRS];
-  gboolean retval;
-  int i;
-
-  g_return_val_if_fail (first_attribute_name != NULL, FALSE);
-  g_return_val_if_fail (first_attribute_retloc != NULL, FALSE);
-
-  retval = TRUE;
-
-  n_attrs = 1;
-  attrs[0].name = first_attribute_name;
-  attrs[0].retloc = first_attribute_retloc;
-  *first_attribute_retloc = NULL;
-  
-  va_start (args, first_attribute_retloc);
-
-  name = va_arg (args, const char*);
-  retloc = va_arg (args, const char**);
-
-  while (name != NULL)
-    {
-      g_return_val_if_fail (retloc != NULL, FALSE);
-
-      g_assert (n_attrs < MAX_ATTRS);
-      
-      attrs[n_attrs].name = name;
-      attrs[n_attrs].retloc = retloc;
-      n_attrs += 1;
-      *retloc = NULL;      
-
-      name = va_arg (args, const char*);
-      retloc = va_arg (args, const char**);
-    }
-
-  va_end (args);
-
-  if (!retval)
-    return retval;
-
-  i = 0;
-  while (attribute_names[i])
-    {
-      int j;
-      gboolean found;
-
-      found = FALSE;
-      j = 0;
-      while (j < n_attrs)
-        {
-          if (strcmp (attrs[j].name, attribute_names[i]) == 0)
-            {
-              retloc = attrs[j].retloc;
-
-              if (*retloc != NULL)
-                {
-                  set_error (error, context,
-                             G_MARKUP_ERROR,
-                             G_MARKUP_ERROR_PARSE,
-                             _("Attribute \"%s\" repeated twice on the same <%s> element"),
-                             attrs[j].name, element_name);
-                  retval = FALSE;
-                  goto out;
-                }
-
-              *retloc = attribute_values[i];
-              found = TRUE;
-            }
-
-          ++j;
-        }
-
-      if (!found)
-        {
-          set_error (error, context,
-                     G_MARKUP_ERROR,
-                     G_MARKUP_ERROR_PARSE,
-                     _("Attribute \"%s\" is invalid on <%s> element in this context"),
-                     attribute_names[i], element_name);
-          retval = FALSE;
-          goto out;
-        }
-
-      ++i;
-    }
-
- out:
-  return retval;
-}
 
 static gboolean
 check_no_attributes (GMarkupParseContext *context,

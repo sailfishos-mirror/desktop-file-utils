@@ -1,5 +1,24 @@
 2004-04-18  Mark McLoughlin  <mark@skynet.ie>
 
+	Warning fixes.
+
+	* src/menu-entries.c:
+	(entry_cache_atom_name),
+	(entry_cache_clear_unused): mark as unused.
+	
+	* src/menu-method.c:
+	(menu_method_ref), (menu_method_unref): ditto.
+	
+	* src/vfolder-parser.c:
+	(add_context_to_error), (locate_attributes): kill these.
+	
+	* src/menu-process.c:
+	(menu_node_resolve_files_recursive): add a missing break;
+	(foreach_dir): try to fixup this and give up - something
+	is very broken here.
+
+2004-04-18  Mark McLoughlin  <mark@skynet.ie>
+
 	* misc/desktop-entry-mode.el: add Emacs desktop entry
 	mode from Ville Skyttä <ville.skytta@iki.fi>
 

@@ -564,7 +564,7 @@ menu_node_resolve_files_recursive (MenuCache  *menu_cache,
       break;
     case MENU_NODE_LEGACY_DIR:
       resolve_legacy_dir (menu_cache, entry_cache, node);
-      /* FIXME break; */
+      break;
 
     case MENU_NODE_PASSTHROUGH:
       /* Just get rid of this, we don't need the memory usage */
@@ -1507,9 +1507,8 @@ foreach_dir (DesktopEntryTree            *tree,
              void                        *user_data)
 {
   GSList *tmp;
-  char *p, tmpchar;
+  char *p;
   DesktopEntryForeachInfo info;
-  TreeNode *node;
 
   p = path_for_node (dir);
 
@@ -1519,14 +1518,24 @@ foreach_dir (DesktopEntryTree            *tree,
   info.is_dir = TRUE;
   info.depth = depth;
   info.menu_id = g_strdelimit (g_strdup(dir->name), "/", '-');
-  /* FIXME.. I'm not sure of that code */
-  if ((node = tree_node_find_subdir (tree->root, p) != NULL) 
-		  && (menu_node_legacy_dir_get_prefix (node) != NULL)) {
-	  tmpchar = info.menu_id;
-	  info.menu_id = g_strconcat (menu_node_legacy_dir_get_prefix (node), 
-			  "-", tmpchar, NULL);
-	  g_free (tmpchar);
+
+#ifdef FIXME /* this is totally hosed */
+  {
+  TreeNode *node;
+
+  node = tree_node_find_subdir (tree->root, p);
+  if (node && menu_node_legacy_dir_get_prefix (node) != NULL)
+    {
+      char *old_id;
+
+      old_id = info.menu_id;
+      info.menu_id = g_strconcat (menu_node_legacy_dir_get_prefix (node), 
+				  "-", old_id, NULL);
+      g_free (old_id);
   }
+  }
+#endif
+
   info.menu_basename = dir->name;
   info.menu_fullpath = p;
   info.filesystem_path_to_entry = dir->dir_entry ? entry_get_absolute_path (dir->dir_entry) : NULL;

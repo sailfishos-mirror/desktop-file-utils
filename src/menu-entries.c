@@ -58,11 +58,11 @@ struct EntryDirectory
 static unsigned int entry_cache_intern_atom (EntryCache   *cache,
                                              const char   *str);
 static const char*  entry_cache_atom_name   (EntryCache   *cache,
-                                             unsigned int  atom);
+                                             unsigned int  atom) G_GNUC_UNUSED;
 static unsigned int entry_cache_get_atom    (EntryCache   *cache,
                                              const char   *str);
 
-static void        entry_cache_clear_unused (EntryCache  *cache);
+static void        entry_cache_clear_unused (EntryCache  *cache) G_GNUC_UNUSED;
 
 static CachedDir*  cached_dir_load          (EntryCache  *cache,
                                              const char  *canonical_path,

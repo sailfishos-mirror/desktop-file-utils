@@ -55,6 +55,9 @@ typedef struct DirHandle     DirHandle;
 typedef struct FileHandle    FileHandle;
 typedef struct MonitorHandle MonitorHandle;
 
+static MenuMethod*       menu_method_new         (void);
+static void              menu_method_ref         (MenuMethod               *method) G_GNUC_UNUSED;
+static void              menu_method_unref       (MenuMethod               *method) G_GNUC_UNUSED;
 static MenuMethod*       method_checkout         (void);
 static void              method_return           (MenuMethod               *method);
 static DesktopEntryTree* menu_method_get_tree    (MenuMethod               *method,
@@ -104,7 +107,7 @@ static GnomeVFSResult dir_handle_new            (MenuMethod               *metho
                                                  DirHandle               **handle);
 static GnomeVFSResult dir_handle_next_file_info (DirHandle                *handle,
                                                  GnomeVFSFileInfo         *info);
-static void           dir_handle_ref            (DirHandle                *handle);
+static void           dir_handle_ref            (DirHandle                *handle) G_GNUC_UNUSED;
 static void           dir_handle_unref          (DirHandle                *handle);
 
 
@@ -148,7 +151,7 @@ static GnomeVFSResult monitor_handle_new    (MenuMethod          *method,
 					     MonitorHandle      **handle);
 static GnomeVFSResult monitor_handle_cancel (MenuMethod          *method,
 					     MonitorHandle       *handle);
-static void           monitor_handle_ref    (MonitorHandle       *handle);
+static void           monitor_handle_ref    (MonitorHandle       *handle) G_GNUC_UNUSED;
 static void           monitor_handle_unref  (MonitorHandle       *handle);
 
 struct {
@@ -769,6 +772,8 @@ menu_method_new (void)
 static void
 menu_method_ref (MenuMethod *method)
 {
+	g_assert (method->refcount > 0);
+
         method->refcount += 1;
 }
 

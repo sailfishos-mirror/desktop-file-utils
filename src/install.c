@@ -125,6 +125,36 @@ process_one_file (const char *filename,
 
       tmp = tmp->next;
     }
+
+  /* Remove categories */
+  tmp = removed_categories;
+  while (tmp != NULL)
+    {
+      gnome_desktop_file_remove_string_from_list (df, NULL, "Categories",
+                                                  NULL, tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Add onlyshowin */
+  tmp = added_only_show_in;
+  while (tmp != NULL)
+    {
+      gnome_desktop_file_merge_string_into_list (df, NULL, "OnlyShowIn",
+                                                 NULL, tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Remove onlyshowin */
+  tmp = removed_only_show_in;
+  while (tmp != NULL)
+    {
+      gnome_desktop_file_remove_string_from_list (df, NULL, "OnlyShowIn",
+                                                  NULL, tmp->data);
+
+      tmp = tmp->next;
+    }
   
   if (!gnome_desktop_file_save (df, new_filename,
                                 permissions, err))

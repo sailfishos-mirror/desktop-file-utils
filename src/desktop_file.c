@@ -998,6 +998,13 @@ gnome_desktop_file_get_strings (GnomeDesktopFile   *df,
   while (retval[i])
     ++i;
 
+  /* Drop the empty string g_strsplit leaves in the vector since
+   * our list of strings ends in ";"
+   */
+  --i;
+  g_free (retval[i]);
+  retval[i] = NULL;
+  
   if (vals)
     *vals = retval;
   else
@@ -1049,6 +1056,24 @@ gnome_desktop_file_set_raw (GnomeDesktopFile  *df,
   line->value = g_strdup (value);
   line->locale = g_strdup (locale);
 }
+
+void
+gnome_desktop_file_set_strings (GnomeDesktopFile  *df,
+                                const char        *section_name,
+                                const char        *keyname,
+                                const char        *locale,
+                                const char       **value)
+{
+  char *str;
+  char *tmp;  
+  
+  tmp = g_strjoinv (";", (char**)value);
+  str = g_strconcat (tmp, ";", NULL);
+  g_free (tmp);
+  gnome_desktop_file_set_raw (df, section_name, keyname, locale, str);
+  g_free (str);
+}
+
 
 void
 gnome_desktop_file_merge_string_into_list (GnomeDesktopFile *df,
@@ -1110,8 +1135,43 @@ gnome_desktop_file_remove_string_from_list (GnomeDesktopFile *df,
                                             const char        *locale,
                                             const char        *value)
 {
+  char **values;
+  int n_values;
+  
+  if (gnome_desktop_file_get_strings (df, section, keyname, locale,
+                                      &values, &n_values))
+    {
+      int i;
+      int n_found;
 
+      n_found = 0;
+      
+      i = 0;
+      while (i < n_values)
+        {
+          if (n_found > 0)
+            {
+              g_free (values[i]);
+              values[i] = values[i+1];
+              values[i+1] = NULL;
+            }
 
+          if (((i+1) < n_values) &&
+              strcmp (values[i], value) == 0)
+            {
+              ++n_found;
+            }
+          else
+            {
+              ++i;
+            }
+        }
 
+      if (n_found > 0)
+        gnome_desktop_file_set_strings (df, section, keyname, locale,
+                                        (const char**) values);
+      
+      g_strfreev (values);
+    }
 }
 

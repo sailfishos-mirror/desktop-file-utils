@@ -154,7 +154,8 @@ g_realpath (const char *name, char *resolved)
 	      dest = rpath + dest_offset;
 	    }
 
-	  dest = __mempcpy (dest, start, end - start);
+	  memcpy (dest, start, end - start);
+          dest = dest + (end - start);
 	  *dest = '\0';
 
 	  if (stat (rpath, &st) < 0)
@@ -162,7 +163,7 @@ g_realpath (const char *name, char *resolved)
 
 	  if (S_ISLNK (st.st_mode))
 	    {
-	      char *buf = __alloca (path_max);
+	      char *buf = alloca (path_max);
 	      size_t len;
 
 	      if (++num_links > MAXSYMLINKS)

@@ -66,6 +66,10 @@ Entry* entry_directory_get_desktop   (EntryDirectory *dir,
 Entry* entry_directory_get_directory (EntryDirectory *dir,
                                       const char     *relative_path);
 
+GSList* entry_directory_get_all_desktops (EntryDirectory *dir);
+GSList* entry_directory_get_by_category  (EntryDirectory *dir,
+                                          const char     *category);
+
 EntryDirectoryList* entry_directory_list_new (void);
 
 void entry_directory_list_ref     (EntryDirectoryList *list);
@@ -83,9 +87,15 @@ Entry* entry_directory_list_get_desktop   (EntryDirectoryList *list,
 Entry* entry_directory_list_get_directory (EntryDirectoryList *list,
                                            const char         *relative_path);
 
+GSList* entry_directory_list_get_all_desktops (EntryDirectoryList *list);
+GSList* entry_directory_list_get_by_category  (EntryDirectoryList *list,
+                                               const char         *category);
+
+
 void entry_ref   (Entry *entry);
 void entry_unref (Entry *entry);
 
+const char* entry_get_absolute_path (Entry      *entry);
 const char* entry_get_relative_path (Entry      *entry);
 gboolean    entry_has_category      (Entry      *entry,
                                      const char *category);

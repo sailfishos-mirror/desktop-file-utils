@@ -19,7 +19,15 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#include <config.h>
+#include <string.h>
+#include <stdio.h>
 #include "menu-layout.h"
+#include "canonicalize.h"
+
+#include <libintl.h>
+#define _(x) gettext ((x))
+#define N_(x) x
 
 typedef struct _MenuFile MenuFile;
 
@@ -44,6 +52,12 @@ struct _MenuNode
 
   guint is_file_root : 1;
   guint refcount : 24;
+};
+
+struct _MenuNodeMenu
+{
+  MenuNode node;
+  MenuNode *name_node; /* cache of the <Name> node */
 };
 
 /* root nodes (no parent) never have siblings */
@@ -92,6 +106,13 @@ menu_node_unref (MenuNode *node)
           menu_node_unref (iter);
           iter = next;
         }
+
+      if (node->type == MENU_NODE_MENU)
+        {
+          MenuNodeMenu *nm = (MenuNodeMenu*) node;
+          if (nm->name_node)
+            menu_node_unref (nm->name_node);
+        }
       
       /* free ourselves */
       g_free (node->content);
@@ -99,12 +120,15 @@ menu_node_unref (MenuNode *node)
     }
 }
 
-static void
-menu_node_new (void)
+static MenuNode*
+menu_node_new (MenuNodeType type)
 {
   MenuNode *node;
 
-  node = g_new0 (MenuNode, 1);
+  if (type == MENU_NODE_MENU)
+    node = g_new0 (MenuNodeMenu, 1);
+  else
+    node = g_new0 (MenuNode, 1);
 
   node->refcount = 1;
   
@@ -147,9 +171,8 @@ menu_node_copy_one (MenuNode *node)
 {
   MenuNode *copy;
 
-  copy = menu_node_new ();
+  copy = menu_node_new (node->type);
 
-  copy->type = node->type;
   copy->content = g_strdup (node->content);
 
   /* don't copy is_file_root */
@@ -318,6 +341,41 @@ menu_node_get_filename (MenuNode *node)
     return NULL;
 }
 
+const char*
+menu_node_menu_get_name (MenuNode *node)
+{
+  MenuNodeMenu *nm;
+  
+  g_return_val_if_fail (node->type == MENU_NODE_MENU, NULL);
+
+  nm = (MenuNodeMenu*) node;
+
+  if (nm->name_node == NULL)
+    {
+      MenuNodeIter *iter;
+      
+      iter = node->children;
+      while (iter != NULL)
+        {
+          next = NODE_NEXT (iter);
+
+          if (iter->type == MENU_NODE_NAME)
+            {
+              nm->name_node = iter;
+              menu_node_ref (nm->name_node);
+              break;
+            }
+          
+          iter = next;
+        }
+    }
+  
+  if (nm->name_node)
+    return menu_node_get_content (nm->name_node);
+  else
+    return NULL;
+}
+
 static GSList *menu_files = NULL;
 
 static MenuFile*
@@ -370,27 +428,55 @@ drop_menu_file (MenuFile *file)
 }
 
 MenuNode*
-menu_node_get_for_file  (const char *filename)
+menu_node_get_for_canonical_file  (const char *filename)
 {
   MenuFile *file;
+  
+  file = find_file_by_name (canonical);
 
-  file = find_file_by_name (filename);
-
+  g_free (canonical);
+  
   if (file)
     {
       g_assert (file->root->is_file_root);
+      
+      menu_node_ref (file->root);
       return file->root;
     }
   
+  return NULL;
+}
+
+MenuNode*
+menu_node_get_for_file  (const char *filename)
+{
+  char *canonical;
+  MenuNode *node;
+
+  canonical = g_canonicalize_file_name (filename);
+  if (canonical == NULL)
+    return NULL;
   
+  node = menu_node_get_for_canonical_file (canonical);
+
+  g_free (canonical);
+
+  return node;
 }
 
 void
 menu_node_sync_for_file (const char *filename)
 {
   MenuFile *file;
+  char *canonical;
 
-  file = find_file_by_name (filename);
+  canonical = g_canonicalize_file_name (filename);
+  if (canonical == NULL)
+    return;
+  
+  file = find_file_by_name (canonical);
+
+  g_free (canonical);
   
   if (file == NULL)
     return;
@@ -402,7 +488,7 @@ utf8_fputs (const char *str,
             FILE       *f)
 {
   char *l;
-
+  
   l = g_locale_from_utf8 (str, -1, NULL, NULL, NULL);
 
   if (l == NULL)

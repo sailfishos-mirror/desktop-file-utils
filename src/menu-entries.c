@@ -19,13 +19,28 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#include <config.h>
+
 #include "menu-entries.h"
+#include "menu-layout.h"
 #include "canonicalize.h"
+#include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <dirent.h>
+
+#include <libintl.h>
+#define _(x) gettext ((x))
+#define N_(x) x
+
+
+typedef struct _CachedDir CachedDir;
 
 struct _Entry
 {
   char *relative_path;
-
+  char *absolute_path;
+  
   char **categories;
   
   guint type : 4;
@@ -42,15 +57,16 @@ struct _EntryDirectory
 
 static char *only_show_in_name = NULL;
 
-static CachedDir* cached_dir_load        (const char  *canonical_path,
-                                          GError     **err);
-static void       cached_dir_mark_used   (CachedDir   *dir);
-static void       cached_dir_mark_unused (CachedDir   *dir);
-static GSList*    cached_dir_get_subdirs (CachedDir   *dir);
-static GSList*    cached_dir_get_entries (CachedDir   *dir);
-static void       cache_clear_unused     (void);
-static Entry*     cached_dir_find_entry  (CachedDir   *dir,
-                                          const char  *name);
+static CachedDir*  cached_dir_load        (const char  *canonical_path,
+                                           GError     **err);
+static void        cached_dir_mark_used   (CachedDir   *dir);
+static void        cached_dir_mark_unused (CachedDir   *dir);
+static GSList*     cached_dir_get_subdirs (CachedDir   *dir);
+static GSList*     cached_dir_get_entries (CachedDir   *dir);
+static const char* cached_dir_get_name    (CachedDir   *dir);
+static void        cache_clear_unused     (void);
+static Entry*      cached_dir_find_entry  (CachedDir   *dir,
+                                           const char  *name);
 
 void
 entry_set_only_show_in_name (const char *name)
@@ -61,7 +77,8 @@ entry_set_only_show_in_name (const char *name)
 
 static Entry*
 entry_new (EntryType   type,
-           const char *relative_path)
+           const char *relative_path,
+           const char *absolute_path)
 {
   Entry *e;
 
@@ -70,18 +87,69 @@ entry_new (EntryType   type,
   e->categories = NULL;
   e->type = type;
   e->relative_path = g_strdup (relative_path);
+  e->absolute_path = g_strdup (absolute_path);
   e->refcount = 1;
   
   return e;
 }
 
-void entry_ref   (Entry *entry);
-void entry_unref (Entry *entry);
+void
+entry_ref (Entry *entry)
+{
+  entry->refcount += 1;
+}
 
-const char* entry_get_relative_path (Entry      *entry);
-gboolean    entry_has_category      (Entry      *entry,
-                                     const char *category);
+void
+entry_unref (Entry *entry)
+{
+  g_return_if_fail (entry != NULL);
+  g_return_if_fail (entry->refcount > 0);
 
+  entry->refcount -= 1;
+  if (entry->refcount == 0)
+    {
+      if (entry->categories)
+        g_strfreev (entry->categories);
+
+      g_free (entry->relative_path);
+      g_free (entry->absolute_path);
+      
+      g_free (entry);
+    }
+}
+
+const char*
+entry_get_absolute_path (Entry *entry)
+{
+  return entry->absolute_path;
+}
+
+const char*
+entry_get_relative_path (Entry *entry)
+{
+  return entry->relative_path;
+}
+
+gboolean
+entry_has_category (Entry      *entry,
+                    const char *category)
+{
+  int i;
+
+  if (entry->categories == NULL)
+    return FALSE;
+  
+  i = 0;
+  while (entry->categories[i] != NULL)
+    {
+      if (strcmp (category, entry->categories[i]) == 0)
+        return TRUE;
+      
+      ++i;
+    }
+
+  return FALSE;
+}
 
 Entry*
 entry_get_by_absolute_path (const char *path)
@@ -89,10 +157,21 @@ entry_get_by_absolute_path (const char *path)
   CachedDir* dir;
   char *dirname;
   char *basename;
+  char *canonical;
   Entry *retval;
 
   retval = NULL;
   dirname = g_path_get_basename (path);
+
+  canonical = g_canonicalize_file_name (dirname);
+  if (canonical == NULL)
+    {
+      menu_verbose ("Error %d getting entry \"%s\": %s\n", errno, path,
+                    g_strerror (errno));
+      g_free (dirname);
+      return NULL;
+    }
+
   basename = g_path_get_dirname (path);
   
   dir = cached_dir_load (dirname, NULL);
@@ -113,7 +192,6 @@ entry_directory_load  (const char     *path,
                        EntryLoadFlags  flags,
                        GError        **err)
 {
-
   char *canonical;
   CachedDir *cd;
   EntryDirectory *ed;
@@ -124,9 +202,10 @@ entry_directory_load  (const char     *path,
       g_set_error (err, ENTRY_ERROR,
                    ENTRY_ERROR_BAD_PATH,
                    _("Filename \"%s\" could not be canonicalized: %s\n"),
-                   g_strerror (errno));
-      menu_verbose ("Error %d loading cached dir \"%s\": %s\n", errno, path);
-      goto out;
+                   path, g_strerror (errno));
+      menu_verbose ("Error %d loading cached dir \"%s\": %s\n", errno, path,
+                    g_strerror (errno));
+      return NULL;
     }
 
   cd = cached_dir_load (canonical, err);
@@ -170,26 +249,31 @@ entry_directory_unref (EntryDirectory *ed)
     }
 }
 
-Entry*
-entry_directory_get_desktop (EntryDirectory *ed,
-                             const char     *relative_path)
+static Entry*
+entry_from_cached_entry (EntryDirectory *ed,
+                         Entry          *src,
+                         const char     *relative_path)
 {
-  Entry *src;
   Entry *e;
   int i;
-  
-  if ((ed->flags & ENTRY_LOAD_DESKTOPS) == 0)
-    return NULL;
-  
-  src = cached_dir_find_entry (ed->root, relative_path);
-  if (src == NULL)
-    return NULL;
 
   if (src->type != ENTRY_DESKTOP)
     return NULL;
-  
-  e = entry_new (src->type, relative_path);
 
+  /* try to avoid a copy (no need to change path
+   * or add "Legacy" keyword). This should
+   * hold for the usual /usr/share/applications/foo.desktop
+   * case, so is worthwhile.
+   */
+  if ((ed->flags & ENTRY_LOAD_LEGACY) == 0 &&
+      strcmp (src->relative_path, relative_path) == 0)
+    {
+      entry_ref (src);
+      return src;
+    }
+  
+  e = entry_new (src->type, relative_path, src->absolute_path);
+  
   i = 0;
   if (src->categories)
     {
@@ -199,7 +283,7 @@ entry_directory_get_desktop (EntryDirectory *ed,
   
   if (ed->flags & ENTRY_LOAD_LEGACY)
     ++i;
-
+  
   if (i > 0)
     {
       e->categories = g_new (char*, i + 1);
@@ -227,12 +311,27 @@ entry_directory_get_desktop (EntryDirectory *ed,
 }
 
 Entry*
+entry_directory_get_desktop (EntryDirectory *ed,
+                             const char     *relative_path)
+{
+  Entry *src;
+  
+  if ((ed->flags & ENTRY_LOAD_DESKTOPS) == 0)
+    return NULL;
+  
+  src = cached_dir_find_entry (ed->root, relative_path);
+  if (src == NULL)
+    return NULL;
+  else
+    return entry_from_cached_entry (ed, src, relative_path);
+}
+
+Entry*
 entry_directory_get_directory (EntryDirectory *ed,
                                const char     *relative_path)
 {
   Entry *src;
   Entry *e;
-  int i;
   
   if ((ed->flags & ENTRY_LOAD_DIRECTORIES) == 0)
     return NULL;
@@ -244,34 +343,396 @@ entry_directory_get_directory (EntryDirectory *ed,
   if (src->type != ENTRY_DIRECTORY)
     return NULL;
   
-  e = entry_new (src->type, relative_path);
+  e = entry_new (src->type, relative_path, src->absolute_path);
   
   return e;
 }
 
-EntryDirectoryList* entry_directory_list_new (void);
+typedef gboolean (* EntryDirectoryForeachFunc) (EntryDirectory *ed,
+                                                Entry          *src,
+                                                const char     *relative_path,
+                                                void           *data1,
+                                                void           *data2);
+static gboolean
+entry_directory_foreach_recursive (EntryDirectory           *ed,
+                                   CachedDir                *cd,
+                                   char                     *parent_path,
+                                   int                       parent_path_len,
+                                   EntryDirectoryForeachFunc func,
+                                   void                     *data1,
+                                   void                     *data2)
+{
+  GSList *tmp;
+  char *child_path_start;
 
-void entry_directory_list_ref     (EntryDirectoryList *list);
-void entry_directory_list_unref   (EntryDirectoryList *list);
-void entry_directory_list_clear   (EntryDirectoryList *list);
-/* prepended dirs are searched first */
-void entry_directory_list_prepend (EntryDirectoryList *list,
-                                   EntryDirectory     *dir);
-void entry_directory_list_append  (EntryDirectoryList *list,
-                                   EntryDirectory     *dir);
+  if (parent_path_len > 0)
+    {
+      parent_path[parent_path_len] = '/';
+      child_path_start = parent_path + parent_path_len + 1;
+    }
+  else
+    {
+      child_path_start = parent_path + parent_path_len;
+    }
+  
+  tmp = cached_dir_get_entries (cd);
+  while (tmp != NULL)
+    {
+      Entry *src;
 
-/* return a new ref */
-Entry* entry_directory_list_get_desktop   (EntryDirectoryList *list,
-                                           const char         *relative_path);
-Entry* entry_directory_list_get_directory (EntryDirectoryList *list,
-                                           const char         *relative_path);
+      src = tmp->data;
 
+      if (src->type == ENTRY_DESKTOP &&
+          (ed->flags & ENTRY_LOAD_DESKTOPS) == 0)
+        goto next;
 
+      if (src->type == ENTRY_DIRECTORY &&
+          (ed->flags & ENTRY_LOAD_DIRECTORIES) == 0)
+        goto next;
+      
+      strcpy (child_path_start,
+              src->relative_path);
+
+      if (!(* func) (ed, src, parent_path,
+                     data1, data2))
+        return FALSE;
+
+    next:
+      tmp = tmp->next;
+    }
+
+  tmp = cached_dir_get_subdirs (cd);
+  while (tmp != NULL)
+    {
+      CachedDir *sub;
+      int path_len;
+      const char *name;
+
+      sub = tmp->data;
+      name = cached_dir_get_name (sub);
+
+      strcpy (child_path_start, name);
+
+      path_len = (child_path_start - parent_path) + strlen (name);   
+      
+      if (!entry_directory_foreach_recursive (ed, sub,
+                                              parent_path,
+                                              path_len,
+                                              func, data1, data2))
+        return FALSE;
+      
+      tmp = tmp->next;
+    }
+  
+  return TRUE;
+}
+
+static void
+entry_directory_foreach (EntryDirectory           *ed,
+                         EntryDirectoryForeachFunc func,
+                         void                     *data1,
+                         void                     *data2)
+{
+  char *parent_path;
+
+  parent_path = g_new (char, PATH_MAX + 2);
+  *parent_path = '\0';
+
+  entry_directory_foreach_recursive (ed, ed->root,
+                                     parent_path,
+                                     0,
+                                     func, data1, data2);
+
+  g_free (parent_path);
+}
+
+static gboolean
+list_all_func (EntryDirectory *ed,
+               Entry          *src,
+               const char     *relative_path,
+               void           *data1,
+               void           *data2)
+{
+  GSList **listp = data1;
+
+  *listp = g_slist_prepend (*listp,
+                            entry_from_cached_entry (ed, src, relative_path));
+
+  return TRUE;
+}
+
+GSList*
+entry_directory_get_all_desktops (EntryDirectory *ed)
+{
+  GSList *list;
+
+  list = NULL;
+  entry_directory_foreach (ed, list_all_func, &list, NULL);
+
+  return list;
+}
+
+static gboolean
+list_in_category_func (EntryDirectory *ed,
+                       Entry          *src,
+                       const char     *relative_path,
+                       void           *data1,
+                       void           *data2)
+{
+  GSList **listp = data1;
+  const char *category = data2;
+
+  if (entry_has_category (src, category) ||
+      ((ed->flags & ENTRY_LOAD_LEGACY) &&
+       strcmp (category, "Legacy") == 0))
+    *listp = g_slist_prepend (*listp,
+                              entry_from_cached_entry (ed, src, relative_path));
+
+  return TRUE;
+}
+
+GSList*
+entry_directory_get_by_category (EntryDirectory *ed,
+                                 const char     *category)
+{
+  GSList *list;
+
+  list = NULL;
+  entry_directory_foreach (ed, list_in_category_func, &list,
+                           (char*) category);
+
+  return list;
+}
+
+struct _EntryDirectoryList
+{
+  int refcount;
+  GSList *dirs;
+};
+
+EntryDirectoryList*
+entry_directory_list_new (void)
+{
+  EntryDirectoryList *list;
+
+  list = g_new (EntryDirectoryList, 1);
+
+  list->refcount = 1;
+  list->dirs = NULL;
+
+  return list;
+}
+
+void
+entry_directory_list_ref (EntryDirectoryList *list)
+{
+  list->refcount += 1;
+}
+
+void
+entry_directory_list_unref (EntryDirectoryList *list)
+{
+  g_return_if_fail (list != NULL);
+  g_return_if_fail (list->refcount > 0);
+
+  list->refcount -= 1;
+  if (list->refcount == 0)
+    {
+      entry_directory_list_clear (list);
+      g_free (list);
+    }
+}
+
+void
+entry_directory_list_clear (EntryDirectoryList *list)
+{
+  g_slist_foreach (list->dirs,
+                   (GFunc) entry_directory_unref,
+                   NULL);
+  g_slist_free (list->dirs);
+  list->dirs = NULL;
+}
+
+void
+entry_directory_list_prepend (EntryDirectoryList *list,
+                              EntryDirectory     *dir)
+{
+  entry_directory_ref (dir);
+  list->dirs = g_slist_prepend (list->dirs, dir);
+}
+
+void
+entry_directory_list_append  (EntryDirectoryList *list,
+                              EntryDirectory     *dir)
+{
+  entry_directory_ref (dir);
+  list->dirs = g_slist_append (list->dirs, dir);
+}
+
+Entry*
+entry_directory_list_get_desktop (EntryDirectoryList *list,
+                                  const char         *relative_path)
+{
+  GSList *tmp;
+
+  tmp = list->dirs;
+  while (tmp != NULL)
+    {
+      Entry *e;
+
+      e = entry_directory_get_desktop (tmp->data, relative_path);
+      if (e && e->type == ENTRY_DESKTOP)
+        return e;
+      else if (e)
+        entry_unref (e);
+      
+      tmp = tmp->next;
+    }
+
+  return NULL;
+}
+
+Entry*
+entry_directory_list_get_directory (EntryDirectoryList *list,
+                                    const char         *relative_path)
+{
+  GSList *tmp;
+
+  tmp = list->dirs;
+  while (tmp != NULL)
+    {
+      Entry *e;
+
+      e = entry_directory_get_directory (tmp->data, relative_path);
+      if (e && e->type == ENTRY_DIRECTORY)
+        return e;
+      else if (e)
+        entry_unref (e);
+      
+      tmp = tmp->next;
+    }
+
+  return NULL;
+}
+
+static void
+entry_hash_listify_foreach (void *key, void *value, void *data)
+{
+  GSList **list = data;
+  Entry *e = value;
+  
+  *list = g_slist_prepend (*list, e);
+  entry_ref (e);
+}
+
+static GSList*
+entry_directory_list_get (EntryDirectoryList       *list,
+                          EntryDirectoryForeachFunc func,
+                          void                     *data2)
+{
+  /* The only tricky thing here is that desktop files later
+   * in the search list with the same relative path
+   * are "hidden" by desktop files earlier in the path,
+   * so we have to do the hash table thing.
+   */
+  GHashTable *hash;
+  GSList *tmp;
+  GSList *reversed;
+  
+  hash = g_hash_table_new_full (g_str_hash,
+                                g_str_equal,
+                                NULL,
+                                (GDestroyNotify) entry_unref);
+
+  /* We go from the end of the list so we can just
+   * g_hash_table_replace and not have to do two
+   * hash lookups (check for existing entry, then insert new
+   * entry)
+   */
+  reversed = g_slist_copy (list->dirs);
+  reversed = g_slist_reverse (list->dirs);
+
+  tmp = reversed;
+  while (tmp != NULL)
+    {
+      entry_directory_foreach (tmp->data, func, hash, data2);
+      
+      tmp = tmp->next;
+    }
+
+  g_slist_free (reversed);
+
+  /* listify the hash */
+  tmp = NULL;
+  g_hash_table_foreach (hash, entry_hash_listify_foreach, &tmp);
+  
+  g_hash_table_destroy (hash);
+
+  return tmp;
+}
+
+static gboolean
+hash_all_func (EntryDirectory *ed,
+               Entry          *src,
+               const char     *relative_path,
+               void           *data1,
+               void           *data2)
+{
+  GHashTable *hash = data1;
+  Entry *e;
+
+  e = entry_from_cached_entry (ed, src, relative_path);
+
+  /* pass ownership of reference to the hash table */
+  g_hash_table_replace (hash, e->relative_path,
+                        e);
+}
+
+GSList*
+entry_directory_list_get_all_desktops (EntryDirectoryList *list)
+{
+  return entry_directory_list_get (list, hash_all_func,
+                                   NULL);
+}
+
+static gboolean
+hash_by_category_func (EntryDirectory *ed,
+                       Entry          *src,
+                       const char     *relative_path,
+                       void           *data1,
+                       void           *data2)
+{
+  GHashTable *hash = data1;
+  const char *category = data2;
+  Entry *e;
+  
+  if (entry_has_category (src, category) ||
+      ((ed->flags & ENTRY_LOAD_LEGACY) &&
+       strcmp (category, "Legacy") == 0))
+    {
+      e = entry_from_cached_entry (ed, src, relative_path);
+      
+      /* pass ownership of reference to the hash table */
+      g_hash_table_replace (hash, e->relative_path,
+                            e);
+    }
+
+  return TRUE;
+}
+
+GSList*
+entry_directory_list_get_by_category (EntryDirectoryList *list,
+                                      const char         *category)
+{
+  return entry_directory_list_get (list, hash_by_category_func,
+                                   (char*) category);
+}
+  
 /*
  * Big global cache of desktop entries
  */
 
-typedef struct
+struct _CachedDir
 {
   CachedDir *parent;
   char *name;
@@ -279,7 +740,7 @@ typedef struct
   GSList *subdirs;
   guint have_read_entries : 1;
   guint use_count : 27;
-} CachedDir;
+};
 
 static CachedDir *root_dir = NULL;
 
@@ -378,7 +839,7 @@ find_subdir (CachedDir   *dir,
   return NULL;
 }
 
-static CachedDir*
+static Entry*
 find_entry (CachedDir   *dir,
             const char  *name)
 {
@@ -389,7 +850,7 @@ find_entry (CachedDir   *dir,
     {
       Entry *e = tmp->data;
 
-      if (strcmp (e->name, name) == 0)
+      if (strcmp (e->relative_path, name) == 0)
         return e;
 
       tmp = tmp->next;
@@ -402,7 +863,6 @@ static Entry*
 cached_dir_find_entry (CachedDir   *dir,
                        const char  *name)
 {
-  GSList *tmp;
   char **split;
   int i;
   CachedDir *iter;
@@ -466,7 +926,6 @@ cached_dir_ensure (const char *canonical)
           cd->parent = dir;
         }
 
-      parent = dir;
       dir = cd;
       
       ++i;
@@ -483,7 +942,7 @@ cached_dir_load (const char *canonical_path,
 {
   CachedDir *retval;
 
-  menu_verbose ("Loading cached dir \"%s\"\n", path);  
+  menu_verbose ("Loading cached dir \"%s\"\n", canonical_path);  
 
   retval = NULL;
 
@@ -527,11 +986,12 @@ cached_dir_get_full_path (CachedDir *dir)
 }
 
 static char *
-unescape_string (gchar *str, gint len)
+unescape_string (const char *str, int len)
 {
-  gchar *res;
-  gchar *p, *q;
-  gchar *end;
+  char *res;
+  const char *p;
+  char *q;
+  const char *end;
 
   /* len + 1 is enough, because unescaping never makes the
    * string longer */
@@ -590,7 +1050,7 @@ unescape_string (gchar *str, gint len)
   return res;
 }
 
-static const char*
+static char*
 find_value (const char *str,
             const char *key)
 {
@@ -623,19 +1083,19 @@ find_value (const char *str,
   q = p;
   while (q != str)
     {      
-      if (!(q == ' ' || q == '\t'))
+      if (!(*q == ' ' || *q == '\t'))
         break;
 
       --q;
     }
   
-  if (!(q == str || q == '\n' || q == '\r'))
+  if (!(q == str || *q == '\n' || *q == '\r'))
     return NULL;
 
   q = p + key_len;
   while (*q)
     {
-      if (!(q == ' ' || q == '\t'))
+      if (!(*q == ' ' || *q == '\t'))
         break;
       ++q;
     }
@@ -661,6 +1121,7 @@ static char**
 string_list_from_desktop_value (const char *raw)
 {
   char **retval;
+  int i;
   
   retval = g_strsplit (raw, ";", G_MAXINT);
 
@@ -743,7 +1204,7 @@ entry_new_desktop_from_file (const char *filename,
         }
     }
 
-  e = entry_new (ENTRY_DESKTOP, basename);
+  e = entry_new (ENTRY_DESKTOP, basename, filename);
   
   categories = find_value (str, "Categories");
   if (categories != NULL)
@@ -761,7 +1222,7 @@ static Entry*
 entry_new_directory_from_file (const char *filename,
                                const char *basename)
 {
-  return entry_new (ENTRY_DIRECTORY, basename);
+  return entry_new (ENTRY_DIRECTORY, basename, filename);
 }
 
 static void
@@ -776,7 +1237,6 @@ load_entries_recursive (CachedDir  *dir,
   char* fullpath_end;
   guint len;
   guint subdir_len;
-  int i;
 
   if (dir && dir->have_read_entries)
     return;
@@ -835,7 +1295,7 @@ load_entries_recursive (CachedDir  *dir,
         continue; /* Shouldn't ever happen since PATH_MAX is available */
 
       if (g_str_has_suffix (dent->d_name, ".desktop"))
-        {      
+        {
           Entry *e;
 
           e = entry_new_desktop_from_file (fullpath, dent->d_name);
@@ -877,7 +1337,6 @@ cached_dir_scan_recursive (CachedDir   *dir,
                            const char  *path)
 {
   char *canonical;
-  GSList *tmp;
   
   /* "path" corresponds to the canonical path to dir,
    * if path is non-NULL
@@ -1032,6 +1491,13 @@ cache_clear_unused (void)
           root_dir = NULL;
         }
     }
+}
+
+
+static const char*
+cached_dir_get_name (CachedDir *dir)
+{
+  return dir->name;
 }
 
 static GSList*

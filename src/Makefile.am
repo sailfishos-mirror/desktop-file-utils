@@ -18,9 +18,17 @@ desktop_file_install_SOURCES=			\
 	install.c
 
 desktop_menu_tool_SOURCES=			\
+	canonicalize.c				\
+	canonicalize.h				\
 	desktop_file.c				\
 	desktop_file.h				\
 	gen-compat-tree.c			\
+	menu-entries.c				\
+	menu-entries.h				\
+	menu-layout.c				\
+	menu-layout.h				\
+	menu-process.c				\
+	menu-process.h				\
 	validate.c				\
 	validate.h				\
 	vfolder-parser.c			\

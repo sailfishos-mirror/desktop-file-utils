@@ -75,9 +75,10 @@ void menu_node_append_child  (MenuNode *parent,
 void menu_node_unlink (MenuNode *node);
 void menu_node_steal  (MenuNode *node);
 
-MenuNodeType menu_node_get_type     (MenuNode *node);
-const char*  menu_node_get_content  (MenuNode *node);
-const char*  menu_node_get_filename (MenuNode *node);
+MenuNodeType menu_node_get_type      (MenuNode *node);
+const char*  menu_node_get_content   (MenuNode *node);
+const char*  menu_node_get_filename  (MenuNode *node);
+const char*  menu_node_menu_get_name (MenuNode *node);
 
 /* Return the pristine menu node for the file.
  * Changing this node will change what gets written
@@ -86,8 +87,9 @@ const char*  menu_node_get_filename (MenuNode *node);
  * the menu node for each file is cached while references
  * are outstanding.
  */
-MenuNode* menu_node_get_for_file  (const char *filename);
-void      menu_node_sync_for_file (const char *filename);
+MenuNode* menu_node_get_for_file            (const char *filename);
+MenuNode* menu_node_get_for_canonical_file  (const char *filename);
+void      menu_node_sync_for_file           (const char *filename);
 
 /* random utility function */
 void menu_verbose    (const char *format,

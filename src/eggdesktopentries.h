@@ -50,101 +50,157 @@ typedef enum
   EGG_DESKTOP_ENTRIES_GENERATE_LOOKUP_MAP      = 1 << 2
 } EggDesktopEntriesFlags;
 
-EggDesktopEntries         *egg_desktop_entries_new           (gchar **legal_start_groups,
-                                                              EggDesktopEntriesFlags flags);
-EggDesktopEntries         *egg_desktop_entries_new_from_file (gchar **legal_start_groups,
+EggDesktopEntries         *egg_desktop_entries_new           (EggDesktopEntriesFlags   flags,
+                                                              GError                 **error);
+EggDesktopEntries         *egg_desktop_entries_new_from_file (const gchar             *file,
+                                                              gchar * const legal_start_groups[],
                                                               EggDesktopEntriesFlags   flags,
-                                                              const gchar         *file,
                                                               GError             **error);
+EggDesktopEntries         *egg_desktop_entries_new_from_data (const gchar         *data,
+                                                              gsize                length,
+                                                              gchar * const legal_start_groups[],
+                                                              EggDesktopEntriesFlags   flags,
+                                                              GError             **error);
+EggDesktopEntries         *egg_desktop_entries_new_from_data_dirs (const gchar             *file,
+                                                                   gchar                  **full_path,
+                                                                   gchar * const            legal_start_groups[],
+                                                                   EggDesktopEntriesFlags   flags,
+                                                                   GError                 **error);
+
 void                   egg_desktop_entries_free            (EggDesktopEntries  *entries);
 
 void                   egg_desktop_entries_keep_locales    (EggDesktopEntries *entries,
-						            gchar **locales);
-
-void                   egg_desktop_entries_parse_data (EggDesktopEntries  *entries,
-	                                             const gchar    *data,
-						     gsize          length,
-						     GError        **error);  
-void                   egg_desktop_entries_flush_parse_buffer (EggDesktopEntries  *entries,
-		 		                             GError          **error);
+                                                            gchar * const      locales[]);
 
 gchar                 *egg_desktop_entries_to_data   (EggDesktopEntries   *entries,
-	                                            gsize             *length,
-						    GError           **error);
+                                                      gsize             *length,
+                                                      GError           **error);
 
 const gchar           *egg_desktop_entries_get_start_group (EggDesktopEntries *entries);
 
 gchar                **egg_desktop_entries_get_groups (EggDesktopEntries  *entries,
-	                                           gsize          *length);
+                                                       gsize          *length);
 gchar                **egg_desktop_entries_get_keys   (EggDesktopEntries  *entries,
-				                   const gchar    *group_name,
-						   gsize            *length,
-						   GError        **error);
+                                                       const gchar    *group_name,
+                                                       gsize            *length,
+                                                       GError        **error);
 gboolean               egg_desktop_entries_has_group  (EggDesktopEntries  *entries,
-	                                           const gchar     *group);
+                                                       const gchar     *group);
 
 gboolean               egg_desktop_entries_has_key  (EggDesktopEntries  *entries,
-	                                           const gchar     *group,
-                                                   const gchar     *key);
+                                                     const gchar     *group,
+                                                     const gchar     *key);
 
 gchar                 *egg_desktop_entries_get_value         (EggDesktopEntries  *entries,
-				                          const gchar    *group,
-				                          const gchar    *key,
-						          GError        **error);
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              GError        **error);
+
+void                  egg_desktop_entries_set_value         (EggDesktopEntries  *entries,
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              const gchar    *value,
+                                                              GError        **error);
+
 gchar                 *egg_desktop_entries_get_string        (EggDesktopEntries  *entries,
-				                          const gchar    *group,
-				                          const gchar    *key,
-						          GError        **error);
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              GError        **error);
+void                  egg_desktop_entries_set_string        (EggDesktopEntries  *entries,
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              const gchar    *value,
+                                                              GError        **error);
+
 gchar                 *egg_desktop_entries_get_locale_string (EggDesktopEntries  *entries,
-					                  const gchar    *group,
-					                  const gchar    *key,
-					                  const gchar    *locale,
-					                  GError        **error);
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              const gchar    *locale,
+                                                              GError        **error);
+void                   egg_desktop_entries_set_locale_string (EggDesktopEntries  *entries,
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              const gchar    *locale,
+                                                              const gchar    *value,
+                                                              GError        **error);
+
 gboolean               egg_desktop_entries_get_boolean       (EggDesktopEntries  *entries,
-				                          const gchar    *group,
-				                          const gchar    *key,
-							  GError        **error);
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              GError        **error);
+void                   egg_desktop_entries_set_boolean       (EggDesktopEntries  *entries,
+                                                              const gchar    *group,
+                                                              const gchar    *key,
+                                                              gboolean        value,
+                                                              GError        **error);
+
 gint                   egg_desktop_entries_get_integer       (EggDesktopEntries  *entries,
-				                          const gchar    *group,
-				                          const gchar    *key,
-							  GError        **error);
+                                                              const gchar        *group,
+                                                              const gchar        *key,
+                                                              GError            **error);
+void                   egg_desktop_entries_set_integer       (EggDesktopEntries  *entries,
+                                                              const gchar        *group,
+                                                              const gchar        *key,
+                                                              gint                value,
+                                                              GError            **error);
 
 gchar                **egg_desktop_entries_get_string_list        (EggDesktopEntries  *entries,
-					                       const gchar    *group,
-					                       const gchar    *key,
-					                       gsize          *length,
-					                       GError        **error);
+                                                                   const gchar        *group,
+                                                                   const gchar        *key,
+                                                                   gsize              *length,
+                                                                   GError            **error);
+void                   egg_desktop_entries_set_string_list        (EggDesktopEntries  *entries,
+                                                                   const gchar        *group,
+                                                                   const gchar        *key,
+                                                                   gchar * const       value[],
+                                                                   gsize               length,
+                                                                   GError            **error);
+
 gchar                **egg_desktop_entries_get_locale_string_list (EggDesktopEntries  *entries,
-						               const gchar    *group,
-						               const gchar    *key,
-						               const gchar    *locale,
-						               gsize          *length,
-						               GError        **error);
+                                                                   const gchar        *group,
+                                                                   const gchar        *key,
+                                                                   const gchar        *locale,
+                                                                   gsize              *length,
+                                                                   GError            **error);
+void                   egg_desktop_entries_set_locale_string_list (EggDesktopEntries  *entries,
+                                                                   const gchar        *group,
+                                                                   const gchar        *key,
+                                                                   const gchar        *locale,
+                                                                   gchar * const       value[], 
+                                                                   gsize               length,
+                                                                   GError            **error);
+
 gboolean              *egg_desktop_entries_get_boolean_list       (EggDesktopEntries  *entries,
-					                       const gchar    *group,
-					                       const gchar    *key,
-					                       gsize          *length,
-							       GError        **error);
+                                                                   const gchar    *group,
+                                                                   const gchar    *key,
+                                                                   gsize          *length,
+                                                                   GError        **error);
+void                   egg_desktop_entries_set_boolean_list       (EggDesktopEntries  *entries,
+                                                                   const gchar    *group,
+                                                                   const gchar    *key,
+                                                                   gboolean       value[],
+                                                                   gsize          length,
+                                                                   GError        **error);
+
 gint                  *egg_desktop_entries_get_integer_list       (EggDesktopEntries  *entries,
-					                       const gchar    *group,
-					                       const gchar    *key,
-					                       gsize          *length,
-							       GError        **error);
+                                                                   const gchar    *group,
+                                                                   const gchar    *key,
+                                                                   gsize          *length,
+                                                                   GError        **error);
+void                   egg_desktop_entries_set_integer_list       (EggDesktopEntries  *entries,
+                                                                   const gchar    *group,
+                                                                   const gchar    *key,
+                                                                   gint           value[],
+                                                                   gsize          length,
+                                                                   GError        **error);
 
-void                    egg_desktop_entries_add_entry (EggDesktopEntries *entries,
-				                     const gchar   *group,
-				                     const gchar   *key,
-				                     const gchar   *value);
 
-void                    egg_desktop_entries_remove_entry (EggDesktopEntries *entries,
-				                        const gchar   *group,
-				                        const gchar   *key);
-					      
-void                    egg_desktop_entries_add_group  (EggDesktopEntries *entries,
-				                      const gchar     *group_name);
+void                    egg_desktop_entries_remove_key (EggDesktopEntries *entries,
+                                                        const gchar   *group,
+                                                        const gchar   *key);
 
 void                    egg_desktop_entries_remove_group (EggDesktopEntries *entries,
-		 		                        const gchar     *group_name);
+                                                          const gchar     *group_name);
 
 G_END_DECLS
 #endif /* __EGG_DESKTOP_ENTRIES_H__ */

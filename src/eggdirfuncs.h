@@ -28,6 +28,8 @@ gchar* egg_get_user_configuration_dir (void);
 gchar* egg_get_user_cache_dir (void);
 gchar** egg_get_secondary_data_dirs (void);
 gchar** egg_get_secondary_configuration_dirs (void);
+gchar** egg_get_data_dirs (void);
+gchar** egg_get_configuration_dirs (void);
 
 G_END_DECLS
 

@@ -98,10 +98,10 @@ process_desktop_file (const char  *desktop_file,
 
   load_error = NULL;
   entries = 
-    egg_desktop_entries_new_from_file (NULL,
+    egg_desktop_entries_new_from_file (desktop_file, NULL,
                                        EGG_DESKTOP_ENTRIES_DISCARD_COMMENTS |
                                        EGG_DESKTOP_ENTRIES_DISCARD_TRANSLATIONS,
-                                       desktop_file, &load_error);
+                                       &load_error);
 
   if (load_error != NULL) {
     g_propagate_error (error, load_error);

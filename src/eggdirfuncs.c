@@ -138,3 +138,52 @@ egg_get_secondary_configuration_dirs (void)
 
   return conf_dir_vector;
 }
+
+gchar **
+egg_get_data_dirs (void)
+{
+  gchar **data_dirs = NULL, **secondary_data_dirs;
+  gsize i, length;
+
+  secondary_data_dirs = egg_get_secondary_data_dirs ();
+
+  for (length = 0; secondary_data_dirs[length] != NULL; length++);
+
+  data_dirs = g_renew (char *, secondary_data_dirs, length + 2);
+
+  data_dirs[0] = egg_get_user_data_dir ();
+
+  i = 0;
+  while (i < length) {
+    data_dirs[i + 1] = secondary_data_dirs[i];
+    i++;
+  }
+  data_dirs[length + 1] = NULL;
+
+  return data_dirs;
+}
+
+gchar **
+egg_get_configuration_dirs (void)
+{
+  gchar **configuration_dirs = NULL, **secondary_configuration_dirs;
+  gsize i, length;
+
+  secondary_configuration_dirs = egg_get_secondary_configuration_dirs ();
+
+  for (length = 0; secondary_configuration_dirs[length] != NULL; length++);
+
+  configuration_dirs = g_renew (char *, secondary_configuration_dirs,
+                                length + 2);
+
+  configuration_dirs[0] = egg_get_user_configuration_dir ();
+
+  i = 0;
+  while (i < length) {
+    configuration_dirs[i + 1] = secondary_configuration_dirs[i];
+    i++;
+  }
+  configuration_dirs[length + 1] = NULL;
+
+  return configuration_dirs;
+}

@@ -501,10 +501,10 @@ generic_keys (GnomeDesktopFile *df, const char *filename)
 }
 
 struct SectionData {
-  gboolean has_desktop_entry;
-  gboolean has_kde_desktop_entry;
   GHashTable *hash;
   const char *filename;
+  const char *main_section;
+  gboolean has_kde_desktop_entry;
 };
 
 static void
@@ -514,53 +514,70 @@ enum_sections (GnomeDesktopFile *df,
 {
   struct SectionData *section = data;
 
-  if (name && strcmp (name, "Desktop Entry") == 0)
-    section->has_desktop_entry = TRUE;
-  else if (name && strcmp (name, "KDE Desktop Entry") == 0)
-    section->has_kde_desktop_entry = TRUE;
-  else if (name && strncmp (name, "X-", 2) != 0)
-    print_fatal ("Error, file %s contains section %s, extensions to the spec should use section names starting with \"X-\".\n", section->filename, name);
+  g_assert (name != NULL);
 
-  if (name)
+  if (strcmp (name, "Desktop Entry") == 0 ||
+      strcmp (name, "KDE Desktop Entry") == 0)
     {
-      if (g_hash_table_lookup (section->hash, name))
-	print_fatal ("Error, file %s contains multiple sections named %s\n", section->filename, name);
+      if (!section->main_section)
+	{
+	  section->main_section = name;
+	}
       else
-	g_hash_table_insert (section->hash, (char *)name, (char *)name);
+	{
+	  print_fatal ("Error, file %s already contains section %s, should not contain another section %s\n",
+		       section->filename, section->main_section, name);
+	}
+
+      if (strcmp (name, "KDE Desktop Entry") == 0)
+	section->has_kde_desktop_entry = TRUE;
     }
+  else if (strncmp (name, "Desktop Action ", 15) != 0 &&
+	   strncmp (name, "X-", 2) != 0)
+    {
+      print_fatal ("Error, file %s contains section %s, extensions to the spec should use section names starting with \"X-\".\n",
+		   section->filename, name);
+    }
+
+  if (g_hash_table_lookup (section->hash, name))
+    print_fatal ("Error, file %s contains multiple sections named %s\n", section->filename, name);
+  else
+    g_hash_table_insert (section->hash, (char *)name, (char *)name);
 }
 
-static gboolean
+static const char *
 required_section (GnomeDesktopFile *df, const char *filename)
 {
-  struct SectionData section = {FALSE, FALSE};
+  struct SectionData section;
   
   section.hash = g_hash_table_new (g_str_hash, g_str_equal);
   section.filename = filename;
+  section.main_section = NULL;
+  section.has_kde_desktop_entry = FALSE;
     
   gnome_desktop_file_foreach_section (df, enum_sections, &section);
 
-  if (!section.has_desktop_entry && !section.has_kde_desktop_entry)
+  if (!section.main_section)
     {
       print_fatal ("Error, file %s doesn't contain a desktop entry section\n", filename);
-      return FALSE;
     }
   else if (section.has_kde_desktop_entry)
     {
-      print_warning ("Warning, file %s contains a \"KDE Desktop Entry\" section. This has been deprecated in favor of \"Desktop Entry\"\n", filename);
+      print_warning ("Warning, file %s contains a \"KDE Desktop Entry\" section. This has been deprecated in favor of \"Desktop Entry\"\n",
+		     filename);
     }
 
   g_hash_table_destroy (section.hash);
   
-  return TRUE;
+  return section.main_section;
 }
 
 static gboolean
-required_keys (GnomeDesktopFile *df, const char *filename)
+required_keys (GnomeDesktopFile *df, const char *section, const char *filename)
 {
   const char *val;
   
-  if (gnome_desktop_file_get_raw (df, NULL,
+  if (gnome_desktop_file_get_raw (df, section,
 				  "Encoding",
 				  NULL, &val))
     {
@@ -573,14 +590,14 @@ required_keys (GnomeDesktopFile *df, const char *filename)
       print_fatal ("Error, file %s does not contain the \"Encoding\" key. This is a required field for all desktop files.\n", filename);
     }
 
-  if (!gnome_desktop_file_get_raw (df, NULL,
+  if (!gnome_desktop_file_get_raw (df, section,
 				   "Name",
 				   NULL, &val))
     {
       print_fatal ("Error, file %s does not contain the \"Name\" key. This is a required field for all desktop files.\n", filename);
     }
 
-  if (gnome_desktop_file_get_raw (df, NULL,
+  if (gnome_desktop_file_get_raw (df, section,
 				  "Type",
 				  NULL, &val))
     {
@@ -602,18 +619,126 @@ required_keys (GnomeDesktopFile *df, const char *filename)
   return TRUE;
 }
 
+struct ActionsData {
+  GHashTable *hash;
+  const char *filename;
+};
+
+static void
+enum_actions (GnomeDesktopFile *df,
+	      const char       *section,
+	      gpointer          data)
+{
+  struct ActionsData *actions_data = data;
+  const char *val;
+  const char *action;
+
+  g_assert (section != NULL);
+
+  if (strncmp (section, "Desktop Action ", 15) != 0)
+    return;
+
+  action = section + 15;
+
+  /* Already verified this */
+  g_assert (!g_hash_table_lookup (actions_data->hash, action));
+
+  g_hash_table_insert (actions_data->hash, (char *) action, (char *) action);
+
+  if (!gnome_desktop_file_get_raw (df, section,
+				   "Exec",
+				   NULL, &val))
+    {
+      print_fatal ("Error, file %s contains \"Desktop Action %s\" section which lacks an Exec key.\n",
+		   actions_data->filename, section);
+    }
+}
+
+static void
+error_orphaned_action (gpointer       key,
+		       gpointer       value,
+		       gpointer       user_data)
+{
+  const char *action = key;
+  const char *filename = user_data;
+
+  print_fatal ("Error, file %s contains \"Desktop Action %s\" but Actions key does not contain '%s'\n",
+	       filename, action, action);
+}
+
+static gboolean
+required_actions (GnomeDesktopFile *df, const char *filename)
+{
+  struct ActionsData actions_data;
+  gboolean retval = FALSE;
+
+  actions_data.hash = g_hash_table_new (g_str_hash, g_str_equal);
+  actions_data.filename = filename;
+    
+  gnome_desktop_file_foreach_section (df, enum_actions, &actions_data);
+
+  if (g_hash_table_size (actions_data.hash) > 0)
+    {
+      const char *val;
+      char **actions;
+      int i;
+
+      if (!gnome_desktop_file_get_raw (df, NULL, "Actions", NULL, &val))
+	{
+	  print_fatal ("Error, file %s has \"Desktop Action\" sections but no Action key.\n", filename);
+	  goto out;
+	}
+
+      actions = g_strsplit (val, ";", G_MAXINT);
+      for (i = 0; actions [i]; i++)
+	{
+	  if (*actions [i] == '\0')
+	    continue;
+
+	  if (!g_hash_table_lookup (actions_data.hash, actions [i]))
+	    {
+	      print_fatal ("Error, Action key contains '%s' but file %s has \"Desktop Action %s\" section.\n",
+			   actions [i], filename, actions [i]);
+	      goto out;
+	    }
+
+	  g_hash_table_remove (actions_data.hash, actions [i]);
+	}
+
+      g_strfreev (actions);
+
+      if (g_hash_table_size (actions_data.hash) > 0)
+	{
+	  g_hash_table_foreach (actions_data.hash,
+				error_orphaned_action,
+				(char *) filename);
+	  goto out;
+	}
+    }
+
+  retval = TRUE;
+
+ out:
+  g_hash_table_destroy (actions_data.hash);
+
+  return retval;
+}
+
 gboolean
 desktop_file_validate (GnomeDesktopFile *df, const char *filename)
 {
   const char *name;
   const char *comment;
+  const char *main_section;
 
   /* FIXME global variable cruft */
   fatal_error_occurred = FALSE;
   
-  if (!required_section (df, filename))
+  if ((main_section = required_section (df, filename)) == NULL)
     return !fatal_error_occurred;
-  if (!required_keys (df, filename))
+  if (!required_keys (df, main_section, filename))
+    return !fatal_error_occurred;
+  if (!required_actions (df, filename))
     return !fatal_error_occurred;
 
   generic_keys (df, filename);

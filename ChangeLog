@@ -1,3 +1,20 @@
+2004-02-19  Mark McLoughlin  <mark@skynet.ie>
+
+	Add support for .desktop files which contains Actions. Verify
+	that the Actions key and Desktop Action sections match up
+	and that each Desktop Action section has an Exec key.
+
+	* src/validate.c:
+	(enum_sections): record the name of the main section and
+	allow Desktop Action sections.
+	(required_section): return the name of the main section.
+	(required_keys): actually check for these keys in the correct
+	section.
+	(enum_actions), (error_orphaned_action),
+	(required_actions): make sure the Actions key and Desktop Actions
+	sections match up.
+	(desktop_file_validate): upd.
+
 2003-10-23  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-process.c (tree_node_find_subdir): don't return an

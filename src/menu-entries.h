@@ -121,7 +121,8 @@ void entry_unref (Entry *entry);
 const char* entry_get_absolute_path (Entry      *entry);
 const char* entry_get_relative_path (Entry      *entry);
 const char* entry_get_name          (Entry      *entry);
-gboolean entry_has_category 	    (Entry      *entry,
+gboolean    entry_get_nodisplay     (Entry      *entry);
+gboolean    entry_has_category      (Entry      *entry,
 		                     EntryCache *cache,
 				     const char *category);
 

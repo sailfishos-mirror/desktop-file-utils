@@ -45,6 +45,7 @@ struct Entry
   
   guint type : 4;
   guint refcount : 24;
+  guint nodisplay : 1;
 };
 
 struct EntryDirectory
@@ -82,7 +83,8 @@ static gboolean    cached_dir_is_legacy     (CachedDir   *dir);
 static Entry*
 entry_new (EntryType   type,
            const char *relative_path,
-           const char *absolute_path)
+           const char *absolute_path,
+	   gboolean    nodisplay)
 {
   Entry *e;
 
@@ -92,6 +94,7 @@ entry_new (EntryType   type,
   e->type = type;
   e->relative_path = g_strdup (relative_path);
   e->absolute_path = g_strdup (absolute_path);
+  e->nodisplay = nodisplay != FALSE;
   e->refcount = 1;
   
   return e;
@@ -148,6 +151,14 @@ entry_get_name (Entry *entry)
     return base + 1;
   else
     return entry->relative_path;
+}
+
+gboolean
+entry_get_nodisplay (Entry *entry)
+{
+  g_return_val_if_fail (entry->type == ENTRY_DIRECTORY, FALSE);
+
+  return entry->nodisplay;
 }
 
 gboolean
@@ -368,7 +379,7 @@ entry_from_cached_entry (EntryDirectory *ed,
       return src;
     }
   
-  e = entry_new (src->type, relative_path, src->absolute_path);
+  e = entry_new (src->type, relative_path, src->absolute_path, src->nodisplay);
   
   n_categories_to_copy = 0;
   if (src->categories)
@@ -438,7 +449,7 @@ entry_directory_get_directory (EntryDirectory *ed,
   if (src->type != ENTRY_DIRECTORY)
     return NULL;
   
-  e = entry_new (src->type, relative_path, src->absolute_path);
+  e = entry_new (src->type, relative_path, src->absolute_path, src->nodisplay);
   
   return e;
 }
@@ -1739,20 +1750,41 @@ entry_new_desktop_from_file (EntryCache *cache,
                              const char *basename)
 {
   char *str;
-  gsize len;
   GError *err;
+  char *nodisplay;
   char *categories;
   Entry *e;
   
   str = NULL;
-  len = 0;
   err = NULL;
-  if (!g_file_get_contents (filename, &str, &len, &err))
+  if (!g_file_get_contents (filename, &str, NULL, &err))
     {
       menu_verbose ("Could not get contents of \"%s\": %s\n",
                     filename, err->message);
       g_error_free (err);
       return NULL;
+    }
+
+  nodisplay = find_value (str, "NoDisplay");
+  if (nodisplay != NULL)
+    {
+      gboolean show;
+
+      show = TRUE;
+      if (strcmp (nodisplay, "true") == 0)
+	{
+	  menu_verbose ("Not showing \"%s\" because of NoDisplay=true\n",
+			filename);
+	  show = FALSE;
+	}
+
+      g_free (nodisplay);
+
+      if (!show)
+	{
+	  g_free (str);
+	  return NULL;
+	}
     }
 
   if (cache->only_show_in_name)
@@ -1799,7 +1831,7 @@ entry_new_desktop_from_file (EntryCache *cache,
         }
     }
 
-  e = entry_new (ENTRY_DESKTOP, basename, filename);
+  e = entry_new (ENTRY_DESKTOP, basename, filename, FALSE);
   
   categories = find_value (str, "Categories");
   if (categories != NULL)
@@ -1818,7 +1850,36 @@ static Entry*
 entry_new_directory_from_file (const char *filename,
                                const char *basename)
 {
-  return entry_new (ENTRY_DIRECTORY, basename, filename);
+  char *str;
+  GError *err;
+  char *nodisplay_str;
+  gboolean nodisplay;
+  
+  str = NULL;
+  err = NULL;
+  if (!g_file_get_contents (filename, &str, NULL, &err))
+    {
+      menu_verbose ("Could not get contents of \"%s\": %s\n",
+                    filename, err->message);
+      g_error_free (err);
+      return NULL;
+    }
+
+  nodisplay = FALSE;
+  nodisplay_str = find_value (str, "NoDisplay");
+  if (nodisplay_str != NULL)
+    {
+      if (strcmp (nodisplay_str, "true") == 0)
+	{
+	  menu_verbose ("Not showing \"%s\" because of NoDisplay=true\n",
+			filename);
+	  nodisplay = TRUE;
+	}
+
+      g_free (nodisplay_str);
+    }
+
+  return entry_new (ENTRY_DIRECTORY, basename, filename, nodisplay);
 }
 
 static void

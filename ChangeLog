@@ -1,5 +1,19 @@
 2004-08-29  Mark McLoughlin  <mark@skynet.ie>
 
+	Based on a patch from Dan Williams <dcbw@redhat.com>
+
+	* src/menu-entries.[ch]:
+	(entry_get_nodisplay): add accessor for nodisplay flag
+	(entry_new_desktop_from_file): return NULL if NoDisplay=TRUE
+	(entry_new_directory_from_file): set the nodisplay flag if
+	NoDisplay=TRUE.
+	
+	* src/menu-process.c: (tree_node_from_menu_node): if the
+	last .directory has NoDisplay=true treat it as if the
+	<Menu> had a <Deleted>
+
+2004-08-29  Mark McLoughlin  <mark@skynet.ie>
+
 	* src/menu-process.h: don't include desktop_file.h
 	
 	* src/menu-util.h: don't include menu-layout.h

@@ -1970,6 +1970,11 @@ tree_node_from_menu_node (TreeNode   *parent,
       child = menu_node_get_next (child);
     }
 
+  if (tree_node->dir_entry && entry_get_nodisplay (tree_node->dir_entry))
+    {
+      deleted = TRUE;
+    }
+
   if (deleted)
     {
       entry_set_unref (entries);

@@ -119,7 +119,17 @@ gboolean  menu_node_sync_for_file          (const char  *filename,
                                             GError     **error);
 
 /* random utility function */
+#ifdef DFU_MENU_DISABLE_VERBOSE
+#ifdef G_HAVE_ISO_VARARGS
+#define menu_verbose(...)
+#elif defined(G_HAVE_GNUC_VARARGS)
+#define menu_verbose(format...)
+#else
+#error "Cannot disable verbose mode due to lack of varargs macros"
+#endif
+#else
 void menu_verbose    (const char *format,
                       ...) G_GNUC_PRINTF (1, 2);
+#endif
 
 #endif /* MENU_LAYOUT_H */

@@ -57,16 +57,17 @@ struct _EntryDirectory
 
 static char *only_show_in_name = NULL;
 
-static CachedDir*  cached_dir_load        (const char  *canonical_path,
-                                           GError     **err);
-static void        cached_dir_mark_used   (CachedDir   *dir);
-static void        cached_dir_mark_unused (CachedDir   *dir);
-static GSList*     cached_dir_get_subdirs (CachedDir   *dir);
-static GSList*     cached_dir_get_entries (CachedDir   *dir);
-static const char* cached_dir_get_name    (CachedDir   *dir);
-static void        cache_clear_unused     (void);
-static Entry*      cached_dir_find_entry  (CachedDir   *dir,
-                                           const char  *name);
+static CachedDir*  cached_dir_load          (const char  *canonical_path,
+                                             GError     **err);
+static void        cached_dir_mark_used     (CachedDir   *dir);
+static void        cached_dir_mark_unused   (CachedDir   *dir);
+static GSList*     cached_dir_get_subdirs   (CachedDir   *dir);
+static GSList*     cached_dir_get_entries   (CachedDir   *dir);
+static const char* cached_dir_get_name      (CachedDir   *dir);
+static void        cache_clear_unused       (void);
+static Entry*      cached_dir_find_entry    (CachedDir   *dir,
+                                             const char  *name);
+static int         cached_dir_count_entries (CachedDir   *dir);
 
 void
 entry_set_only_show_in_name (const char *name)
@@ -82,7 +83,7 @@ entry_new (EntryType   type,
 {
   Entry *e;
 
-  e = g_new (Entry, 1);
+  e = g_new0 (Entry, 1);
   
   e->categories = NULL;
   e->type = type;
@@ -153,18 +154,27 @@ entry_has_category (Entry      *entry,
 {
   int i;
 
+  menu_verbose ("  checking whether entry %s has category %s\n",
+                entry->relative_path, category);
+  
   if (entry->categories == NULL)
-    return FALSE;
+    {
+      menu_verbose ("   entry has no categories\n");
+      return FALSE;
+    }
   
   i = 0;
   while (entry->categories[i] != NULL)
     {
+      menu_verbose ("   %s %s\n", category, entry->categories[i]);
       if (strcmp (category, entry->categories[i]) == 0)
         return TRUE;
       
       ++i;
     }
 
+  menu_verbose ("   does not have category %s\n", category);
+  
   return FALSE;
 }
 
@@ -234,7 +244,7 @@ entry_directory_load  (const char     *path,
       return NULL;
     }
 
-  ed = g_new (EntryDirectory, 1);
+  ed = g_new0 (EntryDirectory, 1);
   ed->absolute_path = canonical;
   ed->root = cd;
   ed->flags = flags;
@@ -257,7 +267,7 @@ entry_directory_unref (EntryDirectory *ed)
   g_return_if_fail (ed != NULL);
   g_return_if_fail (ed->refcount > 0);
 
-  ed->refcount -= 1;
+  ed->refcount -= 1;  
   if (ed->refcount == 0)
     {
       cached_dir_mark_unused (ed->root);
@@ -463,6 +473,11 @@ entry_directory_foreach (EntryDirectory           *ed,
                                      func, data1, data2);
 
   g_free (parent_path);
+
+#if 0
+  menu_verbose ("%d entries in the EntryDirectory after foreach\n",
+                cached_dir_count_entries (ed->root));
+#endif
 }
 
 static gboolean
@@ -533,7 +548,7 @@ entry_directory_list_new (void)
 {
   EntryDirectoryList *list;
 
-  list = g_new (EntryDirectoryList, 1);
+  list = g_new0 (EntryDirectoryList, 1);
 
   list->refcount = 1;
   list->dirs = NULL;
@@ -545,6 +560,9 @@ entry_directory_list_new (void)
 void
 entry_directory_list_ref (EntryDirectoryList *list)
 {
+  g_return_if_fail (list != NULL);
+  g_return_if_fail (list->refcount > 0);
+  
   list->refcount += 1;
 }
 
@@ -553,7 +571,7 @@ entry_directory_list_unref (EntryDirectoryList *list)
 {
   g_return_if_fail (list != NULL);
   g_return_if_fail (list->refcount > 0);
-
+  
   list->refcount -= 1;
   if (list->refcount == 0)
     {
@@ -562,12 +580,18 @@ entry_directory_list_unref (EntryDirectoryList *list)
     }
 }
 
+static void
+dir_unref_foreach (void *element,
+                   void *user_data)
+{
+  EntryDirectory *ed = element;
+  entry_directory_unref (ed);
+}
+
 void
 entry_directory_list_clear (EntryDirectoryList *list)
 {
-  g_slist_foreach (list->dirs,
-                   (GFunc) entry_directory_unref,
-                   NULL);
+  g_slist_foreach (list->dirs, dir_unref_foreach, NULL);
   g_slist_free (list->dirs);
   list->dirs = NULL;
   list->length = 0;
@@ -690,7 +714,7 @@ entry_directory_list_add (EntryDirectoryList       *list,
    * entry)
    */
   reversed = g_slist_copy (list->dirs);
-  reversed = g_slist_reverse (list->dirs);
+  reversed = g_slist_reverse (reversed);
 
   tmp = reversed;
   while (tmp != NULL)
@@ -722,6 +746,9 @@ void
 entry_directory_list_get_all_desktops (EntryDirectoryList *list,
                                        EntrySet           *set)
 {
+  menu_verbose (" Storing all of list %p in set %p\n",
+                list, set);
+  
   entry_directory_list_add (list, get_all_func,
                             set, NULL);
 }
@@ -754,6 +781,8 @@ entry_directory_list_get_by_category (EntryDirectoryList *list,
                                       const char         *category,
                                       EntrySet           *set)
 {
+  menu_verbose (" Storing list %p category %s in set %p\n",
+                list, category, set);
   entry_directory_list_add (list, get_by_category_func,
                             set, (char*) category);
 }
@@ -787,6 +816,9 @@ entry_directory_list_invert_set (EntryDirectoryList *list,
 {
   EntrySet *inverse;
 
+  menu_verbose (" Inverting set %p relative to list %p\n",
+                set, list);
+  
   inverse = entry_set_new ();
   entry_directory_list_add (list, get_inverse_func,
                             inverse, set);
@@ -810,6 +842,8 @@ entry_set_new (void)
   set = g_new0 (EntrySet, 1);
   set->refcount = 1;
 
+  menu_verbose (" New entry set %p\n", set);
+  
   return set;
 }
 
@@ -828,6 +862,8 @@ entry_set_unref (EntrySet *set)
   set->refcount -= 1;
   if (set->refcount == 0)
     {
+      menu_verbose (" Deleting entry set %p\n", set);
+      
       if (set->hash)
         g_hash_table_destroy (set->hash);
       g_free (set);
@@ -838,6 +874,9 @@ void
 entry_set_add_entry (EntrySet *set,
                      Entry    *entry)
 {
+  menu_verbose (" Adding to set %p entry %s\n",
+                set, entry->relative_path);
+  
   if (set->hash == NULL)
     {
       set->hash = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -854,6 +893,9 @@ void
 entry_set_remove_entry (EntrySet *set,
                         Entry    *entry)
 {
+  menu_verbose (" Removing from set %p entry %s\n",
+                set, entry->relative_path);
+  
   if (set->hash == NULL)
     return;
   
@@ -874,6 +916,8 @@ entry_set_lookup (EntrySet   *set,
 void
 entry_set_clear (EntrySet *set)
 {
+  menu_verbose (" Clearing set %p\n", set);
+  
   if (set->hash != NULL)
     {
       g_hash_table_destroy (set->hash);
@@ -936,6 +980,8 @@ void
 entry_set_union (EntrySet *set,
                  EntrySet *with)
 {
+  menu_verbose (" Union of %p and %p\n", set, with);
+  
   if (entry_set_get_count (with) == 0)
     {
       /* A fast simple case */
@@ -953,6 +999,7 @@ entry_set_union (EntrySet *set,
 
 typedef struct
 {
+  EntrySet *set;
   EntrySet *with;
 } IntersectData;
 
@@ -962,13 +1009,22 @@ intersect_foreach_remove (void *key, void *value, void *data)
   IntersectData *id = data;
 
   /* return TRUE to remove if the key is not in the other set */
-  return g_hash_table_lookup (id->with->hash, key) == NULL;
+  if (g_hash_table_lookup (id->with->hash, key) == NULL)
+    {
+      menu_verbose (" Removing from %p entry %s\n",
+                    id->set, (char*) key);
+      return TRUE;
+    }
+  else
+    return FALSE;
 }
 
 void
 entry_set_intersection (EntrySet *set,
                         EntrySet *with)
 {
+  menu_verbose (" Intersection of %p and %p\n", set, with);
+  
   if (entry_set_get_count (set) == 0 ||
       entry_set_get_count (with) == 0)
     {
@@ -984,26 +1040,42 @@ entry_set_intersection (EntrySet *set,
       g_assert (set->hash);
       g_assert (with->hash);
 
+      id.set = set;
       id.with = with;
       
       g_hash_table_foreach_remove (set->hash, intersect_foreach_remove, &id);
     }
 }
 
+typedef struct
+{
+  EntrySet *set;
+  EntrySet *other;
+} SubtractData;
+
+
 static gboolean
 subtract_foreach_remove (void *key, void *value, void *data)
 {
-  EntrySet *other = data;
+  SubtractData *sd = data;
 
   /* return TRUE to remove if the key IS in the other set */
-  return g_hash_table_lookup (other->hash, key) == NULL;
+  if (g_hash_table_lookup (sd->other->hash, key) != NULL)
+    {
+      menu_verbose (" Removing from %p entry %s\n",
+                    sd->set, (char*) key);      
+      return TRUE;
+    }
+  else
+    return FALSE;
 }
-
 
 void
 entry_set_subtract (EntrySet *set,
                     EntrySet *other)
 {
+  menu_verbose (" Subtract from %p set %p\n", set, other);
+  
   if (entry_set_get_count (set) == 0 ||
       entry_set_get_count (other) == 0)
     {
@@ -1012,11 +1084,16 @@ entry_set_subtract (EntrySet *set,
     }
   else
     {
-      /* Remove everything in "set" which is not in "other" */
+      /* Remove everything in "set" which is not in "other" */      
+      SubtractData sd;
+      
       g_assert (set->hash);
       g_assert (other->hash);
+
+      sd.set = set;
+      sd.other = other;
       
-      g_hash_table_foreach_remove (set->hash, subtract_foreach_remove, other);
+      g_hash_table_foreach_remove (set->hash, subtract_foreach_remove, &sd);
     }
 }
 
@@ -1026,6 +1103,8 @@ entry_set_swap_contents (EntrySet *a,
 {
   GHashTable *tmp;
 
+  menu_verbose (" Swap contents of %p and %p\n", a, b);
+  
   tmp = a->hash;
   a->hash = b->hash;
   b->hash = tmp;
@@ -1373,7 +1452,9 @@ find_value (const char *str,
   if (*p == '\0')
     return NULL;
 
-  key_len = strlen (key);
+  if (key_len < 0)
+    key_len = strlen (key);
+
   if (strncmp (p, key, key_len) != 0)
     {
       ++p;
@@ -1384,12 +1465,12 @@ find_value (const char *str,
    * verify that we have '^ *key *='
    */
   q = p;
-  while (q != str)
-    {      
+  while (q > str)
+    {
+      --q;
+
       if (!(*q == ' ' || *q == '\t'))
         break;
-
-      --q;
     }
   
   if (!(q == str || *q == '\n' || *q == '\r'))
@@ -1515,7 +1596,7 @@ entry_new_desktop_from_file (const char *filename,
       e->categories = string_list_from_desktop_value (categories);
       g_free (categories);
     }
-
+  
   g_free (str);
   
   return e;
@@ -1838,4 +1919,28 @@ entry_error_quark (void)
     q = g_quark_from_static_string ("entry-error-quark");
 
   return q;
+}
+
+static int
+cached_dir_count_entries (CachedDir *dir)
+{
+  int count;
+  
+  GSList *tmp;
+
+  count = 0;
+  
+  tmp = dir->subdirs;
+  while (tmp != NULL)
+    {
+      CachedDir *child = tmp->data;
+
+      count += cached_dir_count_entries (child);
+      
+      tmp = tmp->next;
+    }
+
+  count += g_slist_length (dir->entries);
+
+  return count;
 }

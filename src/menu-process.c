@@ -686,7 +686,7 @@ tree_node_new (void)
 {
   TreeNode *node;
 
-  node = g_new (TreeNode, 1);
+  node = g_new0 (TreeNode, 1);
   node->name = NULL;
   node->dir_entry = NULL;
   node->entries = NULL;

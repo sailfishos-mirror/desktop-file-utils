@@ -1518,13 +1518,13 @@ static const char *
 get_canonical_encoding (const char *encoding)
 {
   int i;
-  for (i = 0; i < G_N_ELEMENTS (enc_aliases); i++)
+  for (i = 0; i < (int) G_N_ELEMENTS (enc_aliases); i++)
     {
       if (aliases_equal (enc_aliases[i].alias, encoding))
 	return enc_aliases[i].value;
     }
 
-  for (i = 0; i < G_N_ELEMENTS (known_encodings); i++)
+  for (i = 0; i < (int) G_N_ELEMENTS (known_encodings); i++)
     {
       if (aliases_equal (known_encodings[i].encoding, encoding))
 	return known_encodings[i].encoding;
@@ -1555,7 +1555,7 @@ get_encoding_from_lang (const char *lang)
 {
   int i, j;
   
-  for (i = 0; i < G_N_ELEMENTS (known_encodings); i++)
+  for (i = 0; i < (int) G_N_ELEMENTS (known_encodings); i++)
     {
       for (j = 0; j < N_LANG; j++)
 	{

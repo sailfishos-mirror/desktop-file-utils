@@ -31,28 +31,41 @@
 #define _(x) gettext ((x))
 #define N_(x) x
 
-static void menu_node_resolve_files (const char *node_dirname,
-                                     const char *node_filename,
-                                     MenuNode   *node);
+static void menu_node_resolve_files (MenuNode   *node);
+
+static MenuNode*
+find_menu_child (MenuNode *node)
+{
+  MenuNode *child;
+
+  child = menu_node_get_children (node);
+  while (child && menu_node_get_type (child) != MENU_NODE_MENU)
+    child = menu_node_get_next (child);
+
+  return child;
+}
 
 static void
 merge_resolved_copy_of_children (MenuNode   *where,
-                                 MenuNode   *from,
-                                 const char *from_filename)
+                                 MenuNode   *from)
 {
   MenuNode *from_child;
   MenuNode *insert_after;
   MenuNode *from_copy;
-  char *dirname;
-
+  MenuNode *menu_child;
+  
   /* Copy and file-resolve the node */
   from_copy = menu_node_deep_copy (from);
-  dirname = g_path_get_dirname (from_filename);
-  menu_node_resolve_files (dirname, from_filename, from_copy);
-  g_free (dirname);
+  menu_node_resolve_files (from_copy);
   
   insert_after = where;
-  from_child = menu_node_get_children (from_copy);
+
+  /* skip root node */
+  menu_child = find_menu_child (from_copy);
+  g_assert (menu_child != NULL);
+
+  /* merge children of toplevel <Menu> */
+  from_child = menu_node_get_children (menu_child);
   while (from_child != NULL)
     {
       MenuNode *next;
@@ -64,7 +77,7 @@ merge_resolved_copy_of_children (MenuNode   *where,
         case MENU_NODE_NAME:
           menu_node_unlink (from_child); /* delete this */
           break;
-
+          
         default:
           {
             menu_node_steal (from_child);
@@ -78,46 +91,18 @@ merge_resolved_copy_of_children (MenuNode   *where,
       from_child = next;
     }
 
-  /* Now "from_copy" should be a single root node */
+  /* Now "from_copy" should be a single root node plus a single <Menu>
+   * node below it, possibly with some PASSTHROUGH nodes mixed in.
+   */
+  g_assert (menu_node_get_type (from_copy) == MENU_NODE_ROOT);
+  g_assert (menu_node_get_children (from_copy) != NULL);
+  g_assert (menu_node_get_type (menu_node_get_children (from_copy)) == MENU_NODE_MENU);
+  
   menu_node_unref (from_copy);
 }
 
-static char*
-node_get_filename (const char *dirname,
-                   MenuNode   *node)
-{
-  const char *content;
-  char *filename;
-  
-  content = menu_node_get_content (node);
-  
-  if (content == NULL)
-    {
-      /* really the parser should have caught this */
-      menu_verbose ("MergeFile/MergeDir/LegacyDir element has no content!\n");
-      return NULL;
-    }
-
-  if (*content != '/')
-    {
-      filename = g_build_filename (dirname, content, NULL);
-      menu_verbose ("Node contains file %s made relative to %s\n",
-                    content, dirname);
-    }
-  else
-    {
-      filename = g_strdup (content);
-      menu_verbose ("Node contains absolute path %s\n",
-                    content);
-    }
-
-  return filename;
-}
-
 static void
-menu_node_resolve_files (const char *node_dirname,
-                         const char *node_filename,
-                         MenuNode   *node)
+menu_node_resolve_files (MenuNode   *node)
 {
   MenuNode *child;
 
@@ -146,16 +131,17 @@ menu_node_resolve_files (const char *node_dirname,
             MenuNode *to_merge;
             char *filename;
 
-            filename = node_get_filename (node_dirname, child);
+            filename = menu_node_get_content_as_path (child);
             if (filename == NULL)
               goto done;
+
+            menu_verbose ("Merging file \"%s\"\n", filename);
             
             to_merge = menu_node_get_for_file (filename, NULL); /* missing files ignored */
             if (to_merge == NULL)
               goto done;
             
-            merge_resolved_copy_of_children (child, to_merge,
-                                             filename);
+            merge_resolved_copy_of_children (child, to_merge);
 
             menu_node_unref (to_merge);
 
@@ -417,18 +403,6 @@ struct _DesktopEntryTree
 static void build_tree     (DesktopEntryTree *tree);
 static void tree_node_free (TreeNode *node);
 
-static MenuNode*
-find_menu_child (MenuNode *node)
-{
-  MenuNode *child;
-
-  child = menu_node_get_children (node);
-  while (child && menu_node_get_type (child) != MENU_NODE_MENU)
-    child = menu_node_get_next (child);
-
-  return child;
-}
-
 DesktopEntryTree*
 desktop_entry_tree_load (const char  *filename,
                          GError     **error)
@@ -436,7 +410,6 @@ desktop_entry_tree_load (const char  *filename,
   DesktopEntryTree *tree;
   MenuNode *orig_node;
   MenuNode *resolved_node;
-  char *dirname;
   char *canonical;
 
   canonical = g_canonicalize_file_name (filename);
@@ -457,16 +430,14 @@ desktop_entry_tree_load (const char  *filename,
       return NULL;
     }
 
-  dirname = g_path_get_dirname (canonical);
-
-  resolved_node = menu_node_deep_copy (find_menu_child (orig_node));
-  menu_node_resolve_files (dirname, canonical, resolved_node);
+  resolved_node = menu_node_deep_copy (orig_node);
+  menu_node_resolve_files (resolved_node);
 
   menu_node_strip_duplicate_children (resolved_node);
 
   tree = g_new0 (DesktopEntryTree, 1);
   tree->menu_file = canonical;
-  tree->menu_file_dir = dirname;
+  tree->menu_file_dir = g_path_get_dirname (canonical);
   tree->orig_node = orig_node;
   tree->resolved_node = resolved_node;
   tree->root = NULL;
@@ -1017,7 +988,7 @@ build_tree (DesktopEntryTree *tree)
 
   tree->root = tree_node_new ();
   fill_tree_node_from_menu_node (tree->root,
-                                 tree->resolved_node);
+                                 find_menu_child (tree->resolved_node));
   if (tree_node_free_if_broken (tree->root))
     {
       tree->root = NULL;

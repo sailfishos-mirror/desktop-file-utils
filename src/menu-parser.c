@@ -730,7 +730,8 @@ menu_load (const char *filename,
   char *text;
   int length;
   MenuNode *retval;
-
+  char *basedir;
+  
   text = NULL;
   length = 0;
   retval = NULL;
@@ -745,6 +746,10 @@ menu_load (const char *filename,
   g_assert (text);
 
   menu_parser_init (&parser);
+
+  basedir = g_path_get_dirname (filename);
+  menu_node_root_set_basedir (parser.root, basedir);
+  g_free (basedir);
   
   context = g_markup_parse_context_new (&menu_funcs,
                                         0, &parser, NULL);

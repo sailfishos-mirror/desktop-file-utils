@@ -26,6 +26,7 @@
 #include "canonicalize.h"
 #include "menu-entries.h"
 #include "menu-parser.h"
+#include "dfu-test.h"
 
 #include <libintl.h>
 #define _(x) gettext ((x))
@@ -33,6 +34,7 @@
 
 typedef struct _MenuFile MenuFile;
 typedef struct _MenuNodeMenu MenuNodeMenu;
+typedef struct _MenuNodeRoot MenuNodeRoot;
 typedef struct _MenuNodeLegacyDir MenuNodeLegacyDir;
 
 struct _MenuFile
@@ -56,6 +58,12 @@ struct _MenuNode
   guint is_file_root : 1;
   guint refcount : 20;
   guint type : 7;
+};
+
+struct _MenuNodeRoot
+{
+  MenuNode node;
+  char    *basedir;
 };
 
 struct _MenuNodeMenu
@@ -138,6 +146,12 @@ menu_node_unref (MenuNode *node)
 
           g_free (nld->prefix);
         }
+      else if (node->type == MENU_NODE_ROOT)
+        {
+          MenuNodeRoot *nr = (MenuNodeRoot*) node;
+
+          g_free (nr->basedir);
+        }
       
       /* free ourselves */
       g_free (node->content);
@@ -154,6 +168,8 @@ menu_node_new (MenuNodeType type)
     node = (MenuNode*) g_new0 (MenuNodeMenu, 1);
   else if (type == MENU_NODE_LEGACY_DIR)
     node = (MenuNode*) g_new0 (MenuNodeLegacyDir, 1);
+  else if (type == MENU_NODE_ROOT)
+    node = (MenuNode*) g_new0 (MenuNodeRoot, 1);
   else
     node = g_new0 (MenuNode, 1);
 
@@ -205,6 +221,13 @@ menu_node_copy_one (MenuNode *node)
   copy->content = g_strdup (node->content);
 
   /* don't copy is_file_root */
+
+  if (copy->type == MENU_NODE_ROOT)
+    ((MenuNodeRoot*)copy)->basedir =
+      g_strdup (((MenuNodeRoot*)node)->basedir);
+  else if (copy->type == MENU_NODE_LEGACY_DIR)
+    ((MenuNodeLegacyDir*)copy)->prefix =
+      g_strdup (((MenuNodeLegacyDir*)node)->prefix);
   
   return copy;
 }
@@ -237,6 +260,63 @@ menu_node_get_root (MenuNode *node)
     parent = parent->parent;
 
   return parent;
+}
+
+const char*
+menu_node_get_basedir (MenuNode *node)
+{
+  MenuNode *root;
+
+  root = menu_node_get_root (node);
+
+  if (root->type == MENU_NODE_ROOT)
+    {
+      MenuNodeRoot *nr = (MenuNodeRoot*) root;
+
+      if (nr->basedir == NULL)
+        menu_verbose ("Menu node root has null basedir\n");
+      
+      return nr->basedir;
+    }
+  else
+    {
+      menu_verbose ("Menu node root has type %d not root\n",
+                    root->type);
+      return NULL;
+    }
+}
+
+char*
+menu_node_get_content_as_path (MenuNode *node)
+{
+  if (node->content == NULL)
+    return NULL;
+  
+  if (g_path_is_absolute (node->content))
+    {
+      menu_verbose ("Path \"%s\" is absolute\n",
+                    node->content);
+      return g_strdup (node->content);
+    }
+  else
+    {
+      const char *basedir;
+
+      basedir = menu_node_get_basedir (node);
+      
+      if (basedir == NULL)
+        {
+          menu_verbose ("No basedir available, using \"%s\" as-is\n",
+                        node->content);
+          return g_strdup (node->content);
+        }
+      else
+        {
+          menu_verbose ("Using basedir \"%s\" filename \"%s\"\n",
+                        basedir, node->content);
+          return g_build_filename (basedir, node->content, NULL);
+        }
+    }
 }
 
 #define RETURN_IF_NO_PARENT(node) \
@@ -533,6 +613,37 @@ menu_node_legacy_dir_set_prefix (MenuNode   *node,
   nld->prefix = g_strdup (prefix);
 }
 
+const char*
+menu_node_root_get_basedir (MenuNode *node)
+{
+  MenuNodeRoot *nr;
+  
+  g_return_val_if_fail (node->type == MENU_NODE_ROOT, NULL);
+
+  nr = (MenuNodeRoot*) node;
+  
+  return nr->basedir;
+}
+
+void
+menu_node_root_set_basedir (MenuNode   *node,
+                            const char *dirname)
+{
+  MenuNodeRoot *nr;
+  
+  g_return_if_fail (node->type == MENU_NODE_ROOT);
+
+  nr = (MenuNodeRoot*) node;
+
+  if (nr->basedir == dirname)
+    return;
+  
+  g_free (nr->basedir);
+  nr->basedir = g_strdup (dirname);
+
+  menu_verbose ("Set basedir \"%s\"\n", nr->basedir ? nr->basedir : "(none)");
+}
+
 static void
 menu_node_menu_ensure_entry_lists (MenuNode *node)
 {
@@ -568,23 +679,39 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
 
           if (iter->type == MENU_NODE_APP_DIR)
             {
-              ed = entry_directory_load (iter->content,
+              char *path;
+
+              path = menu_node_get_content_as_path (iter);
+              
+              ed = entry_directory_load (path,
                                          ENTRY_LOAD_DESKTOPS, NULL);
               if (ed != NULL)
                 app_dirs = g_slist_prepend (app_dirs, ed);
+
+              g_free (path);
             }
           else if (iter->type == MENU_NODE_DIRECTORY_DIR)
             {
-              ed = entry_directory_load (iter->content,
+              char *path;
+
+              path = menu_node_get_content_as_path (iter);
+              
+              ed = entry_directory_load (path,
                                          ENTRY_LOAD_DIRECTORIES, NULL);
               if (ed != NULL)
                 dir_dirs = g_slist_prepend (dir_dirs, ed);
+
+              g_free (path);
             }
           else if (iter->type == MENU_NODE_LEGACY_DIR)
             {
+              char *path;
+
+              path = menu_node_get_content_as_path (iter);
+              
               if (nm->app_dirs == NULL)
                 {
-                  ed = entry_directory_load (iter->content,
+                  ed = entry_directory_load (path,
                                              ENTRY_LOAD_DESKTOPS | ENTRY_LOAD_LEGACY,
                                              NULL);
                   if (ed != NULL)
@@ -593,12 +720,14 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
               
               if (nm->dir_dirs == NULL)
                 {
-                  ed = entry_directory_load (iter->content,
+                  ed = entry_directory_load (path,
                                              ENTRY_LOAD_DIRECTORIES | ENTRY_LOAD_LEGACY,
                                              NULL);
                   if (ed != NULL)
                     dir_dirs = g_slist_prepend (dir_dirs, ed);
                 }
+
+              g_free (path);
             }
         }
           
@@ -613,7 +742,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
            * EntryDirectoryList, or create an empty one if we're a
            * root node
            */
-          if (node->parent == NULL)
+          if (node->parent == NULL ||
+              node->parent->type == MENU_NODE_ROOT)
             nm->app_dirs = entry_directory_list_new ();
           else
             {
@@ -665,7 +795,8 @@ menu_node_menu_ensure_entry_lists (MenuNode *node)
            * EntryDirectoryList, or create an empty one if we're a
            * root node
            */
-          if (node->parent == NULL)
+          if (node->parent == NULL ||
+              node->parent->type == MENU_NODE_ROOT)
             nm->dir_dirs = entry_directory_list_new ();
           else
             {
@@ -926,3 +1057,177 @@ menu_verbose (const char *format,
   
   g_free (str);
 }
+
+#ifdef DFU_BUILD_TESTS
+static int
+null_safe_strcmp (const char *a,
+                  const char *b)
+{
+  if (a == NULL && b == NULL)
+    return 0;
+  else if (a == NULL)
+    return -1;
+  else if (b == NULL)
+    return 1;
+  else
+    return strcmp (a, b);
+}
+
+static gboolean
+node_has_child (MenuNode *node,
+                MenuNode *child)
+{
+  MenuNode *tmp;
+
+  if (node->children == NULL)
+    return FALSE;
+  
+  tmp = node->children;
+  do
+    {
+      if (child == tmp)
+        return TRUE;
+
+      tmp = tmp->next;
+    }
+  while (tmp != node->children);
+
+  return FALSE;
+}
+
+static gboolean
+nodes_equal (MenuNode *a,
+             MenuNode *b)
+{
+  MenuNode *iter1;
+  MenuNode *iter2;
+  
+  if (a->type != b->type)
+    return FALSE;
+
+  if (null_safe_strcmp (a->content, b->content) != 0)
+    return FALSE;
+  
+  if (a->children && !b->children)
+    return FALSE;
+
+  if (!a->children && b->children)
+    return FALSE;
+  
+  iter1 = a->children;
+  iter2 = b->children;
+  if (iter1 && iter2)
+    {
+      do
+        {      
+          if (!nodes_equal (iter1, iter2))
+            return FALSE;
+
+          iter1 = iter1->next;
+          iter2 = iter2->next;
+        }
+      while (iter1 != a->children &&
+             iter2 != b->children);
+
+      if (iter1 != a->children)
+        return FALSE;
+
+      if (iter2 != b->children)
+        return FALSE;
+    }
+
+  if (a->type == MENU_NODE_ROOT)
+    {
+      MenuNodeRoot *ar = (MenuNodeRoot*) a;
+      MenuNodeRoot *br = (MenuNodeRoot*) b;
+
+      if (null_safe_strcmp (ar->basedir, br->basedir) != 0)
+        return FALSE;
+    }
+  else if (a->type == MENU_NODE_LEGACY_DIR)
+    {
+      MenuNodeLegacyDir *ald = (MenuNodeLegacyDir*) a;
+      MenuNodeLegacyDir *bld = (MenuNodeLegacyDir*) b;
+
+      if (null_safe_strcmp (ald->prefix, bld->prefix) != 0)
+        return FALSE;
+    }
+  
+  return TRUE;
+}
+
+static void
+menu_node_check_consistency (MenuNode *node)
+{
+  MenuNode *tmp;
+  
+  if (node->parent)
+    g_assert (node_has_child (node->parent, node));
+  
+  tmp = node;
+  do
+    {
+      g_assert (tmp->prev->next == tmp);
+      g_assert (tmp->next->prev == tmp);
+
+      if (tmp->children)
+        menu_node_check_consistency (tmp->children);
+
+      tmp = tmp->next;
+    }
+  while (tmp != node);  
+
+  /* be sure copy works */
+  tmp = menu_node_deep_copy (node);
+  g_assert (nodes_equal (tmp, node));
+  menu_node_unref (tmp);
+  
+  return;
+}
+
+gboolean
+dfu_test_menu_nodes (const char *test_data_dir)
+{
+  MenuNode *node;
+  MenuNode *child;
+  int i;
+  
+  node = menu_node_new (MENU_NODE_INCLUDE);
+
+  i = 0;
+  while (i < 10)
+    {
+      child = menu_node_new (MENU_NODE_AND);
+
+      menu_node_append_child (node, child);
+
+      menu_node_unref (child);
+
+      menu_node_check_consistency (node);
+      
+      ++i;
+    }
+
+  menu_node_unref (node);
+
+  node = menu_node_new (MENU_NODE_EXCLUDE);
+
+  i = 0;
+  while (i < 10)
+    {
+      child = menu_node_new (MENU_NODE_OR);
+
+      menu_node_prepend_child (node, child);
+
+      menu_node_unref (child);
+
+      menu_node_check_consistency (node);
+      
+      ++i;
+    }
+
+  menu_node_unref (node);
+  
+  return TRUE;
+}
+#endif /* DFU_BUILD_TESTS */

@@ -1,3 +1,20 @@
+2003-05-02  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-process.c: use basedir stuff stored on root node 
+	instead of dealing with it in this file
+
+	* src/menu-parser.c (menu_load): set basedir
+
+	* src/menu-layout.c (menu_node_copy_one): copy fields in MenuNode
+	"subclasses"
+	(menu_node_get_basedir): new
+	(menu_node_get_content_as_path): new
+
+	* configure.in: add more compiler warnings, and --enable-tests
+
+	* src/menu-layout.c (dfu_test_menu_nodes): start setting up unit
+	test stuff
+
 2003-05-01  Havoc Pennington  <hp@pobox.com>
 
 	* src/menu-process.c (desktop_entry_tree_print): implement

@@ -84,9 +84,11 @@ void menu_node_append_child  (MenuNode *parent,
 void menu_node_unlink (MenuNode *node);
 void menu_node_steal  (MenuNode *node);
 
-MenuNodeType menu_node_get_type      (MenuNode *node);
-const char*  menu_node_get_content   (MenuNode *node);
-const char*  menu_node_get_filename  (MenuNode *node);
+MenuNodeType menu_node_get_type            (MenuNode *node);
+const char*  menu_node_get_content         (MenuNode *node);
+const char*  menu_node_get_filename        (MenuNode *node);
+const char*  menu_node_get_basedir         (MenuNode *node);
+char*        menu_node_get_content_as_path (MenuNode *node);
 
 void         menu_node_set_content   (MenuNode   *node,
                                       const char *content);
@@ -95,7 +97,9 @@ const char* menu_node_menu_get_name         (MenuNode   *node);
 const char* menu_node_legacy_dir_get_prefix (MenuNode   *node);
 void        menu_node_legacy_dir_set_prefix (MenuNode   *node,
                                              const char *prefix);
-
+const char* menu_node_root_get_basedir      (MenuNode   *node);
+void        menu_node_root_set_basedir      (MenuNode   *node,
+                                             const char *dirname);
 
 EntryDirectoryList* menu_node_menu_get_app_entries (MenuNode *node);
 EntryDirectoryList* menu_node_menu_get_directory_entries (MenuNode *node);

@@ -212,6 +212,8 @@ entry_directory_load  (const char     *path,
   char *canonical;
   CachedDir *cd;
   EntryDirectory *ed;
+
+  menu_verbose ("Loading entry directory \"%s\"\n", path);
   
   canonical = g_canonicalize_file_name (path);
   if (canonical == NULL)
@@ -1601,6 +1603,9 @@ load_entries_recursive (CachedDir  *dir,
 
           e = entry_new_desktop_from_file (fullpath, dent->d_name);
 
+          menu_verbose ("Tried loading \"%s\": %s\n",
+                        fullpath, e ? "ok" : "failed");
+          
           if (e != NULL)
             dir->entries = g_slist_prepend (dir->entries, e);
         }
@@ -1610,6 +1615,9 @@ load_entries_recursive (CachedDir  *dir,
 
           e = entry_new_directory_from_file (fullpath, dent->d_name);
 
+          menu_verbose ("Tried loading \"%s\": %s\n",
+                        fullpath, e ? "ok" : "failed");
+          
           if (e != NULL)
             dir->entries = g_slist_prepend (dir->entries, e);
         }
@@ -1793,7 +1801,6 @@ cache_clear_unused (void)
         }
     }
 }
-
 
 static const char*
 cached_dir_get_name (CachedDir *dir)

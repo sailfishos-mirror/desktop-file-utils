@@ -1,3 +1,7 @@
+2003-05-29  Havoc Pennington  <hp@redhat.com>
+
+	* src/gen-compat-tree.c (process_one_file): fix build 	
+
 2003-05-28  Havoc Pennington  <hp@redhat.com>
 
 	* src/canonicalize.c (g_canonicalize_file_name): add

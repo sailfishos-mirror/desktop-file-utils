@@ -431,7 +431,8 @@ process_one_file (const char *filename)
       DesktopEntryTree *tree;
 
       err = NULL;
-      tree = desktop_entry_tree_load (filename, only_show_in_desktop, &err);
+      tree = desktop_entry_tree_load (filename, only_show_in_desktop,
+                                      NULL, &err);
       if (err)
         {
           g_printerr (_("Failed to load %s: %s\n"),

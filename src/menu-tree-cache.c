@@ -172,6 +172,7 @@ typedef struct
   char             *canonical_path;
   DesktopEntryTree *tree;
   GError           *load_failure_reason;
+  MenuOverrideDir  *overrides;
 } CacheEntry;
 
 struct DesktopEntryTreeCache
@@ -239,11 +240,11 @@ desktop_entry_tree_cache_unref (DesktopEntryTreeCache *cache)
     }
 }
 
-static DesktopEntryTree*
-lookup_canonical (DesktopEntryTreeCache *cache,
-                  const char            *canonical,
-                  const char            *create_chaining_to,
-                  GError               **error)
+static CacheEntry*
+lookup_canonical_entry (DesktopEntryTreeCache *cache,
+                        const char            *canonical,
+                        const char            *create_chaining_to,
+                        GError               **error)
 {
   CacheEntry *entry;
 
@@ -283,20 +284,19 @@ lookup_canonical (DesktopEntryTreeCache *cache,
     }
   else
     {
-      menu_verbose ("Returning cached entry tree\n");
+      menu_verbose ("Returning cached entry\n");
       
-      desktop_entry_tree_ref (entry->tree);
-      return entry->tree;
+      return entry;
     }
 }
 
-static DesktopEntryTree*
-lookup_absolute (DesktopEntryTreeCache *cache,
-                 const char            *absolute,
-                 const char            *create_chaining_to,
-                 GError               **error)
+static CacheEntry*
+lookup_absolute_entry (DesktopEntryTreeCache *cache,
+                       const char            *absolute,
+                       const char            *create_chaining_to,
+                       GError               **error)
 {
-  DesktopEntryTree *tree;
+  CacheEntry *entry;
   char *canonical;
 
   menu_verbose ("Looking up absolute filename in tree cache: \"%s\"\n",
@@ -309,9 +309,9 @@ lookup_absolute (DesktopEntryTreeCache *cache,
    */
   if (g_hash_table_lookup (cache->entries, absolute) != NULL)
     {
-      tree = lookup_canonical (cache, absolute, create_chaining_to, error);
-      if (tree != NULL)
-        return tree;
+      entry = lookup_canonical_entry (cache, absolute, create_chaining_to, error);
+      if (entry != NULL)
+        return entry;
     }
 
   /* Now really canonicalize it and try again */
@@ -327,22 +327,22 @@ lookup_absolute (DesktopEntryTreeCache *cache,
       return NULL;
     }
   
-  tree = lookup_canonical (cache, canonical, create_chaining_to, error);
+  entry = lookup_canonical_entry (cache, canonical, create_chaining_to, error);
   g_free (canonical);
-  return tree;
+  return entry;
 }
 
 /* FIXME this cache has the usual cache problem - when to expire it?
  * Right now I think "never" is probably a good enough answer, but at
  * some point we might want to re-evaluate.
  */
-DesktopEntryTree*
-desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
-                                 const char            *menu_file,
-                                 gboolean               create_user_file,
-                                 GError               **error)
+static CacheEntry*
+cache_lookup (DesktopEntryTreeCache *cache,
+              const char            *menu_file,
+              gboolean               create_user_file,
+              GError               **error)
 {
-  DesktopEntryTree *retval;
+  CacheEntry *retval;
 
   retval = NULL;
   
@@ -351,12 +351,12 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
    */
   if (g_path_is_absolute (menu_file))
     {
-      retval = lookup_absolute (cache, menu_file, NULL, error);
+      retval = lookup_absolute_entry (cache, menu_file, NULL, error);
     }
   else
     {
       XdgPathInfo info;
-      DesktopEntryTree *tree;
+      CacheEntry *entry;
       int i;
       const char *canonical;
 
@@ -365,7 +365,7 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
                                        menu_file);
       if (canonical != NULL)
         {
-          retval = lookup_canonical (cache, canonical, NULL, error);
+          retval = lookup_canonical_entry (cache, canonical, NULL, error);
           goto out;
         }
 
@@ -404,16 +404,16 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
           else
             chain_to = NULL;
           
-          tree = lookup_absolute (cache, absolute, chain_to, error);
+          entry = lookup_absolute_entry (cache, absolute, chain_to, error);
           g_free (absolute);
           g_free (chain_to);
           
-          if (tree != NULL)
+          if (entry != NULL)
             {
               /* in case an earlier lookup piled up */
-              menu_verbose ("Successfully got tree %p\n", tree);
+              menu_verbose ("Successfully got entry %p\n", entry);
               g_clear_error (error);
-              retval = tree;
+              retval = entry;
               goto out;
             }
           
@@ -430,3 +430,67 @@ desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
   return retval;
 }
 
+DesktopEntryTree*
+desktop_entry_tree_cache_lookup (DesktopEntryTreeCache *cache,
+                                 const char            *menu_file,
+                                 gboolean               create_user_file,
+                                 GError               **error)
+{
+  CacheEntry *entry;
+
+  entry = cache_lookup (cache, menu_file, create_user_file,
+                        error);
+
+  if (entry)
+    {
+      desktop_entry_tree_ref (entry->tree);
+      return entry->tree;
+    }
+  else
+    return NULL;
+}
+
+/* For a menu_file like "applications.menu" override a menu_path
+ * entry like "Applications/Games/foo.desktop"
+ */
+gboolean
+desktop_entry_tree_cache_override (DesktopEntryTreeCache *cache,
+                                   const char            *menu_file,
+                                   const char            *menu_path,
+                                   GError               **error)
+{
+  CacheEntry *entry;
+
+  entry = cache_lookup (cache, menu_file, TRUE, error);
+
+  if (entry == NULL)
+    return FALSE;
+
+  if (entry->overrides == NULL)
+    {
+      char *d;
+      GString *menu_type;
+      XdgPathInfo info;
+
+      init_xdg_paths (&info);
+
+      menu_type = g_string_new (menu_path);
+      g_string_truncate (menu_type, menu_type->len - strlen (".menu"));
+      g_string_append (menu_type, "-edits");
+      
+      d = g_build_filename (info.config_home,
+                            menu_type->str, NULL);
+      
+      entry->overrides = menu_override_dir_create (d, error);
+
+      g_string_free (menu_type, TRUE);
+      g_free (d);
+    }
+
+  if (entry->overrides == NULL)
+    return FALSE;
+
+  /* FIXME */
+  
+  return TRUE;
+}

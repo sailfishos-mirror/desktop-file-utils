@@ -63,10 +63,13 @@ merge_resolved_copy_of_children (MenuCache  *menu_cache,
   menu_node_resolve_files (menu_cache, entry_cache, from_copy);
   
   insert_after = where;
+  g_assert (menu_node_get_type (insert_after) != MENU_NODE_ROOT);
+  g_assert (menu_node_get_parent (insert_after) != NULL);
 
   /* skip root node */
   menu_child = find_menu_child (from_copy);
   g_assert (menu_child != NULL);
+  g_assert (menu_node_get_type (menu_child) == MENU_NODE_MENU);
 
   /* merge children of toplevel <Menu> */
   from_child = menu_node_get_children (menu_child);
@@ -75,6 +78,11 @@ merge_resolved_copy_of_children (MenuCache  *menu_cache,
       MenuNode *next;
 
       next = menu_node_get_next (from_child);
+      g_assert (next != from_child);
+
+      menu_verbose ("Merging %p after %p\n", from_child, insert_after);
+      menu_node_debug_print (from_child);
+      menu_node_debug_print (insert_after);
       
       switch (menu_node_get_type (from_child))
         {
@@ -91,6 +99,9 @@ merge_resolved_copy_of_children (MenuCache  *menu_cache,
           }
           break;
         }
+
+      g_assert (menu_node_get_type (insert_after) != MENU_NODE_ROOT);
+      g_assert (menu_node_get_parent (insert_after) != NULL);
       
       from_child = next;
     }
@@ -100,9 +111,103 @@ merge_resolved_copy_of_children (MenuCache  *menu_cache,
    */
   g_assert (menu_node_get_type (from_copy) == MENU_NODE_ROOT);
   g_assert (menu_node_get_children (from_copy) != NULL);
-  g_assert (menu_node_get_type (menu_node_get_children (from_copy)) == MENU_NODE_MENU);
   
   menu_node_unref (from_copy);
+}
+
+static void
+menu_node_resolve_files_recursive (MenuCache  *menu_cache,
+                                   EntryCache *entry_cache,
+                                   MenuNode   *node)
+{
+  MenuNode *child;
+
+  menu_verbose ("Resolving files in node %p\n", node);
+      
+  switch (menu_node_get_type (node))
+    {
+    case MENU_NODE_MERGE_FILE:
+      {
+        MenuNode *to_merge;
+        char *filename;
+
+        filename = menu_node_get_content_as_path (node);
+        if (filename == NULL)
+          {
+            menu_verbose ("No filename in MergeFile\n");
+            goto done;
+          }
+
+        menu_verbose ("Merging file \"%s\"\n", filename);
+            
+        to_merge = menu_cache_get_menu_for_file (menu_cache,
+                                                 filename,
+                                                 NULL,
+                                                 NULL); /* missing files ignored */
+        if (to_merge == NULL)
+          {
+            menu_verbose ("No menu for file \"%s\" found when merging\n",
+                          filename);
+            goto done;
+          }
+            
+        merge_resolved_copy_of_children (menu_cache, entry_cache,
+                                         node, to_merge);
+
+        menu_node_unref (to_merge);
+
+      done:
+        g_free (filename);
+        menu_node_unlink (node); /* delete this child, replaced
+                                   * by the merged content
+                                   */
+      }
+      break;
+    case MENU_NODE_MERGE_DIR:
+      {
+        /* FIXME don't just delete it ;-) */
+        
+        menu_node_unlink (node);
+      }
+      break;
+    case MENU_NODE_LEGACY_DIR:
+      {
+        /* FIXME don't just delete it ;-) */
+            
+        menu_node_unlink (node);
+      }
+      break;
+
+#if 0
+      /* FIXME may as well expand these here */
+    case MENU_NODE_DEFAULT_APP_DIRS:
+      break;
+    case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
+      break;
+#endif
+          
+    default:
+      /* Recurse */
+      child = menu_node_get_children (node);
+      
+      while (child != NULL)
+        {
+          MenuNode *next;
+          
+          menu_verbose ("  (recursing to node %p)\n", child);
+          
+          /* get next first, because we may delete this child (and place new
+           * file contents between "child" and "next")
+           */
+          next = menu_node_get_next (child);
+
+          menu_node_resolve_files_recursive (menu_cache, entry_cache,
+                                             child);
+          
+          child = next;
+        }
+      break;
+    }
 }
 
 static void
@@ -110,8 +215,8 @@ menu_node_resolve_files (MenuCache  *menu_cache,
                          EntryCache *entry_cache,
                          MenuNode   *node)
 {
-  MenuNode *child;
-
+  menu_verbose ("Resolving files in root node %p\n", node);
+  
   /* FIXME
    * if someone does <MergeFile>A.menu</MergeFile> inside
    * A.menu, or a more elaborate loop involving multiple
@@ -119,79 +224,9 @@ menu_node_resolve_files (MenuCache  *menu_cache,
    * we can find
    */
   menu_node_root_set_entry_cache (node, entry_cache);
-  
-  child = menu_node_get_children (node);
 
-  while (child != NULL)
-    {
-      MenuNode *next;
-
-      /* get next first, because we delete this child (and place new
-       * file contents between "child" and "next")
-       */
-      next = menu_node_get_next (child);
-      
-      switch (menu_node_get_type (child))
-        {
-        case MENU_NODE_MERGE_FILE:
-          {
-            MenuNode *to_merge;
-            char *filename;
-
-            filename = menu_node_get_content_as_path (child);
-            if (filename == NULL)
-              goto done;
-
-            menu_verbose ("Merging file \"%s\"\n", filename);
-            
-            to_merge = menu_cache_get_menu_for_file (menu_cache,
-                                                     filename,
-                                                     NULL,
-                                                     NULL); /* missing files ignored */
-            if (to_merge == NULL)
-              goto done;
-            
-            merge_resolved_copy_of_children (menu_cache, entry_cache,
-                                             child, to_merge);
-
-            menu_node_unref (to_merge);
-
-          done:
-            g_free (filename);
-            menu_node_unlink (child); /* delete this child, replaced
-                                       * by the merged content
-                                       */
-          }
-          break;
-        case MENU_NODE_MERGE_DIR:
-          {
-            /* FIXME don't just delete it ;-) */
-            
-            menu_node_unlink (child);
-          }
-          break;
-        case MENU_NODE_LEGACY_DIR:
-          {
-            /* FIXME don't just delete it ;-) */
-            
-            menu_node_unlink (child);
-          }
-          break;
-
-#if 0
-          /* FIXME may as well expand these here */
-        case MENU_NODE_DEFAULT_APP_DIRS:
-          break;
-        case MENU_NODE_DEFAULT_DIRECTORY_DIRS:
-          break;
-#endif
-          
-        default:
-          break;
-        }
-
-      child = next;
-    }
+  menu_node_resolve_files_recursive (menu_cache, entry_cache,
+                                     node);
 }
 
 static int
@@ -513,6 +548,14 @@ desktop_entry_tree_unref (DesktopEntryTree *tree)
       menu_cache_unref (tree->menu_cache);
       g_free (tree);
     }
+}
+
+void
+desktop_entry_tree_invalidate (DesktopEntryTree *tree,
+                               const char       *dirname)
+{
+  menu_cache_invalidate (tree->menu_cache, dirname);
+  entry_cache_invalidate (tree->entry_cache, dirname);
 }
 
 static TreeNode*

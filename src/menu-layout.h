@@ -117,6 +117,9 @@ void       menu_cache_unref (MenuCache *cache);
 const char* menu_cache_get_filename_for_node (MenuCache *cache,
                                               MenuNode  *node);
 
+void       menu_cache_invalidate (MenuCache  *cache,
+                                  const char *canonical);
+
 /* Return the pristine menu node for the file.
  * Changing this node will change what gets written
  * back to disk, if you do menu_node_sync_for_file.

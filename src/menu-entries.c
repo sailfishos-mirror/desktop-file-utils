@@ -1217,7 +1217,7 @@ cached_dir_new (EntryCache *cache,
 }
 
 static void
-cached_dir_clear_all_children (CachedDir *dir)
+cached_dir_clear_entries (CachedDir *dir)
 {
   GSList *tmp;
 
@@ -1229,7 +1229,15 @@ cached_dir_clear_all_children (CachedDir *dir)
     }
   g_slist_free (dir->entries);
   dir->entries = NULL;
+}
 
+static void
+cached_dir_clear_all_children (CachedDir *dir)
+{
+  GSList *tmp;
+
+  cached_dir_clear_entries (dir);
+  
   tmp = dir->subdirs;
   while (tmp != NULL)
     {
@@ -1344,8 +1352,9 @@ cached_dir_find_entry (CachedDir   *dir,
 }
 
 static CachedDir*
-cached_dir_ensure (EntryCache *cache,
-                   const char *canonical)
+cached_dir_lookup (EntryCache *cache,
+                   const char *canonical,
+                   gboolean    create_if_not_found)
 {
   char **split;
   int i;
@@ -1373,21 +1382,34 @@ cached_dir_ensure (EntryCache *cache,
 
       cd = find_subdir (dir, split[i]);
 
-      if (cd == NULL)
+      if (cd == NULL && create_if_not_found)
         {
           cd = cached_dir_new (cache, split[i]);
           dir->subdirs = g_slist_prepend (dir->subdirs, cd);
           cd->parent = dir;
+        }
+      else
+        {
+          dir = NULL;
+          goto out;
         }
 
       dir = cd;
       
       ++i;
     }
-  
+
+ out:
   g_strfreev (split);
 
   return dir;
+}
+
+static CachedDir*
+cached_dir_ensure (EntryCache *cache,
+                   const char *canonical)
+{
+  return cached_dir_lookup (cache, canonical, TRUE);
 }
 
 static CachedDir*
@@ -1670,7 +1692,7 @@ entry_new_desktop_from_file (EntryCache *cache,
                              const char *basename)
 {
   char *str;
-  int len;
+  gsize len;
   GError *err;
   char *categories;
   Entry *e;
@@ -1796,9 +1818,9 @@ load_entries_recursive (CachedDir  *dir,
     }
 
   g_assert (dir != NULL);
-  
-  /* Blow away all current entries */  
-  cached_dir_clear_all_children (dir);
+
+  cached_dir_clear_entries (dir);
+  g_assert (dir->entries == NULL);
   
   len = strlen (dirname);
   subdir_len = PATH_MAX - len;
@@ -2166,6 +2188,40 @@ entry_cache_set_only_show_in_name (EntryCache *cache,
   
   g_free (cache->only_show_in_name);
   cache->only_show_in_name = g_strdup (name);
+}
+
+static void
+cached_dir_invalidate (CachedDir *dir)
+{
+  GSList *tmp;
+
+  menu_verbose ("  (invalidating %s)\n",
+                dir->name);
+  
+  dir->have_read_entries = FALSE;
+
+  tmp = dir->subdirs;
+  while (tmp != NULL)
+    {
+      cached_dir_invalidate (tmp->data);
+      tmp = tmp->next;
+    }
+}
+
+/* Invalidate cached data below filesystem dir */
+void
+entry_cache_invalidate (EntryCache *cache,
+                        const char *dir)
+{
+  CachedDir *root;
+
+  menu_verbose ("Invalidating cache of .desktop files in \"%s\"\n",
+                dir);
+  
+  root = cached_dir_lookup (cache, dir, FALSE);
+  
+  if (root)
+    cached_dir_invalidate (root);
 }
 
 static unsigned int

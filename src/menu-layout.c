@@ -279,7 +279,10 @@ char*
 menu_node_get_content_as_path (MenuNode *node)
 {
   if (node->content == NULL)
-    return NULL;
+    {
+      menu_verbose ("  (node has no content to get as a path)\n");
+      return NULL;
+    }
   
   if (g_path_is_absolute (node->content))
     {
@@ -308,14 +311,16 @@ menu_node_get_content_as_path (MenuNode *node)
     }
 }
 
-#define RETURN_IF_NO_PARENT(node) \
+#define RETURN_IF_NO_PARENT(node)                               \
 do                                                              \
 {                                                               \
   if ((node)->parent == NULL)                                   \
     {                                                           \
       g_warning ("To add siblings to a menu node, "             \
                  "it must not be the root node, "               \
-                 "and must be linked in below some root node"); \
+                 "and must be linked in below some root node\n" \
+                 "node parent = %p and type = %d",              \
+                 (node)->parent, (node)->type);                 \
       return;                                                   \
     }                                                           \
 }                                                               \
@@ -489,11 +494,19 @@ menu_node_steal (MenuNode *node)
     default:
       break;
     }
+
+  if (node->parent && node->parent->children == node)
+    {
+      if (node->next != node)
+        node->parent->children = node->next;
+      else
+        node->parent->children = NULL;
+    }
   
   /* these are no-ops for length-one node lists */
   node->prev->next = node->next;
   node->next->prev = node->prev;
-  
+    
   node->parent = NULL;
   
   /* point to ourselves, now we're length one */
@@ -995,6 +1008,35 @@ drop_menu_file (MenuCache *cache,
   
   g_free (file->filename);
   g_free (file);
+}
+
+void
+menu_cache_invalidate (MenuCache  *cache,
+                       const char *canonical)
+{
+  GSList *tmp;
+  int len;
+
+  menu_verbose ("Invalidating menu cache below \"%s\"\n",
+                canonical);
+  
+  len = strlen (canonical);
+  
+  tmp = cache->menu_files;
+  while (tmp != NULL)
+    {
+      GSList *next = tmp->next;
+      MenuFile *file = tmp->data;
+
+      if (strncmp (file->filename, canonical, len) == 0)
+        {
+          menu_verbose ("Dropping menu file \"%s\" due to cache invalidation\n",
+                        file->filename);
+          drop_menu_file (cache, file); /* removes "tmp" */
+        }
+      
+      tmp = next;
+    }
 }
 
 static gboolean

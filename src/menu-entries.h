@@ -59,6 +59,8 @@ void        entry_cache_ref                   (EntryCache *cache);
 void        entry_cache_unref                 (EntryCache *cache);
 void        entry_cache_set_only_show_in_name (EntryCache *cache,
                                                const char *name);
+void        entry_cache_invalidate            (EntryCache *cache,
+                                               const char *dir);
 
 /* returns a new ref, never has Legacy category, relative path is entry basename */
 Entry* entry_get_by_absolute_path (EntryCache *cache,

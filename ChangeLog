@@ -1,5 +1,17 @@
 2003-05-29  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-method.c (menu_method_resolve_uri_writable): new
+
+	* src/menu-tree-cache.c (desktop_entry_tree_cache_override): new
+
+	* src/menu-entries.c (entry_cache_invalidate): new
+
+	* src/menu-process.c (merge_resolved_copy_of_children): lots of 
+	fixing
+
+	* src/menu-layout.c (menu_node_steal): fix to update
+	node->parent->children pointer
+
 	* src/gen-compat-tree.c (process_one_file): fix build 	
 
 2003-05-28  Havoc Pennington  <hp@redhat.com>

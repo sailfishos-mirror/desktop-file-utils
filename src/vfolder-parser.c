@@ -1030,7 +1030,7 @@ vfolder_load (const char *filename,
   GError *error;
   ParseInfo info;
   char *text;
-  int length;
+  gsize length;
   Vfolder *retval;
 
   text = NULL;

@@ -38,6 +38,7 @@
 #include <libgnomevfs/gnome-vfs-utils.h>
 
 #include "menu-tree-cache.h"
+#include "menu-layout.h"
 
 /* FIXME - we have a gettext domain problem while not included in libgnomevfs */
 #define _(x) x
@@ -62,6 +63,14 @@ static GnomeVFSResult    menu_method_get_info    (MenuMethod               *meth
 						  GnomeVFSFileInfo         *file_info,
 						  GnomeVFSFileInfoOptions   options);
 
+
+static gboolean menu_method_resolve_uri_writable (MenuMethod               *method,
+						  GnomeVFSURI              *uri,
+						  gboolean                  create_if_not_found,
+						  DesktopEntryTree        **tree_p,
+						  DesktopEntryTreeNode    **node_p,
+						  char                    **real_path_p,
+						  GError                  **error);
 
 static GnomeVFSResult dir_handle_new            (MenuMethod               *method,
                                                  GnomeVFSURI              *uri,
@@ -531,19 +540,66 @@ menu_method_unref (MenuMethod *method)
         }
 }
 
+static const char*
+scheme_to_menu (const char *scheme)
+{
+        if (strcmp (scheme, "menu-test") == 0) {
+		return "applications.menu";
+	} else {
+		return NULL;
+	}
+}
+
+static gboolean
+menu_method_ensure_override (MenuMethod   *method,
+			     GnomeVFSURI  *uri,
+			     GError      **error)
+{
+        const char *scheme;
+        char *unescaped;
+	const char *menu;
+        
+        scheme = gnome_vfs_uri_get_scheme (uri);
+        g_assert (scheme != NULL);
+
+	menu = scheme_to_menu (scheme);
+	if (menu == NULL) {
+		menu_verbose ("Unknown protocol %s\n", scheme);
+                g_set_error (error, G_FILE_ERROR,
+                             G_FILE_ERROR_FAILED,
+                             _("Unknown protocol \"%s\"\n"),
+                             scheme);
+		return FALSE;
+	}
+        
+        unescaped = gnome_vfs_unescape_string (uri->text, "");
+	
+	if (!desktop_entry_tree_cache_override (method->cache,
+						menu, unescaped,
+						error)) {
+		g_free (unescaped);
+		return FALSE;
+	}
+
+	g_free (unescaped);
+	return TRUE;
+}
+
 static DesktopEntryTree*
 menu_method_get_tree (MenuMethod  *method,
                       const char  *scheme,
                       GError     **error)
 {
         DesktopEntryTree *tree;
-
-	menu_verbose ("Getting scheme %s tree\n", scheme);
+	const char *menu;
 	
-        if (strcmp (scheme, "menu-test") == 0) {
+	menu_verbose ("Getting scheme %s tree\n", scheme);
+
+	menu = scheme_to_menu (scheme);
+
+	if (menu != NULL) {
                 tree = desktop_entry_tree_cache_lookup (method->cache,
-                                                        "applications.menu",
-							TRUE,
+							menu, TRUE,
                                                         error);
         } else {
 		menu_verbose ("Unknown protocol %s\n", scheme);
@@ -616,6 +672,52 @@ menu_method_resolve_uri (MenuMethod            *method,
         g_free (unescaped);
 
         return TRUE;
+}
+
+static gboolean
+menu_method_resolve_uri_writable (MenuMethod               *method,
+				  GnomeVFSURI              *uri,
+				  gboolean                  create_if_not_found,
+				  DesktopEntryTree        **tree_p,
+				  DesktopEntryTreeNode    **node_p,
+				  char                    **real_path_p,
+				  GError                  **error)
+{
+	char *real_path;
+	DesktopEntryTreeNode *node;
+	DesktopEntryTree *tree;
+	
+	real_path = NULL;
+	node = NULL;
+	tree = NULL;
+
+	/* Be sure we've overridden this entry, so we can write to
+	 * it
+	 */
+	if (!menu_method_ensure_override (method, uri, error))
+		return FALSE;
+
+	/* Now resolve it */
+	if (!menu_method_resolve_uri (method, uri,
+				      &tree, &node, &real_path,
+				      error))
+		return FALSE;
+	
+
+        if (tree_p)
+                *tree_p = tree;
+        else
+                desktop_entry_tree_unref (tree);
+        
+        if (node_p)
+                *node_p = node;
+
+	if (real_path_p)
+		*real_path_p = real_path;
+	else
+		g_free (real_path);
+
+	return TRUE;
 }
 
 G_LOCK_DEFINE_STATIC (global_method);

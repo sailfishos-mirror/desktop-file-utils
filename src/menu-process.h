@@ -50,6 +50,10 @@ DesktopEntryTree* desktop_entry_tree_load  (const char  *filename,
 void              desktop_entry_tree_ref   (DesktopEntryTree *tree);
 void              desktop_entry_tree_unref (DesktopEntryTree *tree);
 
+/* after calling this, the tree is out-of-date vs. what's on disk */
+void              desktop_entry_tree_invalidate (DesktopEntryTree *tree,
+                                                 const char       *dirname);
+
 /* These don't return references; the DesktopEntryTree is just immutable. */
 gboolean desktop_entry_tree_get_node     (DesktopEntryTree       *tree,
                                           const char             *path,

@@ -84,6 +84,8 @@ menu_override_dir_create (const char       *path,
 {
   MenuOverrideDir *override;
 
+  menu_verbose ("Creating overrides directory \"%s\"\n", path);
+  
   if (!g_create_dir (path, 0755, error))
     return NULL;
 
@@ -146,7 +148,7 @@ menu_override_dir_add (MenuOverrideDir  *override,
   if (based_on_fs_path)
     {
       char *contents;
-      int len;
+      gsize len;
 
       if (!g_file_get_contents (based_on_fs_path, &contents, &len,
                                 error))

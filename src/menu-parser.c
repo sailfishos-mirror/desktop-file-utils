@@ -728,7 +728,7 @@ menu_load (const char *filename,
   GError *error;
   MenuParser parser;
   char *text;
-  int length;
+  gsize length;
   MenuNode *retval;
   char *basedir;
   

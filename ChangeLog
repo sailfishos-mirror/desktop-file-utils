@@ -1,3 +1,9 @@
+2002-08-06  Havoc Pennington  <hp@redhat.com>
+
+	* src/vfolder-query.c (symlink_recurse_nodes): unlink symlink
+	before trying to create it again, to avoid errors and be sure 
+	we replace the old link.
+
 2002-08-04  Havoc Pennington  <hp@redhat.com>
 
 	* src/install.c (main): create target directory if it doesn't 

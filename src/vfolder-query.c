@@ -377,6 +377,8 @@ symlink_recurse_nodes (GNode      *node,
         g_assert (origin);
         
         l = g_build_filename (parent_dir, nd->basename, NULL);
+
+        unlink (l);
         
         if (symlink (origin, l) < 0)
           {

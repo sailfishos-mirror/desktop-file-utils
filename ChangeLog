@@ -1,3 +1,20 @@
+2003-06-06  Havoc Pennington  <hp@redhat.com>
+
+	Last bugfix so we can display redhat-menus pretty OK
+	
+	* src/menu-process.c (node_menu_compare_func): make this consider
+	whether the menu nodes have the same parent, so we don't
+	consolidate dups that aren't children of the same menu
+	(menu_node_strip_duplicate_children): use node_menu_compare_func 
+	instead of node_compare_func to see if two menu nodes are dups
+
+	* src/menu-layout.c (menu_node_get_depth): new
+
+2003-06-05  Havoc Pennington  <hp@redhat.com>
+
+	* src/menu-layout.c (menu_node_append_to_string): fix name of node
+	printed for LegacyDir
+
 2003-06-05  Havoc Pennington  <hp@redhat.com>
 
 	* src/menu-parser.c (menu_load): set name of the menu file on 

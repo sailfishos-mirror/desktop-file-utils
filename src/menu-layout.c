@@ -272,6 +272,24 @@ menu_node_get_root (MenuNode *node)
   return parent;
 }
 
+int
+menu_node_get_depth (MenuNode *node)
+{
+  MenuNode *parent;
+  int depth;
+
+  depth = 0;
+  
+  parent = node;
+  while (parent->parent != NULL)
+    {
+      parent = parent->parent;
+      depth += 1;
+    }
+
+  return depth;
+}
+
 const char*
 menu_node_get_basedir (MenuNode *node)
 {
@@ -1643,7 +1661,7 @@ menu_node_append_to_string (MenuNode *node,
       {
         MenuNodeLegacyDir *nld = (MenuNodeLegacyDir*) node;
         
-        append_simple_with_attr (node, depth, "KDELegacyDirs",
+        append_simple_with_attr (node, depth, "LegacyDir",
                                  "prefix", nld->prefix, str);
       }
       break;

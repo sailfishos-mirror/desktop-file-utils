@@ -155,36 +155,47 @@ entry_has_category (Entry      *entry,
 {
   int i;
   unsigned int a;
-
+#define DETAILED_HAS_CATEGORY 0
+  
+#if DETAILED_HAS_CATEGORY
   menu_verbose ("  checking whether entry %s has category %s\n",
                 entry->relative_path, category);
+#endif
   
   if (entry->categories == NULL)
     {
+#if DETAILED_HAS_CATEGORY
       menu_verbose ("   entry has no categories\n");
+#endif
       return FALSE;
     }
 
   a = entry_cache_get_atom (cache, category);
   if (a == 0)
     {
+#if DETAILED_HAS_CATEGORY
       menu_verbose ("   no entry has this category, category not interned\n");
+#endif
       return FALSE;
     }
   
   i = 0;
   while (entry->categories[i] != 0)
     {
+#if DETAILED_HAS_CATEGORY
       menu_verbose ("   %s %s\n",
                     category, entry_cache_atom_name (cache,
                                                      entry->categories[i]));
+#endif
       if (a == entry->categories[i])
         return TRUE;
       
       ++i;
     }
 
+#if DETAILED_HAS_CATEGORY
   menu_verbose ("   does not have category %s\n", category);
+#endif
   
   return FALSE;
 }
@@ -195,20 +206,26 @@ entry_has_category_atom (Entry       *entry,
 {
   int i;
 
+#if DETAILED_HAS_CATEGORY
   menu_verbose ("  checking whether entry %s has category atom %u\n",
                 entry->relative_path, atom);
+#endif
   
   if (entry->categories == NULL)
     {
+#if DETAILED_HAS_CATEGORY
       menu_verbose ("   entry has no categories\n");
+#endif
       return FALSE;
     }
   
   i = 0;
   while (entry->categories[i] != 0)
     {
+#if DETAILED_HAS_CATEGORY
       menu_verbose ("   %u %u\n",
                     atom, entry->categories[i]);
+#endif
 
       if (atom == entry->categories[i])
         return TRUE;
@@ -216,7 +233,9 @@ entry_has_category_atom (Entry       *entry,
       ++i;
     }
 
+#if DETAILED_HAS_CATEGORY
   menu_verbose ("   does not have category atom %u\n", atom);
+#endif
   
   return FALSE;
 }

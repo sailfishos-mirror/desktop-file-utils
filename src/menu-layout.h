@@ -73,6 +73,7 @@ MenuNode*    menu_node_get_next     (MenuNode *node);
 MenuNode*    menu_node_get_parent   (MenuNode *node);
 MenuNode*    menu_node_get_children (MenuNode *node);
 MenuNode*    menu_node_get_root     (MenuNode *node);
+int          menu_node_get_depth    (MenuNode *node);
 
 void menu_node_insert_before (MenuNode *node,
                               MenuNode *new_sibling);

@@ -128,7 +128,7 @@ load_merge_file (MenuCache  *menu_cache,
   MenuNode *to_merge;
 
   menu_verbose ("Merging file \"%s\"\n", filename);
-            
+  
   to_merge = menu_cache_get_menu_for_file (menu_cache,
                                            filename,
                                            NULL,
@@ -409,7 +409,7 @@ menu_node_resolve_files_recursive (MenuCache  *menu_cache,
     case MENU_NODE_DEFAULT_MERGE_DIRS:
       resolve_default_merge_dirs (menu_cache, entry_cache, node);
       break;
-
+      
     case MENU_NODE_PASSTHROUGH:
       /* Just get rid of this, we don't need the memory usage */
       menu_node_unlink (node);
@@ -500,9 +500,16 @@ node_menu_compare_func (const void *a,
 {
   MenuNode *node_a = (MenuNode*) a;
   MenuNode *node_b = (MenuNode*) b;
+  MenuNode *parent_a = menu_node_get_parent (node_a);
+  MenuNode *parent_b = menu_node_get_parent (node_b);
 
-  return null_safe_strcmp (menu_node_menu_get_name (node_a),
-                           menu_node_menu_get_name (node_b));
+  if (parent_a < parent_b)
+    return -1;
+  else if (parent_a > parent_b)
+    return 1;
+  else
+    return null_safe_strcmp (menu_node_menu_get_name (node_a),
+                             menu_node_menu_get_name (node_b));
 }
 
 static void
@@ -523,11 +530,15 @@ move_children (MenuNode *from,
 
       menu_node_steal (from_child);
       if (insert_before)
-        menu_node_insert_before (insert_before, from_child);
+        {
+          menu_node_insert_before (insert_before, from_child);
+          g_assert (menu_node_get_next (from_child) == insert_before);
+        }
       else
         {
           menu_node_prepend_child (to, from_child);
           insert_before = from_child;
+          g_assert (menu_node_get_children (to) == from_child);
         }
       menu_node_unref (from_child);
       
@@ -612,11 +623,13 @@ menu_node_strip_duplicate_children (MenuNode *node)
       prev = tmp;
       tmp = tmp->next;
     }
-
+  
   g_slist_free (simple_nodes);
   simple_nodes = NULL;
-
-  /* stable sort the menu nodes */
+  
+  /* stable sort the menu nodes (the sort includes the
+   * parents of the nodes in the comparison)
+   */
   menu_nodes = g_slist_sort (menu_nodes,
                              node_menu_compare_func);
 
@@ -629,7 +642,7 @@ menu_node_strip_duplicate_children (MenuNode *node)
           MenuNode *p = prev->data;
           MenuNode *n = tmp->data;
 
-          if (node_compare_func (p, n) == 0)
+          if (node_menu_compare_func (p, n) == 0)
             {
               /* Move children of first menu to the start of second
                * menu and nuke the first menu
@@ -642,10 +655,10 @@ menu_node_strip_duplicate_children (MenuNode *node)
       prev = tmp;
       tmp = tmp->next;
     }
-
+  
   g_slist_free (menu_nodes);
   menu_nodes = NULL;
-
+  
   /* move nodes are pretty much annoying as hell */
 
   /* FIXME */
@@ -737,14 +750,14 @@ desktop_entry_tree_load (const char  *filename,
   if (only_show_in_desktop)
     entry_cache_set_only_show_in_name (entry_cache,
                                        only_show_in_desktop);
-
-  /* menu_node_debug_print (orig_node); */
   
   resolved_node = menu_node_deep_copy (orig_node);
   menu_node_resolve_files (menu_cache, entry_cache, resolved_node);
-
+  
   menu_node_strip_duplicate_children (resolved_node);
 
+  menu_node_debug_print (resolved_node);
+  
   tree = g_new0 (DesktopEntryTree, 1);
   tree->refcount = 1;
   tree->menu_cache = menu_cache;
@@ -1429,6 +1442,10 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
   EntrySet *entries;
   
   g_return_if_fail (menu_node_get_type (menu_node) == MENU_NODE_MENU);
+
+  menu_verbose ("=== Menu name = %s\n",
+                menu_node_menu_get_name (menu_node) ?
+                menu_node_menu_get_name (menu_node) : "(none)");
   
   app_dirs = menu_node_menu_get_app_entries (menu_node);
   dir_dirs = menu_node_menu_get_directory_entries (menu_node);
@@ -1444,6 +1461,7 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
           /* recurse */
           {
             TreeNode *child_tree;
+            
             child_tree = tree_node_new ();
             fill_tree_node_from_menu_node (child_tree, child);
             if (!tree_node_free_if_broken (child_tree))
@@ -1553,7 +1571,7 @@ build_tree (DesktopEntryTree *tree)
 {
   if (tree->root != NULL)
     return;
-
+  
   tree->root = tree_node_new ();
   fill_tree_node_from_menu_node (tree->root,
                                  find_menu_child (tree->resolved_node));

@@ -1279,7 +1279,8 @@ menu_node_append_to_string (MenuNode *node,
 
 static gboolean
 write_string (int         fd,
-              GString    *str,
+              const char *data,
+              size_t      len,
               const char *filename,
               GError    **error)
 {
@@ -1290,7 +1291,7 @@ write_string (int         fd,
   
  again:
 
-  bytes_written = write (fd, str->str + total_written, str->len - total_written);
+  bytes_written = write (fd, data + total_written, len - total_written);
 
   if (bytes_written < 0)
     {
@@ -1308,11 +1309,71 @@ write_string (int         fd,
   else
     {
       total_written += bytes_written;
-      if (total_written < str->len)
+      if (total_written < len)
         goto again;
     }
   
   return TRUE;
+}
+
+gboolean
+g_file_save_atomically (const char *filename,
+                        const char *str,
+                        int         len,
+                        GError    **error)
+{
+  char *tmpfile;
+  int fd;
+  gboolean retval;
+
+  retval = FALSE;
+  
+  if (len < 0)
+    len = strlen (str);
+  
+  tmpfile = g_strconcat (filename, ".tmp-XXXXXX", NULL);
+  
+  fd = g_mkstemp (tmpfile);
+  if (fd < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Could not create file \"%s\": %s\n"),
+                   tmpfile, g_strerror (errno));
+      goto out;
+    }
+  
+  if (!write_string (fd, str, len, tmpfile, error))
+    goto out;
+  
+  if (close (fd) < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to close file \"%s\": %s\n"),
+                   tmpfile, g_strerror (errno));
+      goto out;
+    }
+
+  if (rename (tmpfile, filename) < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to move file \"%s\" to \"%s\": %s\n"),
+                   tmpfile, filename, g_strerror (errno));
+      goto out;
+    }
+
+  g_free (tmpfile);
+  tmpfile = NULL; /* so we won't try to unlink it */
+
+  retval = TRUE;
+  
+ out:
+  if (tmpfile)
+    unlink (tmpfile); /* ignore failures */
+  g_free (tmpfile);
+  return retval;
 }
 
 gboolean
@@ -1322,13 +1383,10 @@ menu_cache_sync_for_file (MenuCache   *cache,
 {
   MenuFile *file;
   char *canonical;
-  char *tmpfile;
-  int fd;
   GString *str;
   gboolean retval;
 
   retval = FALSE;
-  tmpfile = NULL;
   str = NULL;
   
   canonical = g_canonicalize_file_name (filename);
@@ -1352,50 +1410,18 @@ menu_cache_sync_for_file (MenuCache   *cache,
       goto out;
     }
 
-  tmpfile = g_strconcat (canonical, ".tmp-XXXXXX", NULL);
-  
-  fd = g_mkstemp (tmpfile);
-  if (fd < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Could not create file \"%s\": %s\n"),
-                   tmpfile, g_strerror (errno));
-      goto out;
-    }
-
   str = g_string_new (NULL);
   menu_node_append_to_string (file->root, 0, str);
-  if (!write_string (fd, str, tmpfile, error))
+
+  if (!g_file_save_atomically (canonical,
+                               str->str, str->len,
+                               error))
     goto out;
-  if (close (fd) < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Failed to close file \"%s\": %s\n"),
-                   tmpfile, g_strerror (errno));
-      goto out;
-    }
-
-  if (rename (tmpfile, canonical) < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Failed to move file \"%s\" to \"%s\": %s\n"),
-                   tmpfile, canonical, g_strerror (errno));
-      goto out;
-    }
-
-  g_free (tmpfile);
-  tmpfile = NULL; /* so we won't try to unlink it */
   
   retval = TRUE;
   
  out:
-  if (tmpfile)
-    unlink (tmpfile); /* ignore failures */
   g_free (canonical);
-  g_free (tmpfile);
   if (str)
     g_string_free (str, TRUE);
   

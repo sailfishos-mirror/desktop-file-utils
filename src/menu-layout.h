@@ -121,8 +121,7 @@ const char* menu_cache_get_filename_for_node (MenuCache *cache,
  * Changing this node will change what gets written
  * back to disk, if you do menu_node_sync_for_file.
  * get_for_file returns a new reference count.
- * the menu node for each file is cached while references
- * are outstanding.
+ * Right now the cache never actually gets cleared.
  */
 MenuNode* menu_cache_get_menu_for_file           (MenuCache   *cache,
                                                   const char  *filename,
@@ -147,5 +146,10 @@ gboolean  menu_cache_sync_for_file               (MenuCache   *cache,
 void menu_verbose    (const char *format,
                       ...) G_GNUC_PRINTF (1, 2);
 #endif
+
+gboolean g_file_save_atomically (const char *filename,
+                                 const char *str,
+                                 int         len,
+                                 GError    **error);
 
 #endif /* MENU_LAYOUT_H */

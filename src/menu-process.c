@@ -865,6 +865,17 @@ menu_node_to_entry_set (EntryDirectoryList *list,
   return set;
 }
 
+static int
+compare_entries_func (const void *a,
+                      const void *b)
+{
+  Entry *ae = (Entry*) a;
+  Entry *be = (Entry*) b;
+
+  return strcmp (entry_get_relative_path (ae),
+                 entry_get_relative_path (be));
+}
+
 static void
 fill_tree_node_from_menu_node (TreeNode *tree_node,
                                MenuNode *menu_node)
@@ -986,6 +997,12 @@ fill_tree_node_from_menu_node (TreeNode *tree_node,
 
   tree_node->entries = entry_set_list_entries (entries);
   entry_set_unref (entries);
+
+  /* FIXME this is really only needed for the test suite, not
+   * for real menus
+   */
+  tree_node->entries = g_slist_sort (tree_node->entries,
+                                     compare_entries_func);
 }
 
 static void

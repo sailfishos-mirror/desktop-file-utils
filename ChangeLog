@@ -1,5 +1,10 @@
 2003-05-08  Havoc Pennington  <hp@redhat.com>
 
+	* src/menu-process.c (fill_tree_node_from_menu_node): sort entries
+	by basename
+
+2003-05-08  Havoc Pennington  <hp@redhat.com>
+
 	* src/menu-entries.c (entry_directory_list_add): fix list
 	manipulation screwup that caused obscure memory error
 	(find_value): fix bug that made it not work, and avoid extra

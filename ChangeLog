@@ -1,3 +1,9 @@
+2003-04-11  Havoc Pennington  <hp@redhat.com>
+
+	* src/validate.c (required_keys): don't stop checking as soon as
+	we see an Encoding field. Fix from Ville Skytta
+	<ville.skytta@iki.fi>
+
 2002-12-21  Havoc Pennington  <hp@pobox.com>
 
 	* test/run-test.c (main): allow specifying expected name of

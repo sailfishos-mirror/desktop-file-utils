@@ -561,7 +561,6 @@ required_keys (GnomeDesktopFile *df, const char *filename)
       if (strcmp (val, "UTF-8") != 0 &&
 	  strcmp (val, "Legacy-Mixed") != 0)
 	print_fatal ("Error, file %s specifies unknown encoding type '%s'.\n", filename, val);
-      return FALSE;
     }
   else
     {
@@ -588,7 +587,6 @@ required_keys (GnomeDesktopFile *df, const char *filename)
 	  strcmp (val, "ServiceType") != 0)
 	{
 	  print_fatal ("Error, file %s specifies an invalid type '%s'.\n", filename, val);
-	  return FALSE;
 	}
     }
   else

@@ -1,3 +1,8 @@
+2003-04-30  Havoc Pennington  <hp@pobox.com>
+
+	* src/menu-parser.c: skeletal noncompiling base file for menu xml
+	parser thing
+
 2003-04-11  Havoc Pennington  <hp@redhat.com>
 
 	* src/validate.c (required_keys): don't stop checking as soon as

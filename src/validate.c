@@ -719,10 +719,11 @@ main (int argc, char *argv[])
     }
   
   if (!g_file_get_contents (filename, &contents,
-			    NULL, NULL)) {
-    g_printerr ("error reading desktop file '%s'\n", filename);
-    return 1;
-  }
+			    NULL, NULL))
+    {
+      g_printerr ("error reading desktop file '%s'\n", filename);
+      return 1;
+    }
 
   error = NULL;
   df = gnome_desktop_file_new_from_string (contents, &error);

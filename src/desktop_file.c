@@ -1,5 +1,18 @@
+#include <config.h>
+
 #include <string.h>
+#include <errno.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "desktop_file.h"
+
+
+#include <libintl.h>
+#define _(x) gettext ((x))
+#define N_(x) x
+
 
 typedef struct _GnomeDesktopFileSection GnomeDesktopFileSection;
 typedef struct _GnomeDesktopFileLine GnomeDesktopFileLine;
@@ -433,7 +446,7 @@ parse_key_value (GnomeDesktopFileParser *parser, GError **error)
   gchar *key_start;
   gchar *key_end;
   gchar *locale_start = NULL;
-  gchar *locale_end;
+  gchar *locale_end = NULL;
   gchar *value_start;
   gchar *value;
   gchar *p;
@@ -821,4 +834,94 @@ gnome_desktop_file_foreach_key (GnomeDesktopFile            *df,
     }
   
   return;
+}
+
+GnomeDesktopFile*
+gnome_desktop_file_load (const char    *filename,
+                         GError       **error)
+{
+  char *contents;
+  GnomeDesktopFile *df;
+  
+  if (!g_file_get_contents (filename, &contents,
+			    NULL, error))
+    return NULL;
+
+  df = gnome_desktop_file_new_from_string (contents, error);
+
+  g_free (contents);
+
+  return df;
+}
+
+
+gboolean
+gnome_desktop_file_save (GnomeDesktopFile *df,
+                         const char       *path,
+                         int               mode,
+                         GError          **error)
+{
+  char *str;
+  FILE *f;
+  int fd;
+
+  f = fopen (path, "w");
+  if (f == NULL)
+    {
+      g_set_error (error, 
+                   G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to open \"%s\": %s"),
+                   path, g_strerror (errno));
+      return FALSE;
+    }
+  
+  fd = fileno (f);
+  
+  if (fchmod (fd, mode) < 0)
+    {
+      g_set_error (error, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to set permissions %o on \"%s\": %s"),
+                   mode, path, g_strerror (errno));
+
+      fclose (f);
+      unlink (path);
+      
+      return FALSE;
+    }
+
+  str = gnome_desktop_file_to_string (df);
+  
+  if (fputs (str, f) < 0)
+    {
+      g_set_error (error,
+                   G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to write to \"%s\": %s"),
+                   path, g_strerror (errno));
+
+      fclose (f);
+      unlink (path);
+      g_free (str);
+      
+      return FALSE;
+    }
+
+  g_free (str);
+  
+  if (fclose (f) < 0)
+    {
+      g_set_error (error,
+                   G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to close \"%s\": %s"),
+                   path, g_strerror (errno));
+
+      unlink (path);
+
+      return FALSE;
+    }
+
+  return TRUE;
 }

@@ -31,10 +31,11 @@ GQuark gnome_desktop_parse_error_quark (void);
 GnomeDesktopFile *gnome_desktop_file_new             (GnomeDesktopFileEncoding    encoding);
 GnomeDesktopFile *gnome_desktop_file_new_from_string (char                       *data,
 						      GError                    **error);
-GnomeDesktopFile *gnome_desktop_file_load            (char                       *filename,
+GnomeDesktopFile *gnome_desktop_file_load            (const char                 *filename,
 						      GError                    **error);
 gboolean          gnome_desktop_file_save            (GnomeDesktopFile           *df,
 						      const char                 *path,
+                                                      int                         mode,
 						      GError                    **error);
 char *            gnome_desktop_file_to_string       (GnomeDesktopFile           *df);
 void              gnome_desktop_file_free            (GnomeDesktopFile           *df);

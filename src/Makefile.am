@@ -1,5 +1,5 @@
 
-INCLUDES=$(DESKTOP_FILE_UTILS_CFLAGS)
+INCLUDES=$(DESKTOP_FILE_UTILS_CFLAGS) -DDATADIR="\"$(datadir)\""
 
 bin_PROGRAMS=desktop-file-validate desktop-file-install
 

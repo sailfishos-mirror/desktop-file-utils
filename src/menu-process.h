@@ -93,6 +93,8 @@ void     desktop_entry_tree_list_all     (DesktopEntryTree       *tree,
                                           int                    *n_subdirs);
 gboolean desktop_entry_tree_has_entries  (DesktopEntryTree       *tree,
                                           DesktopEntryTreeNode   *parent_node);
+GTime    desktop_entry_tree_get_mtime    (DesktopEntryTree       *tree);
+
 
 /* returns a copy of .directory file absolute path */
 char*       desktop_entry_tree_node_get_directory (DesktopEntryTreeNode *node);

@@ -1,5 +1,18 @@
 2004-08-29  Mark McLoughlin  <mark@skynet.ie>
 
+	Another patch from Dan with some minor changes.
+
+	* src/menu-process.[ch]:
+	(desktop_entry_tree_get_mtime): accessor for mtime.
+	(build_tree): set the mtime to the time which we
+	build the tree.
+	
+	* src/menu-method.c:
+	(fill_in_generic_dir_info),
+	(fill_in_generic_file_info): set mtime/ctime.
+
+2004-08-29  Mark McLoughlin  <mark@skynet.ie>
+
 	Patch to make the menu method notice changes in the entry
 	directories and re-load the menus. Re-worked version of
 	a patch from Dan Williams <dcbw@redhat.com>

@@ -1104,7 +1104,8 @@ method_return (MenuMethod *method)
 
 /* Fill in dir info that's true for all dirs in the vfs */
 static void
-fill_in_generic_dir_info (GnomeVFSFileInfo         *info,
+fill_in_generic_dir_info (DesktopEntryTree         *tree,
+			  GnomeVFSFileInfo         *info,
 			  GnomeVFSFileInfoOptions   options)
 {
 	info->type = GNOME_VFS_FILE_TYPE_DIRECTORY;
@@ -1128,10 +1129,15 @@ fill_in_generic_dir_info (GnomeVFSFileInfo         *info,
 	/* We always own it */
 	info->uid = getuid ();
 	info->gid = getgid ();
+
+	info->mtime = desktop_entry_tree_get_mtime (tree);
+	info->ctime = desktop_entry_tree_get_mtime (tree);
 	
 	info->valid_fields |=
 		GNOME_VFS_FILE_INFO_FIELDS_TYPE |
-		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS;
+		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS |
+		GNOME_VFS_FILE_INFO_FIELDS_MTIME;
+
 }
 
 static void
@@ -1144,12 +1150,13 @@ fill_in_dir_info (DesktopEntryTree         *tree,
 	g_assert (node != NULL);
 	g_assert (file_info != NULL);
 
-	fill_in_generic_dir_info (file_info, options);
+	fill_in_generic_dir_info (tree, file_info, options);
 }
 
 /* Fill in file info that's true for all .desktop files */
 static void
-fill_in_generic_file_info (GnomeVFSFileInfo         *info,
+fill_in_generic_file_info (DesktopEntryTree         *tree,
+			   GnomeVFSFileInfo         *info,
 			   GnomeVFSFileInfoOptions   options)
 {
 	info->type = GNOME_VFS_FILE_TYPE_REGULAR;
@@ -1177,8 +1184,13 @@ fill_in_generic_file_info (GnomeVFSFileInfo         *info,
 	info->uid = getuid ();
 	info->gid = getgid ();
 	
-	info->valid_fields |= GNOME_VFS_FILE_INFO_FIELDS_TYPE |
-		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS;
+	info->mtime = desktop_entry_tree_get_mtime (tree);
+	info->ctime = desktop_entry_tree_get_mtime (tree);
+	
+	info->valid_fields |=
+		GNOME_VFS_FILE_INFO_FIELDS_TYPE |
+		GNOME_VFS_FILE_INFO_FIELDS_PERMISSIONS |
+		GNOME_VFS_FILE_INFO_FIELDS_MTIME;
 }
 
 static void
@@ -1193,7 +1205,7 @@ fill_in_file_info (DesktopEntryTree         *tree,
 	g_assert (path != NULL);
 	g_assert (file_info != NULL);
 	
-	fill_in_generic_file_info (file_info, options);
+	fill_in_generic_file_info (tree, file_info, options);
 }
 
 static GnomeVFSResult
@@ -1533,9 +1545,9 @@ dir_handle_next_file_info (DirHandle         *handle,
         handle->current += 1;
 
         if (handle->current <= handle->n_entries_that_are_subdirs) {
-		fill_in_generic_dir_info (info, handle->options);
+		fill_in_generic_dir_info (handle->tree, info, handle->options);
 	} else {
-		fill_in_generic_file_info (info, handle->options);
+		fill_in_generic_file_info (handle->tree, info, handle->options);
 	}
 
         info->valid_fields &= ~ UNSUPPORTED_INFO_FIELDS;

@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 #include <libintl.h>
 #define _(x) gettext ((x))
@@ -1007,6 +1008,7 @@ struct DesktopEntryTree
   MenuNode   *orig_node;
   MenuNode   *resolved_node;
   TreeNode   *root;
+  GTime       mtime;
   GSList     *monitors;
 };
 
@@ -1093,6 +1095,7 @@ desktop_entry_tree_load (const char  *filename,
   tree->orig_node = orig_node;
   tree->resolved_node = resolved_node;
   tree->root = NULL;
+  tree->mtime = 0;
   
   return tree;
 }
@@ -1490,6 +1493,12 @@ desktop_entry_tree_has_entries (DesktopEntryTree       *tree,
   g_return_val_if_fail (parent_node != NULL, FALSE);
   
   return parent_node->entries != NULL;
+}
+
+GTime
+desktop_entry_tree_get_mtime (DesktopEntryTree *tree)
+{
+  return tree->mtime;
 }
 
 char*
@@ -2132,6 +2141,7 @@ build_tree (DesktopEntryTree *tree)
 
   allocated = g_hash_table_new (NULL, NULL);
   
+  tree->mtime = time (NULL);
   tree->root = tree_node_from_menu_node (tree,
 					 NULL,
                                          find_menu_child (tree->resolved_node),

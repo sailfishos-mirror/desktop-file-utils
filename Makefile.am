@@ -1,3 +1,2 @@
-
-SUBDIRS=src test
+SUBDIRS = src test misc
 

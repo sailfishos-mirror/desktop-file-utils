@@ -1,7 +1,7 @@
 /* Menu layout in-memory data structure (a custom "DOM tree") */
 
 /*
- * Copyright (C) 2002 Red Hat, Inc.
+ * Copyright (C) 2002, 2003 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -131,7 +131,7 @@ menu_node_unref (MenuNode *node)
     }
 }
 
-static MenuNode*
+MenuNode*
 menu_node_new (MenuNodeType type)
 {
   MenuNode *node;
@@ -748,6 +748,8 @@ menu_node_get_for_canonical_file  (const char *canonical)
       menu_node_ref (file->root);
       return file->root;
     }
+
+  /* FIXME load file */
   
   return NULL;
 }
@@ -785,6 +787,8 @@ menu_node_sync_for_file (const char *filename)
   
   if (file == NULL)
     return;
+
+  /* FIXME save file */
 }
 
 

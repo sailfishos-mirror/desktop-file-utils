@@ -30,155 +30,11 @@
 
 typedef struct MenuParser MenuParser;
 
-typedef enum
-{
-  ELEMENT_NONE,
-  ELEMENT_BUSCONFIG,
-  ELEMENT_INCLUDE,
-  ELEMENT_USER,
-  ELEMENT_LISTEN,
-  ELEMENT_AUTH,
-  ELEMENT_POLICY,
-  ELEMENT_LIMIT,
-  ELEMENT_ALLOW,
-  ELEMENT_DENY,
-  ELEMENT_FORK,
-  ELEMENT_PIDFILE,
-  ELEMENT_SERVICEDIR,
-  ELEMENT_INCLUDEDIR,
-  ELEMENT_TYPE
-} ElementType;
-
-typedef struct
-{
-  ElementType type;
-
-  unsigned int had_content : 1;
-
-  union
-  {
-    struct
-    {
-      unsigned int ignore_missing : 1;
-    } include;
-    
-  } d;
-
-} Element;
-
-
 struct MenuParser
 {
-  GSList *states;  
+  MenuNode *root;
+  MenuNode *stack_top;
 };
-
-
-static const char*
-element_type_to_name (ElementType type)
-{
-  switch (type)
-    {
-    case ELEMENT_NONE:
-      return NULL;
-    case ELEMENT_BUSCONFIG:
-      return "busconfig";
-    case ELEMENT_INCLUDE:
-      return "include";
-    case ELEMENT_USER:
-      return "user";
-    case ELEMENT_LISTEN:
-      return "listen";
-    case ELEMENT_AUTH:
-      return "auth";
-    case ELEMENT_POLICY:
-      return "policy";
-    case ELEMENT_LIMIT:
-      return "limit";
-    case ELEMENT_ALLOW:
-      return "allow";
-    case ELEMENT_DENY:
-      return "deny";
-    case ELEMENT_FORK:
-      return "fork";
-    case ELEMENT_PIDFILE:
-      return "pidfile";
-    case ELEMENT_SERVICEDIR:
-      return "servicedir";
-    case ELEMENT_INCLUDEDIR:
-      return "includedir";
-    case ELEMENT_TYPE:
-      return "type";
-    }
-
-  _dbus_assert_not_reached ("bad element type");
-
-  return NULL;
-}
-
-static Element*
-push_element (BusConfigParser *parser,
-              ElementType      type)
-{
-  Element *e;
-
-  _dbus_assert (type != ELEMENT_NONE);
-  
-  e = dbus_new0 (Element, 1);
-  if (e == NULL)
-    return NULL;
-
-  if (!_dbus_list_append (&parser->stack, e))
-    {
-      dbus_free (e);
-      return NULL;
-    }
-  
-  e->type = type;
-
-  return e;
-}
-
-static void
-element_free (Element *e)
-{
-  if (e->type == ELEMENT_LIMIT)
-    dbus_free (e->d.limit.name);
-  
-  dbus_free (e);
-}
-
-static void
-pop_element (BusConfigParser *parser)
-{
-  Element *e;
-
-  e = _dbus_list_pop_last (&parser->stack);
-  
-  element_free (e);
-}
-
-static Element*
-peek_element (BusConfigParser *parser)
-{
-  Element *e;
-
-  e = _dbus_list_get_last (&parser->stack);
-
-  return e;
-}
-
-static ElementType
-top_element_type (BusConfigParser *parser)
-{
-  Element *e;
-
-  e = _dbus_list_get_last (&parser->stack);
-
-  if (e)
-    return e->type;
-  else
-    return ELEMENT_NONE;
-}
 
 static void set_error (GError             **err,
                        GMarkupParseContext *context,
@@ -206,7 +62,7 @@ static void text_handler          (GMarkupParseContext  *context,
                                    gpointer              user_data,
                                    GError              **error);
 
-static GMarkupParser vfolder_parser = {
+static GMarkupParser menu_funcs = {
   start_element_handler,
   end_element_handler,
   text_handler,
@@ -390,6 +246,47 @@ check_no_attributes (GMarkupParseContext *context,
 }
 
 static void
+start_menu_element (MenuParser          *parser,
+                    GMarkupParseContext *context,
+                    const gchar         *element_name,
+                    const gchar        **attribute_names,
+                    const gchar        **attribute_values,
+                    GError             **error)
+{
+  MenuNode *node;
+
+  if (!check_no_attributes (context, element_name,
+                            attribute_names, attribute_values,
+                            error))
+    return;
+  
+  node = menu_node_new (MENU_NODE_MENU);
+
+  if (parser->stack_top == NULL)
+    {
+      g_assert (parser->root == NULL);
+      
+      parser->root = node;
+      parser->stack_top = node;
+    }
+  else
+    {
+      if (menu_node_get_type (parser->stack_top != MENU_NODE_MENU))
+        {
+          set_error (error, context,
+                     G_MARKUP_ERROR,
+                     G_MARKUP_ERROR_PARSE,
+                     _("<Menu> element can only appear below other <Menu> elements\n"));
+          menu_node_unref (node);
+          return;
+        }
+
+      menu_node_append_child (parser->stack_top, node);
+      menu_node_unref (node);
+    }
+}
+
+static void
 start_element_handler (GMarkupParseContext *context,
                        const gchar         *element_name,
                        const gchar        **attribute_names,
@@ -397,7 +294,31 @@ start_element_handler (GMarkupParseContext *context,
                        gpointer             user_data,
                        GError             **error)
 {
+  MenuParser *parser = user_data;
 
+  if (ELEMENT_IS ("menu"))
+    {
+      if (parser->root != NULL &&
+          parser->stack_top == NULL)
+        {
+          set_error (error, context, G_MARKUP_ERROR,
+                     G_MARKUP_ERROR_PARSE,
+                     _("Multiple root elements in menu file, only one toplevel <Menu> is allowed\n"));
+          return;
+        }
+      
+      start_menu_element (parser, element_name,
+                          attribute_names, attribute_values,
+                          error);
+    }
+  else if (parser->stack_top == NULL)
+    {
+      set_error (error, context, G_MARKUP_ERROR,
+                 G_MARKUP_ERROR_PARSE,
+                 _("Root element in a menu file must be <Menu>, not <%s>\n"),
+                 element_name);
+    }
+  
 }
 
 static void
@@ -406,7 +327,11 @@ end_element_handler (GMarkupParseContext *context,
                      gpointer             user_data,
                      GError             **error)
 {
+  MenuParser *parser = user_data;
 
+  g_assert (parser->stack_top != NULL);
+
+  parser->stack_top = menu_node_get_parent (parser->stack_top);
 }
 
 #define NO_TEXT(element_name) set_error (error, context, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE, _("No text is allowed inside element <%s>"), element_name)
@@ -438,12 +363,93 @@ text_handler (GMarkupParseContext *context,
               gsize                text_len,
               gpointer             user_data,
               GError             **error)
-{  
+{
+  MenuParser *parser = user_data;
+  
   if (all_whitespace (text, text_len))
     return;
-  
-  /* FIXME http://bugzilla.gnome.org/show_bug.cgi?id=70448 would
-   * allow a nice cleanup here.
-   */
 
+  g_assert (parser->stack_top != NULL);  
+}
+
+static void
+menu_parser_init (MenuParser *parser)
+{
+  parser->root = NULL;
+  parser->stack_top = NULL;
+}
+
+static void
+menu_parser_free (MenuParser *parser)
+{
+  if (parser->root)
+    menu_node_unref (parser->root);
+}
+
+MenuNode*
+menu_load (const char *filename,
+           GError    **err)
+{
+  GMarkupParseContext *context;
+  GError *error;
+  MenuParser parser;
+  char *text;
+  int length;
+  MenuNode *retval;
+
+  text = NULL;
+  length = 0;
+  retval = NULL;
+  
+  if (!g_file_get_contents (filename,
+                            &text,
+                            &length,
+                            err))
+    return NULL;
+  
+  g_assert (text);
+
+  menu_parser_init (&parser);
+  
+  context = g_markup_parse_context_new (&menu_funcs,
+                                        0, &parser, NULL);
+
+  error = NULL;
+  if (!g_markup_parse_context_parse (context,
+                                     text,
+                                     length,
+                                     &error))
+    goto out;
+
+  error = NULL;
+  if (!g_markup_parse_context_end_parse (context, &error))
+    goto out;
+
+  g_markup_parse_context_free (context);
+
+  goto out;
+
+ out:
+
+  g_free (text);
+  
+  if (error)
+    {
+      g_propagate_error (err, error);
+    }
+  else if (parser.root)
+    {
+      retval = parser.root;
+      parser.root = NULL;
+    }
+  else
+    {
+      g_set_error (err, G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                   _("Menu file %s did not contain a root <VFolderInfo> element"),
+                   filename);
+    }
+
+  menu_parser_free (&parser);
+  
+  return retval;
 }

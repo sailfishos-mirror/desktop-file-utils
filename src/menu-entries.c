@@ -1003,7 +1003,7 @@ entry_set_subtract (EntrySet *set,
     }
   else
     {
-      /* Remove everything in "set" which is not in "with" */
+      /* Remove everything in "set" which is not in "other" */
       g_assert (set->hash);
       g_assert (other->hash);
       

@@ -53,6 +53,7 @@ typedef enum
   MENU_NODE_MERGE_FILE,
   MENU_NODE_MERGE_DIR,
   MENU_NODE_LEGACY_DIR,
+  MENU_NODE_KDE_LEGACY_DIRS,
   MENU_NODE_MOVE,
   MENU_NODE_OLD,
   MENU_NODE_NEW,
@@ -60,6 +61,7 @@ typedef enum
   MENU_NODE_NOT_DELETED
 } MenuNodeType;
 
+MenuNode*    menu_node_new          (MenuNodeType type);
 void         menu_node_ref          (MenuNode *node);
 void         menu_node_unref        (MenuNode *node);
 MenuNode*    menu_node_deep_copy    (MenuNode *node);

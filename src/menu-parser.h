@@ -22,4 +22,7 @@
 #ifndef MENU_PARSER_H
 #define MENU_PARSER_H
 
+MenuNode* menu_load (const char *filename,
+                     GError    **err);
+
 #endif /* MENU_PARSER_H */

@@ -6,6 +6,4 @@ Makefile.in
 *.la
 desktop-file-install
 desktop-file-validate
-desktop-menu-tool
-dfu-test
 update-desktop-database

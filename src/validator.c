@@ -19,7 +19,7 @@ main (int argc, char *argv[])
   if (!g_file_get_contents (filename, &contents,
 			    NULL, NULL))
     {
-      g_printerr ("error reading desktop file '%s'\n", filename);
+      g_printerr ("%s: error reading desktop file\n", filename);
       return 1;
     }
 
@@ -28,7 +28,7 @@ main (int argc, char *argv[])
   
   if (!df)
     {
-      g_printerr ("Error parsing %s: %s\n", filename, error->message);
+      g_printerr ("%s: parse error: %s\n", filename, error->message);
       return 1;
     }
 

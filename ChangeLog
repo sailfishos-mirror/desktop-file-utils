@@ -1,5 +1,21 @@
 2004-04-18  Mark McLoughlin  <mark@skynet.ie>
 
+	Patch from Ville Skyttä <ville.skytta@iki.fi> with some
+	minor changes.
+
+	* src/validate.c:
+	(print_fatal), (print_warning): take a filename arg and
+	say whether its an error or warning.
+	(validate_only_show_in): actually validate against registered
+	OnlyShowIn values.
+	(key_table): upd. for latest spec.
+	(enum_keys): check for keys that are reserved for KDE.
+	(required_section): improve validation here.
+
+	* src/validator.c: (main): fixup the error messages.
+
+2004-04-18  Mark McLoughlin  <mark@skynet.ie>
+
 	Warning fixes.
 
 	* src/menu-entries.c:

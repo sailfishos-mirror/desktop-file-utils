@@ -24,12 +24,15 @@ static gboolean fatal_error_occurred = FALSE;
 
 
 static void
-print_fatal (const char *format, ...)
+print_fatal (const char *filename, const char *format, ...)
 {
   va_list args;
   gchar *str;
   
-  g_return_if_fail (format != NULL);
+  g_return_if_fail (filename != NULL && format != NULL);
+
+  fputs (filename, stdout);
+  fputs (": error: ", stdout);
   
   va_start (args, format);
   str = g_strdup_vprintf (format, args);
@@ -45,13 +48,16 @@ print_fatal (const char *format, ...)
 }
 
 static void
-print_warning (const char *format, ...)
+print_warning (const char* filename, const char *format, ...)
 {
   va_list args;
   gchar *str;
   
-  g_return_if_fail (format != NULL);
-  
+  g_return_if_fail (filename != NULL && format != NULL);
+
+  fputs (filename, stdout);
+  fputs (": warning: ", stdout);
+
   va_start (args, format);
   str = g_strdup_vprintf (format, args);
   va_end (args);
@@ -88,7 +94,7 @@ validate_string (const char *value, const char *key, const char *locale, const c
 	k = g_strdup_printf ("%s[%s]", key, locale);
       else
 	k = g_strdup_printf ("%s", key);
-      print_fatal ("Error in file %s, Invalid characters in value of key %s. Keys of type string may contain ASCII characters except control characters\n", filename, k);
+      print_fatal (filename, "invalid characters in value of key \"%s\", keys of type string may contain ASCII characters except control characters\n", k);
       g_free (k);
     }
 }
@@ -118,7 +124,7 @@ validate_strings (const char *value, const char *key, const char *locale, const 
 	k = g_strdup_printf ("%s[%s]", key, locale);
       else
 	k = g_strdup_printf ("%s", key);
-      print_fatal ("Error in file %s, Invalid characters in value of key %s. Keys of type strings may contain ASCII characters except control characters\n", filename, k);
+      print_fatal (filename, "invalid characters in value of key \"%s\", keys of type strings may contain ASCII characters except control characters\n", k);
       g_free (k);
     }
 
@@ -133,7 +139,7 @@ validate_strings (const char *value, const char *key, const char *locale, const 
           else
             k = g_strdup_printf ("%s", key);
 
-          print_fatal ("Error in file %s, key %s is a list of strings and must end in a semicolon.\n", filename, k);
+          print_fatal (filename, "value of key \"%s\" is a list of strings and must end with a semicolon\n", k);
           g_free (k);
         }
     }
@@ -142,6 +148,9 @@ validate_strings (const char *value, const char *key, const char *locale, const 
 static void
 validate_only_show_in (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
+  const char *onlyshowin_keys[] = {
+    "KDE", "GNOME", "ROX", "XFCE", "Old", NULL
+  };
   char **vals;
   int i;
 
@@ -169,13 +178,31 @@ validate_only_show_in (const char *value, const char *key, const char *locale, c
   i = 0;
   while (vals[i])
     {
-      if (strcmp (vals[i], "KDE") != 0 &&
-          g_ascii_strcasecmp (vals[i], "KDE") == 0)
-        print_fatal ("Error in file %s, OnlyShowIn value for KDE should be all caps KDE, not %s.\n", vals[i]);
-      else if (strcmp (vals[i], "GNOME") != 0 &&
-               g_ascii_strcasecmp (vals[i], "GNOME") == 0)
-        print_fatal ("Error in file %s, OnlyShowIn value for GNOME should be all caps GNOME, not %s.\n", vals[i]);
-      
+      int j = 0;
+
+      while (onlyshowin_keys[j])
+        {
+          if (g_ascii_strcasecmp (vals[i], onlyshowin_keys[j]) == 0)
+	    {
+	      if (strcmp (vals[i], onlyshowin_keys[j]) != 0)
+		{
+		  print_fatal (filename, "%s values are case sensitive (should be \"%s\" instead of \"%s\")\n",
+			       key, onlyshowin_keys[j], vals[i]);
+		}
+	      break;
+	    }
+	  ++j;
+	}
+
+      if (onlyshowin_keys[j] == NULL)
+	{
+	  char *valid_onlyshowins;
+
+	  valid_onlyshowins = g_strjoinv ("\", \"", (gchar **) onlyshowin_keys);
+	  print_fatal (filename, "%s values must be one of \"%s\" (found \"%s\")\n",
+		       key, valid_onlyshowins, vals[i]);
+	  g_free (valid_onlyshowins);
+	}
       ++i;
     }
 
@@ -199,7 +226,7 @@ validate_localestring (const char *value, const char *key, const char *locale, c
   if (gnome_desktop_file_get_encoding (df) == GNOME_DESKTOP_FILE_ENCODING_UTF8)
     {
       if (!g_utf8_validate (value, -1, NULL))
-	print_fatal ("Error, value for key %s in file %s contains invalid UTF-8 characters, even though the encoding is UTF-8.\n", k, filename);
+	print_fatal (filename, "value for key \"%s\" contains invalid UTF-8 characters, even though the encoding is UTF-8\n", k);
     }
   else if (gnome_desktop_file_get_encoding (df) == GNOME_DESKTOP_FILE_ENCODING_LEGACY)
     {
@@ -217,14 +244,14 @@ validate_localestring (const char *value, const char *key, const char *locale, c
 			       NULL,  
 			       &error);
 	      if (!res && error && error->code == G_CONVERT_ERROR_ILLEGAL_SEQUENCE)
-		print_fatal ("Error, value for key %s in file %s contains characters that are invalid in the %s encoding.\n", k, filename, encoding);
+		print_fatal (filename, "value for key \"%s\" contains characters that are invalid in the \"%s\" encoding\n", k, encoding);
 	      else if (!res && error && error->code == G_CONVERT_ERROR_NO_CONVERSION)
-		print_warning ("Warning, encoding (%s) for key %s in file %s is not supported by iconv.\n", encoding, k, filename);
+		print_warning (filename, "encoding \"%s\" for key \"%s\" is not supported by iconv\n", encoding, k);
 		
 	      g_free (res);
 	    }
 	  else
-	    print_fatal ("Error in file %s, no encoding specified for locale %s\n", filename, locale);
+	    print_fatal (filename, "no encoding specified for locale \"%s\"\n", locale);
  	}
       else
 	{
@@ -242,7 +269,7 @@ validate_localestring (const char *value, const char *key, const char *locale, c
 	      p++;
 	    }
 	  if (!ok)
-	    print_fatal ("Error in file %s, untranslated localestring key %s has non-ascii characters in its value\n", filename, key);
+	    print_fatal (filename, "untranslated localestring key \"%s\" has non-ASCII characters in its value\n", key);
 	}
     }
 
@@ -274,7 +301,7 @@ validate_regexps (const char *value, const char *key, const char *locale, const 
 	k = g_strdup_printf ("%s[%s]", key, locale);
       else
 	k = g_strdup_printf ("%s", key);
-      print_fatal ("Error in file %s, Invalid characters in value of key %s. Keys of type regexps may contain ASCII characters except control characters\n", filename, k);
+      print_fatal (filename, "invalid characters in value of key \"%s\", keys of type regexps may contain ASCII characters except control characters\n", k);
       g_free (k);
     }
 }
@@ -284,7 +311,7 @@ validate_boolean (const char *value, const char *key, const char *locale, const 
 {
   if (strcmp (value, "true") != 0 &&
       strcmp (value, "false") != 0)
-    print_fatal ("Error in file %s, Invalid characters in value of key %s. Boolean values must be \"false\" or \"true\", the value was \"%s\".\n", filename, key, value);
+    print_fatal (filename, "invalid characters in value of key \"%s\", boolean values must be \"false\" or \"true\" (found \"%s\")\n", key, value);
   
 }
 
@@ -295,11 +322,11 @@ validate_boolean_or_01 (const char *value, const char *key, const char *locale, 
       strcmp (value, "false") != 0 &&
       strcmp (value, "0") != 0 &&
       strcmp (value, "1") != 0)
-    print_fatal ("Error in file %s, Invalid characters in value of key %s. Boolean values must be \"false\" or \"true\", the value was \"%s\".\n", filename, key, value);
+    print_fatal (filename, "invalid characters in value of key \"%s\", boolean values must be \"false\" or \"true\" (found \"%s\")\n", key, value);
 
   if (strcmp (value, "0") == 0 ||
       strcmp (value, "1") == 0)
-    print_warning ("Warning in file %s, boolean key %s has value %s. Boolean values should be \"false\" or \"true\", although 0 and 1 is allowed in this field for backwards compatibility.\n", filename, key, value);
+    print_warning (filename, "boolean key \"%s\" has value \"%s\", boolean values should be \"false\" or \"true\", although \"0\" and \"1\" are allowed in this field for backwards compatibility\n", key, value);
 }
 
 static void
@@ -310,7 +337,7 @@ validate_numeric (const char *value, const char *key, const char *locale, const 
   
   res = sscanf( value, "%f", &d);
   if (res == 0)
-    print_fatal ("Error in file %s, numeric key %s has value %s, which doesn't look like a number.\n", filename, key, value);
+    print_fatal (filename, "numeric key \"%s\" has value \"%s\", which doesn't look like a number\n", key, value);
 }
 
 struct {
@@ -330,16 +357,16 @@ struct {
   { "Exec", validate_string },
   { "Actions", validate_strings },
   { "Icon", validate_string },
-  { "MiniIcon", validate_string, TRUE },
+  { "MiniIcon", validate_string, TRUE },          /* 0.9.4: deprecated */
   { "Hidden", validate_boolean },
   { "Path", validate_string },
   { "Terminal", validate_boolean_or_01 },
-  { "TerminalOptions", validate_string, /* FIXME: Should be deprecated? */ },
+  { "TerminalOptions", validate_string, TRUE },   /* 0.9.4: deprecated */
   { "SwallowTitle", validate_localestring },
   { "SwallowExec", validate_string }, 
   { "MimeType", validate_regexps },
-  { "Patterns", validate_regexps },
-  { "DefaultApp", validate_string },
+  { "Patterns", validate_regexps, TRUE },         /* 0.9.4: deprecated */
+  { "DefaultApp", validate_string, TRUE },        /* 0.9.4: deprecated */
   { "Dev", validate_string },
   { "FSType", validate_string },
   { "MountPoint", validate_string },
@@ -349,8 +376,17 @@ struct {
   { "URL", validate_string },
   { "Categories", validate_strings }, /* FIXME: should check that each category is known */
   { "OnlyShowIn", validate_only_show_in },
+  { "NotShowIn", validate_only_show_in },
   { "StartupNotify", validate_boolean },
-  { "StartupWMClass", validate_string }
+  { "StartupWMClass", validate_string },
+  { "BinaryPattern", validate_string, TRUE },     /* 0.9.3: deprecated */
+  { "DocPath", validate_string },                 /* 0.9.4: within KDE only */
+  { "Extensions", validate_string, TRUE },        /* 0.9.3: deprecated */
+  { "InitialPreference", validate_string },       /* 0.9.4: within KDE only */
+  { "Keywords", validate_string },                /* 0.9.4: within KDE only */
+  { "MapNotify", validate_string, TRUE },         /* 0.9.3: deprecated */
+  { "Protocols", validate_string, TRUE },         /* 0.9.3: deprecated */
+  { "ServiceTypes", validate_string },            /* 0.9.4: within KDE only */
 };
 
 static void
@@ -368,7 +404,7 @@ enum_keys (GnomeDesktopFile *df,
   if (key == NULL)
     {
       if (!g_utf8_validate (value, -1, NULL))
-	print_warning ("Warning, file %s contains non UTF-8 comments\n", data->filename);
+	print_warning (data->filename, "file contains non-UTF-8 comments\n");
 
       return;
     }
@@ -382,7 +418,7 @@ enum_keys (GnomeDesktopFile *df,
 
   if (locale == NULL) {
     if (hash_data->has_non_translated)
-	print_fatal ("Error, file %s contains multiple assignments of key %s\n", data->filename, key);
+      print_fatal (data->filename, "file contains multiple assignments of key \"%s\"\n", key);
       
     hash_data->has_non_translated = TRUE;
   } else {
@@ -403,7 +439,7 @@ enum_keys (GnomeDesktopFile *df,
 
 	  canonical = get_canonical_encoding (encoding);
 	  if (strcmp (encoding, canonical) != 0)
-	    print_warning ("Warning in file %s, non-canonical encoding %s specified. The canonical name of the encoding is %s\n", data->filename, encoding, canonical);
+	    print_warning (data->filename, "non-canonical encoding \"%s\" specified, the canonical name of the encoding is \"%s\"\n", encoding, canonical);
 	}
     }
 #endif
@@ -419,12 +455,17 @@ enum_keys (GnomeDesktopFile *df,
       if (key_table[i].validate_type)
 	(*key_table[i].validate_type) (value, key, locale, data->filename, df);
       if (key_table[i].deprecated)
-	print_warning ("Warning, file %s contains key %s. Usage of this key is not recommended, since it has been deprecated\n", data->filename, key);      
+	print_warning (data->filename, "file contains key \"%s\", usage of this key is not recommended, since it has been deprecated\n", key);      
+      if (strcmp (key, "ServiceTypes") == 0 ||
+	  strcmp (key, "DocPath") == 0 ||
+	  strcmp (key, "Keywords") == 0 ||
+	  strcmp (key, "InitialPreference") == 0)
+	print_warning (data->filename, "file contains key \"%s\", this key is currently reserved for use within KDE, and should in the future KDE releases be prefixed by \"X-\"\n", key);
     }
   else
     {
       if (strncmp (key, "X-", 2) != 0)
-	print_warning ("Warning in file %s: nonstandard key \"%s\" lacks the \"X-\" prefix.\n", data->filename, key);
+	print_warning (data->filename, "non-standard key \"%s\" lacks the \"X-\" prefix\n", key);
     }
 
   /* Validation of specific keys */
@@ -434,14 +475,14 @@ enum_keys (GnomeDesktopFile *df,
 #if 0
       /* With new icon theme spec we allow this */
       if (strchr (value, '.') == NULL)
-	print_warning ("Warning, icon '%s' specified in file %s does not seem to contain a filename extension\n", value, data->filename);
+	print_warning (data->filename, "icon \"%s\" specified does not seem to contain a filename extension\n", value);
 #endif
     }
   
   if (strcmp (key, "Exec") == 0)
     {
       if (strstr (value, "NO_XALF") != NULL)
-	print_fatal ("Error, The Exec string for file %s includes the nonstandard broken NO_XALF prefix\n", data->filename);
+	print_fatal (data->filename, "the Exec string includes the nonstandard, broken NO_XALF prefix\n");
 
       p = value;
       while (*p)
@@ -456,7 +497,7 @@ enum_keys (GnomeDesktopFile *df,
 		  *p != 'i' && *p != 'm' &&
 		  *p != 'c' && *p != 'k' &&
 		  *p != 'v' && *p != '%')
-		print_fatal ("Error, The Exec string for file %s includes non-standard parameter %%%c\n", data->filename, *p);
+		print_fatal (data->filename, "the Exec string includes the non-standard parameter \"%%%c\"\n", *p);
 	      if (*p == 0)
 		break;
 	    }
@@ -478,7 +519,7 @@ enum_hash_keys (gpointer       key,
 
   if (hash_data->has_translated &&
       !hash_data->has_non_translated)
-    print_fatal ("Error in file %s, key %s is translated, but no untranslated version exists\n", data->filename, (char *)key);
+    print_fatal (data->filename, "key \"%s\" is translated, but no untranslated version exists\n", (char *)key);
   
 }
 
@@ -529,8 +570,7 @@ enum_sections (GnomeDesktopFile *df,
 	}
       else
 	{
-	  print_fatal ("Error, file %s already contains section %s, should not contain another section %s\n",
-		       section->filename, section->main_section, name);
+	  print_fatal (section->filename, "file already contains section %s, should not contain another section %s\n", section->main_section, name);
 	}
 
       if (strcmp (name, "KDE Desktop Entry") == 0)
@@ -539,12 +579,11 @@ enum_sections (GnomeDesktopFile *df,
   else if (strncmp (name, "Desktop Action ", 15) != 0 &&
 	   strncmp (name, "X-", 2) != 0)
     {
-      print_fatal ("Error, file %s contains section %s, extensions to the spec should use section names starting with \"X-\".\n",
-		   section->filename, name);
+      print_fatal (section->filename, "file contains section %s, extensions to the spec should use section names starting with \"X-\".\n", name);
     }
 
   if (g_hash_table_lookup (section->hash, name))
-    print_fatal ("Error, file %s contains multiple sections named %s\n", section->filename, name);
+    print_fatal (section->filename, "file contains multiple sections named %s\n", name);
   else
     g_hash_table_insert (section->hash, (char *)name, (char *)name);
 }
@@ -563,12 +602,11 @@ required_section (GnomeDesktopFile *df, const char *filename)
 
   if (!section.main_section)
     {
-      print_fatal ("Error, file %s doesn't contain a desktop entry section\n", filename);
+      print_fatal (filename, "file doesn't contain a \"Desktop Entry\" section\n");
     }
   else if (section.has_kde_desktop_entry)
     {
-      print_warning ("Warning, file %s contains a \"KDE Desktop Entry\" section. This has been deprecated in favor of \"Desktop Entry\"\n",
-		     filename);
+      print_warning (filename, "file contains a \"KDE Desktop Entry\" section, this has been deprecated in favor of \"Desktop Entry\"\n");
     }
 
   g_hash_table_destroy (section.hash);
@@ -587,18 +625,18 @@ required_keys (GnomeDesktopFile *df, const char *section, const char *filename)
     {
       if (strcmp (val, "UTF-8") != 0 &&
 	  strcmp (val, "Legacy-Mixed") != 0)
-	print_fatal ("Error, file %s specifies unknown encoding type '%s'.\n", filename, val);
+	print_fatal (filename, "unknown Encoding type \"%s\", should be one of \"UTF-8\", \"Legacy-Mixed\"\n", val);
     }
   else
     {
-      print_fatal ("Error, file %s does not contain the \"Encoding\" key. This is a required field for all desktop files.\n", filename);
+      print_fatal (filename, "required key \"Encoding\" not found\n");
     }
 
   if (!gnome_desktop_file_get_raw (df, section,
 				   "Name",
 				   NULL, &val))
     {
-      print_fatal ("Error, file %s does not contain the \"Name\" key. This is a required field for all desktop files.\n", filename);
+      print_fatal (filename, "required key \"Name\" not found\n");
     }
 
   if (gnome_desktop_file_get_raw (df, section,
@@ -608,17 +646,26 @@ required_keys (GnomeDesktopFile *df, const char *section, const char *filename)
       if (strcmp (val, "Application") != 0 &&
 	  strcmp (val, "Link") != 0 &&
 	  strcmp (val, "FSDevice") != 0 &&
-	  strcmp (val, "MimeType") != 0 &&
-	  strcmp (val, "Directory") != 0 &&
-	  strcmp (val, "Service") != 0 &&
-	  strcmp (val, "ServiceType") != 0)
+	  strcmp (val, "Directory") != 0)
 	{
-	  print_fatal ("Error, file %s specifies an invalid type '%s'.\n", filename, val);
+	  if (strcmp (val, "MimeType") == 0)
+	    {
+	      print_warning (filename, "file specifies \"Type=MimeType\", usage of the \"MimeType\" value for \"Type\" is not recommended, since it has been deprecated\n");
+	    }
+	  else if (strcmp (val, "Service") == 0 ||
+		   strcmp (val, "ServiceType") == 0)
+	    {
+	      print_warning (filename, "file specifies \"Type=%s\", this value for \"Type\" is currently reserved for use within KDE, and should in future KDE releases be prefixed by \"X-\"\n", val);
+	    }
+	  else
+	    {
+	      print_fatal (filename, "invalid Type \"%s\"\n", val);
+	    }
 	}
     }
   else
     {
-      print_fatal ("Error, file %s does not contain the \"Type\" key. This is a required field for all desktop files.\n", filename);
+      print_fatal (filename, "required key \"Type\" not found\n");
     }
   return TRUE;
 }
@@ -657,8 +704,7 @@ enum_actions (GnomeDesktopFile *df,
 				   "Exec",
 				   NULL, &val))
     {
-      print_fatal ("Error, file %s contains \"Desktop Action %s\" section which lacks an Exec key.\n",
-		   actions_data->filename, section);
+      print_fatal (actions_data->filename, "file contains \"Desktop Action %s\" section which lacks an Exec key\n", section);
     }
 }
 
@@ -670,8 +716,7 @@ error_orphaned_action (gpointer       key,
   const char *action = key;
   const char *filename = user_data;
 
-  print_fatal ("Error, file %s contains \"Desktop Action %s\" but Actions key does not contain '%s'\n",
-	       filename, action, action);
+  print_fatal (filename, "file contains \"Desktop Action %s\" but Actions key does not contain '%s'\n", action, action);
 }
 
 static gboolean
@@ -693,7 +738,7 @@ required_actions (GnomeDesktopFile *df, const char *filename)
 
       if (!gnome_desktop_file_get_raw (df, NULL, "Actions", NULL, &val))
 	{
-	  print_fatal ("Error, file %s has \"Desktop Action\" sections but no Action key.\n", filename);
+	  print_fatal (filename, "file has \"Desktop Action\" sections but no Action key\n");
 	  goto out;
 	}
 
@@ -705,8 +750,8 @@ required_actions (GnomeDesktopFile *df, const char *filename)
 
 	  if (!g_hash_table_lookup (actions_data.hash, actions [i]))
 	    {
-	      print_fatal ("Error, Action key contains '%s' but file %s has \"Desktop Action %s\" section.\n",
-			   actions [i], filename, actions [i]);
+	      print_fatal (filename, "Action key contains '%s' but file has \"Desktop Action %s\" section\n",
+			   actions [i], actions [i]);
 	      goto out;
 	    }
 
@@ -755,7 +800,7 @@ desktop_file_validate (GnomeDesktopFile *df, const char *filename)
       gnome_desktop_file_get_raw (df, NULL, "Comment", NULL, &comment))
     {
       if (strcmp (name, comment) == 0)
-	print_warning ("Warning in file %s, the fields Name and Comment have the same value\n", filename);
+	print_warning (filename, "the fields \"Name\" and \"Comment\" have the same value\n");
     }
 
   return !fatal_error_occurred;
@@ -773,7 +818,8 @@ desktop_file_fixup (GnomeDesktopFile *df,
   
   if (gnome_desktop_file_has_section (df, "KDE Desktop Entry"))
     {
-      g_printerr (_("Changing deprecated [KDE Desktop Entry] to plain [Desktop Entry]\n"));
+      g_printerr (_("%s: changing deprecated [KDE Desktop Entry] to plain [Desktop Entry]\n"),
+		  filename);
       gnome_desktop_file_rename_section (df,
                                          "KDE Desktop Entry",
                                          "Desktop Entry");
@@ -788,14 +834,14 @@ desktop_file_fixup (GnomeDesktopFile *df,
       if (strcmp (val, "UTF-8") != 0 &&
 	  strcmp (val, "Legacy-Mixed") != 0)
         {
-          g_printerr (_("File \"%s\" has bogus encoding \"%s\" "),
+          g_printerr (_("%s: bogus encoding \"%s\" "),
                       filename, val);
           fix_encoding = TRUE;
         }
     }
   else
     {
-      g_printerr (_("File \"%s\" has missing encoding "),
+      g_printerr (_("%s: missing encoding "),
                   filename);
       fix_encoding = TRUE;
     }
@@ -814,7 +860,7 @@ desktop_file_fixup (GnomeDesktopFile *df,
           gnome_desktop_file_set_raw (df, NULL, "Encoding", NULL, "UTF-8");
           break;          
         case GNOME_DESKTOP_FILE_ENCODING_UNKNOWN:
-          g_printerr (_("\nNot enough data to guess at encoding of \"%s\"!\n"),
+          g_printerr (_("\n%s: not enough data to guess encoding!\n"),
                       filename);
           return FALSE;
           break;
@@ -837,7 +883,7 @@ desktop_file_fixup (GnomeDesktopFile *df,
             {
               char *str;
 
-              g_printerr ("File \"%s\" key \"%s\" string list not semicolon-terminated, fixing\n",
+              g_printerr ("%s: key \"%s\" string list not semicolon-terminated, fixing\n",
                           filename, string_list_keys[i]);
               
               str = g_strconcat (val, ";", NULL);

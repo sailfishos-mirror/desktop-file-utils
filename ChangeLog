@@ -1,3 +1,8 @@
+2002-06-16  Havoc Pennington  <hp@pobox.com>
+
+	* src/install.c: fix delete_original flag so it actually gets
+	filled in and works
+
 2002-06-05  Havoc Pennington  <hp@redhat.com>
 
 	* configure.in: 0.2 version

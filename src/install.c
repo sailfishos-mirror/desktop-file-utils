@@ -287,7 +287,7 @@ struct poptOption options[] = {
     "delete-original",
     '\0',
     POPT_ARG_NONE,
-    NULL,
+    &delete_original,
     OPTION_DELETE_ORIGINAL,
     N_("Delete the source desktop file, leaving only the target file. Effectively \"renames\" a desktop file."),
     NULL

@@ -22,10 +22,23 @@
 #ifndef MENU_PROCESS_H
 #define MENU_PROCESS_H
 
-#include "menu-layout.h"
-#include "menu-entries.h"
+#include <glib.h>
 
 typedef struct _DesktopEntryTree DesktopEntryTree;
+
+typedef gboolean (* DesktopEntryTreeForeachFunc) (DesktopEntryTree *tree,
+                                                  gboolean          is_dir,
+                                                  int               depth,
+                                                  const char       *menu_path,
+                                                  const char       *filesystem_path_to_entry,
+                                                  void             *data);
+
+typedef enum
+{
+  DESKTOP_ENTRY_TREE_PRINT_NAME          = 1 << 0,
+  DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME  = 1 << 1,
+  DESKTOP_ENTRY_TREE_PRINT_COMMENT       = 1 << 2
+} DesktopEntryTreePrintFlags;
 
 DesktopEntryTree* desktop_entry_tree_load  (const char  *filename,
                                             GError     **error);
@@ -41,16 +54,12 @@ void desktop_entry_tree_list_entries (DesktopEntryTree *tree,
                                       int              *n_entries);
 
 /* returns a copy of .directory file absolute path */
-char* desktop_entry_tree_get_directory (DesktopEntryTree *tree,
-                                        const char       *dirname);
-
-
-typedef enum
-{
-  DESKTOP_ENTRY_TREE_PRINT_NAME          = 1 << 0,
-  DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME  = 1 << 1,
-  DESKTOP_ENTRY_TREE_PRINT_COMMENT       = 1 << 2
-} DesktopEntryTreePrintFlags;
+char* desktop_entry_tree_get_directory (DesktopEntryTree            *tree,
+                                        const char                  *dirname);
+void  desktop_entry_tree_foreach       (DesktopEntryTree            *tree,
+                                        const char                  *parent_dir,
+                                        DesktopEntryTreeForeachFunc  func,
+                                        void                        *user_data);
 
 void desktop_entry_tree_print             (DesktopEntryTree           *tree,
                                            DesktopEntryTreePrintFlags  flags);

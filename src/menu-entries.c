@@ -1,7 +1,7 @@
 /* Desktop and directory entries */
 
 /*
- * Copyright (C) 2002 Red Hat, Inc.
+ * Copyright (C) 2002, 2003 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -96,6 +96,9 @@ entry_new (EntryType   type,
 void
 entry_ref (Entry *entry)
 {
+  g_return_if_fail (entry != NULL);
+  g_return_if_fail (entry->refcount > 0);
+  
   entry->refcount += 1;
 }
 
@@ -217,7 +220,7 @@ entry_directory_load  (const char     *path,
                    ENTRY_ERROR_BAD_PATH,
                    _("Filename \"%s\" could not be canonicalized: %s\n"),
                    path, g_strerror (errno));
-      menu_verbose ("Error %d loading cached dir \"%s\": %s\n", errno, path,
+      menu_verbose ("Error %d canonicalizing \"%s\": %s\n", errno, path,
                     g_strerror (errno));
       return NULL;
     }
@@ -802,7 +805,7 @@ entry_set_new (void)
 {
   EntrySet *set;
 
-  set = g_new (EntrySet, 1);
+  set = g_new0 (EntrySet, 1);
   set->refcount = 1;
 
   return set;
@@ -838,7 +841,7 @@ entry_set_add_entry (EntrySet *set,
       set->hash = g_hash_table_new_full (g_str_hash, g_str_equal,
                                          NULL, (GDestroyNotify) entry_unref);      
     }
-  
+
   entry_ref (entry);
   g_hash_table_replace (set->hash,
                         entry->relative_path,
@@ -881,6 +884,8 @@ entry_hash_listify_foreach (void *key, void *value, void *data)
 {
   GSList **list = data;
   Entry *e = value;
+
+  g_assert (e != NULL);
   
   *list = g_slist_prepend (*list, e);
   entry_ref (e);
@@ -920,6 +925,8 @@ union_foreach (void *key, void *value, void *data)
   EntrySet *set = data;
   Entry *e = value;
 
+  g_assert (set != NULL);
+  g_assert (e != NULL);
   entry_set_add_entry (set, e);
 }
 

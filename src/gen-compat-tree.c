@@ -284,7 +284,7 @@ markup_get_root_node_name (const char  *filename,
   FILE *f;
 #define BUFLEN 128
   char buf[BUFLEN];
-  int bytes_read;
+  size_t bytes_read;
   
   root_element = NULL;
 

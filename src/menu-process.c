@@ -20,7 +20,11 @@
  */
 
 #include "menu-process.h"
+#include "menu-layout.h"
+#include "menu-entries.h"
 #include "canonicalize.h"
+#include "desktop_file.h"
+#include <stdio.h>
 #include <string.h>
 
 #include <libintl.h>
@@ -413,6 +417,18 @@ struct _DesktopEntryTree
 static void build_tree     (DesktopEntryTree *tree);
 static void tree_node_free (TreeNode *node);
 
+static MenuNode*
+find_menu_child (MenuNode *node)
+{
+  MenuNode *child;
+
+  child = menu_node_get_children (node);
+  while (child && menu_node_get_type (child) != MENU_NODE_MENU)
+    child = menu_node_get_next (child);
+
+  return child;
+}
+
 DesktopEntryTree*
 desktop_entry_tree_load (const char  *filename,
                          GError     **error)
@@ -443,7 +459,7 @@ desktop_entry_tree_load (const char  *filename,
 
   dirname = g_path_get_dirname (canonical);
 
-  resolved_node = menu_node_deep_copy (orig_node);
+  resolved_node = menu_node_deep_copy (find_menu_child (orig_node));
   menu_node_resolve_files (dirname, canonical, resolved_node);
 
   menu_node_strip_duplicate_children (resolved_node);
@@ -621,6 +637,72 @@ desktop_entry_tree_get_directory (DesktopEntryTree *tree,
     return NULL;
 
   return g_strdup (entry_get_absolute_path (dir->dir_entry));
+}
+
+static gboolean
+foreach_dir (DesktopEntryTree            *tree,
+             TreeNode                    *dir,
+             int                          depth,
+             DesktopEntryTreeForeachFunc  func,
+             void                        *user_data)
+{
+  GSList *tmp;
+
+  if (! (* func) (tree,
+                  TRUE,
+                  depth,
+                  NULL, /* FIXME */
+                  entry_get_absolute_path (dir->dir_entry),
+                  user_data))
+    return FALSE;
+  
+  tmp = dir->entries;
+  while (tmp != NULL)
+    {
+      Entry *e = tmp->data;
+
+      if (! (* func) (tree,
+                      FALSE,
+                      depth,
+                      NULL, /* FIXME */
+                      entry_get_absolute_path (e),
+                      user_data))
+        return FALSE;
+
+      tmp = tmp->next;
+    }
+
+  tmp = dir->subdirs;
+  while (tmp != NULL)
+    {
+      TreeNode *d = tmp->data;
+
+      if (!foreach_dir (tree, d, depth + 1, func, user_data))
+        return FALSE;
+
+      tmp = tmp->next;
+    }
+
+  return TRUE;
+}
+
+void
+desktop_entry_tree_foreach (DesktopEntryTree            *tree,
+                            const char                  *parent_dir,
+                            DesktopEntryTreeForeachFunc  func,
+                            void                        *user_data)
+{
+  TreeNode *dir;
+  
+  build_tree (tree);
+  if (tree->root == NULL)
+    return;
+  
+  dir = tree_node_find_subdir (tree->root, parent_dir);
+  if (dir == NULL)
+    return;
+
+  foreach_dir (tree, dir, 0, func, user_data);
 }
 
 static TreeNode*
@@ -943,13 +1025,122 @@ build_tree (DesktopEntryTree *tree)
     }
 }
 
+typedef struct
+{
+  unsigned int flags;
+
+} PrintData;
+
+static gboolean
+foreach_print (DesktopEntryTree *tree,
+               gboolean          is_dir,
+               int               depth,
+               const char       *menu_path,
+               const char       *filesystem_path_to_entry,
+               void             *data)
+{
+#define MAX_FIELDS 3
+  PrintData *pd = data;
+  int i;
+  GnomeDesktopFile *df;
+  GError *error;
+  char *fields[MAX_FIELDS] = { NULL, NULL, NULL };
+  char *s;
+  
+  pd = data;
+
+  error = NULL;
+  df = gnome_desktop_file_load (filesystem_path_to_entry, &error);
+  if (df == NULL)
+    {
+      g_printerr ("Warning: failed to load desktop file \"%s\": %s\n",
+                  filesystem_path_to_entry, error->message);
+      g_error_free (error);
+      return TRUE;
+    }
+  g_assert (error == NULL);
+  
+  i = depth;
+  while (i > 0)
+    {
+      fputc (' ', stdout);
+      --i;
+    }
+
+  i = 0;
+  if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_NAME)
+    {
+      if (!gnome_desktop_file_get_locale_string (df,
+                                                 NULL,
+                                                 "Name",
+                                                 &s))
+        s = g_strdup (_("<missing Name>"));
+
+      fields[i] = s;      
+      ++i;
+    }
+  
+  if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_GENERIC_NAME)
+    {
+      if (!gnome_desktop_file_get_locale_string (df,
+                                                 NULL,
+                                                 "GenericName",
+                                                 &s))
+        s = g_strdup (_("<missing GenericName>"));
+      
+      fields[i] = s;
+      ++i;
+    }
+
+  if (pd->flags & DESKTOP_ENTRY_TREE_PRINT_COMMENT)
+    {
+      if (!gnome_desktop_file_get_locale_string (df,
+                                                 NULL,
+                                                 "Comment",
+                                                 &s))
+        s = g_strdup (_("<missing Comment>"));
+      
+      fields[i] = s;
+      ++i;
+    }
+
+  switch (i)
+    {
+    case 3:
+      g_print ("%s : %s : %s\n",
+               fields[0], fields[1], fields[2]);
+      break;
+    case 2:
+      g_print ("%s : %s\n",
+               fields[0], fields[1]);
+      break;
+    case 1:
+      g_print ("%s\n",
+               fields[0]);
+      break;
+    }
+
+  --i;
+  while (i >= 0)
+    {
+      g_free (fields[i]);
+      --i;
+    }
+
+  gnome_desktop_file_free (df);
+  
+  return TRUE;
+}
 
 void
 desktop_entry_tree_print (DesktopEntryTree           *tree,
                           DesktopEntryTreePrintFlags  flags)
 {
+  PrintData pd;
 
-
+  pd.flags = flags;
+  
+  desktop_entry_tree_foreach (tree, "/", foreach_print, &pd);
 }
 
 void
@@ -973,6 +1164,7 @@ menu_set_only_show_in_desktop (const char *desktop_name)
 {
   g_free (only_show_in_desktop);
   only_show_in_desktop = g_strdup (desktop_name);
+  entry_set_only_show_in_name (desktop_name);
 }
 
 void

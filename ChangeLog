@@ -1,3 +1,10 @@
+2003-05-01  Havoc Pennington  <hp@pobox.com>
+
+	* src/menu-process.c (desktop_entry_tree_print): implement
+	(desktop_entry_tree_foreach): implement
+
+	* src/menu-entries.c (entry_set_new): fix to init to all bits zero
+
 2003-05-01  Havoc Pennington  <hp@redhat.com>
 
 	* src/validate.c: change to only warn about invalid keys, don't

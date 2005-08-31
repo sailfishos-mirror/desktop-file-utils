@@ -516,8 +516,7 @@ egg_desktop_entries_new_from_data (const gchar           *data,
   if (entries_error) 
     {
       g_propagate_error (error, entries_error);
-      if (entries)
-        egg_desktop_entries_free (entries);
+      egg_desktop_entries_free (entries);
 
       return NULL;
     }
@@ -787,7 +786,7 @@ egg_desktop_entries_parse_line (EggDesktopEntries  *entries,
     {
       g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR, 
 		   EGG_DESKTOP_ENTRIES_ERROR_PARSE,
-		   _("desktop entry contain line '%s' which is not "
+		   _("desktop entry contains line '%s' which is not "
 		     "an entry, group, or comment"), line);
       return;
     }
@@ -929,7 +928,7 @@ egg_desktop_entries_parse_entry (EggDesktopEntries  *entries,
     {
       g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 		   EGG_DESKTOP_ENTRIES_ERROR_UNKNOWN_ENCODING,
-		   _("desktop entry contain line '%s' "
+		   _("desktop entry contains line '%s' "
 		     "which is not UTF-8"), line);
 
       g_free (key);
@@ -952,7 +951,7 @@ egg_desktop_entries_parse_entry (EggDesktopEntries  *entries,
 	{
           g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 		       EGG_DESKTOP_ENTRIES_ERROR_UNKNOWN_ENCODING,
-		       _("desktop entry contain unknown encoding '%s'"), value);
+		       _("desktop entry contains unknown encoding '%s'"), value);
 
 	  g_free (key);
 	  g_free (value);
@@ -1358,7 +1357,7 @@ egg_desktop_entries_get_string (EggDesktopEntries  *entries,
 	{
 	  g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 		       EGG_DESKTOP_ENTRIES_ERROR_INVALID_VALUE,
-		       _("desktop entry contain key '%s' "
+		       _("desktop entry contains key '%s' "
 			 "which has value that cannot be interpreted."),
 		       key);
 	  g_error_free (entries_error);
@@ -1608,7 +1607,7 @@ egg_desktop_entries_get_locale_string (EggDesktopEntries  *entries,
 	{
 	  g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 		       EGG_DESKTOP_ENTRIES_ERROR_INVALID_VALUE,
-		       _("desktop entry contain key '%s' "
+		       _("desktop entry contains key '%s' "
 			 "which has value that cannot be interpreted."),
 		       candidate_key);
 
@@ -1633,7 +1632,7 @@ egg_desktop_entries_get_locale_string (EggDesktopEntries  *entries,
       else
 	g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 		     EGG_DESKTOP_ENTRIES_ERROR_KEY_NOT_FOUND,
-		     _("desktop entry contain no translated value "
+		     _("desktop entry contains no translated value "
 		       "for key '%s' with locale '%s'."),
 		     key, locale);
     }
@@ -1801,7 +1800,7 @@ egg_desktop_entries_get_boolean (EggDesktopEntries  *entries,
 	{
 	  g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 		       EGG_DESKTOP_ENTRIES_ERROR_INVALID_VALUE,
-		       _("desktop entry contain key '%s' "
+		       _("desktop entry contains key '%s' "
 			 "which has value that cannot be interpreted."),
 		       key);
 	  g_error_free (entries_error);
@@ -2003,7 +2002,7 @@ egg_desktop_entries_get_integer (EggDesktopEntries  *entries,
 	{
 	  g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 		       EGG_DESKTOP_ENTRIES_ERROR_INVALID_VALUE,
-		       _("desktop entry contain key '%s' "
+		       _("desktop entry contains key '%s' "
 			 "which has value that cannot be interpreted."), key);
 	  g_error_free (entries_error);
 	}
@@ -2771,7 +2770,7 @@ egg_desktop_entries_parse_value_as_string (EggDesktopEntries  *entries,
 
 		  g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
 			       EGG_DESKTOP_ENTRIES_ERROR_INVALID_VALUE,
-			       _("desktop entry contain invalid escape "
+			       _("desktop entry contains invalid escape "
 				 "sequence '%s'"), sequence);
 		}
 	      break;
@@ -2788,7 +2787,7 @@ egg_desktop_entries_parse_value_as_string (EggDesktopEntries  *entries,
     {
       g_set_error (error, EGG_DESKTOP_ENTRIES_ERROR,
                    EGG_DESKTOP_ENTRIES_ERROR_INVALID_VALUE,
-		   _("desktop entry contain escape character at end of "
+		   _("desktop entry contains escape character at end of "
 		     "line"));
     }
 

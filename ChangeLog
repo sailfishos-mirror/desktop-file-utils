@@ -1,3 +1,10 @@
+2005-08-31  Ray Strode  <rstrode@redhat.com>
+	
+	* src/eggdesktopentries.[ch]:
+	resync from libegg to fix grammar error spotted by 
+	Moritz Barsnick <moritz@barsnick.net>.  (this code 
+	should really be changed to use gkeyfile)
+
 2005-01-09  Ray Strode  <rstrode@redhat.com>
 	
 	* src/update-desktop-database.c:

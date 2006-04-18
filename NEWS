@@ -1,4 +1,15 @@
 ============
+Version 0.11
+============
+
+  o Validate desktop file categories (Emmet Hikory, Vincent Untz)
+  o Use GKeyFile instead of the old egg code in update-desktop-database (Vincent)
+  o Use GOption instead of popt (Vincent)
+  o Fix grammar problem in one of the strings (Moritz Barsnick)
+  o NULL terminate search patch in update-desktop-database (Mike Hearn)
+  o Fix language to encoding mapping to match spec (Ville Skyttä) 
+
+============
 Version 0.10
 ============
 

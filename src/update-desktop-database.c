@@ -24,17 +24,14 @@
 #include <config.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <popt.h>
 #include <glib.h>
-
-#include "eggdesktopentries.h"
-#include "eggdirfuncs.h"
-#include "eggintl.h"
+#include <glib/gi18n.h>
 
 #define NAME "update-desktop-database"
 #define CACHE_FILENAME "mimeinfo.cache"
@@ -175,16 +172,15 @@ process_desktop_file (const char  *desktop_file,
                       GError     **error)
 {
   GError *load_error; 
-  EggDesktopEntries *entries;
+  GKeyFile *keyfile;
   char **mime_types; 
   int i;
 
+  keyfile = g_key_file_new ();
+
   load_error = NULL;
-  entries = 
-    egg_desktop_entries_new_from_file (desktop_file, NULL,
-                                       EGG_DESKTOP_ENTRIES_DISCARD_COMMENTS |
-                                       EGG_DESKTOP_ENTRIES_DISCARD_TRANSLATIONS,
-                                       &load_error);
+  g_key_file_load_from_file (keyfile, desktop_file,
+                             G_KEY_FILE_NONE, &load_error);
 
   if (load_error != NULL) 
     {
@@ -192,12 +188,11 @@ process_desktop_file (const char  *desktop_file,
       return;
     }
 
-  mime_types = egg_desktop_entries_get_string_list (entries, 
-                                  egg_desktop_entries_get_start_group (entries),
-                                                    "MimeType", NULL, 
-                                                    &load_error);
+  mime_types = g_key_file_get_string_list (keyfile,
+                                           g_key_file_get_start_group (keyfile),
+                                           "MimeType", NULL, &load_error);
 
-  egg_desktop_entries_free (entries);
+  g_key_file_free (keyfile);
 
   if (load_error != NULL) 
     {
@@ -281,8 +276,8 @@ process_desktop_files (const char  *desktop_dir,
       if (process_error != NULL)
         {
           if (!g_error_matches (process_error, 
-                                EGG_DESKTOP_ENTRIES_ERROR,
-                                EGG_DESKTOP_ENTRIES_ERROR_KEY_NOT_FOUND))
+                                G_KEY_FILE_ERROR,
+                                G_KEY_FILE_ERROR_KEY_NOT_FOUND))
             {
               udd_print ("Could not parse file '%s': %s\n", full_path,
                          process_error->message);
@@ -377,6 +372,7 @@ sync_database (const char *dir, GError **error)
   char *temp_cache_file, *cache_file;
   FILE *tmp_file;
 
+  temp_cache_file = NULL;
   sync_error = NULL;
   tmp_file = open_temp_cache_file (dir, &temp_cache_file, &sync_error);
 
@@ -434,13 +430,13 @@ static const char **
 get_default_search_path (void)
 {
   static char **args = NULL;
-  char **data_dirs;
+  const char * const *data_dirs;
   int i;
 
   if (args != NULL)
     return (const char **) args;
 
-  data_dirs = egg_get_secondary_data_dirs ();
+  data_dirs = g_get_system_data_dirs ();
 
   for (i = 0; data_dirs[i] != NULL; i++);
 
@@ -450,8 +446,6 @@ get_default_search_path (void)
     args[i] = g_build_filename (data_dirs[i], "applications", NULL);
 
   args[i] = NULL;
-
-  g_strfreev (data_dirs);
 
   return (const char **) args;
 }
@@ -478,37 +472,39 @@ main (int    argc,
       char **argv)
 {
   GError *error;
-  poptContext popt_context;
+  GOptionContext *context;
   const char **desktop_dirs;
   int i;
   gboolean found_processable_dir;
 
-  struct poptOption options[] =
+  const GOptionEntry options[] =
    {
-     { "verbose", 'v', POPT_ARG_NONE, &verbose, 0, 
-       N_("Display more information about processing and updating progress")},
+     { "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
+       N_("Display more information about processing and updating progress"),
+       NULL},
 
-     { "quiet", 'q', POPT_ARG_NONE, &quiet, 0, 
+     { "quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
        N_("Don't display any information about about processing and "
-          "updating progress")},
+          "updating progress"), NULL},
 
-     POPT_AUTOHELP
-
-     { NULL, 0, 0, NULL, 0 }
+     { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &desktop_dirs,
+       NULL, N_("[DIRECTORY...]") },
+     { NULL }
    };
 
-  popt_context = poptGetContext (NAME, argc, (const char **) argv,
-                                 options, 0);
-  while ((i = poptGetNextOpt (popt_context)) != -1)
-    {
-      if (i < -1)
-        {
-          poptPrintHelp (popt_context, stderr, 0);
-          return 1;
-        }
-    }
+  context = g_option_context_new ("");
+  g_option_context_add_main_entries (context, options, NULL);
 
-  desktop_dirs = poptGetArgs (popt_context);
+  desktop_dirs = NULL;
+  error = NULL;
+  g_option_context_parse (context, &argc, &argv, &error);
+
+  if (error != NULL) {
+	  g_printerr ("%s\n", error->message);
+	  g_printerr (_("Run '%s --help' to see a full list of available command line options.\n"), argv[0]);
+	  g_error_free (error);
+	  return 1;
+  }
 
   if (desktop_dirs == NULL || desktop_dirs[0] == NULL)
     desktop_dirs = get_default_search_path ();
@@ -532,7 +528,7 @@ main (int    argc,
       else
         found_processable_dir = TRUE;
     }
-  poptFreeContext (popt_context);
+  g_option_context_free (context);
 
   if (!found_processable_dir)
     {

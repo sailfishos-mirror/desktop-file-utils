@@ -1,3 +1,31 @@
+2006-04-18  Ray Strode <rstrode@redhat.com>
+
+	Validate that desktop file categories match those
+	specified in the spec.  Patch from Emmet Hikory
+	<emmet.hikory@gmail.com> and 
+	Vincent Untz <vuntz@gnome.org> (bug 3337786)
+
+	* src/validate.c (validate_categories): new
+	function to ensure that categories are known.
+
+2006-04-18  Vincent Untz  <vuntz@gnome.org>
+
+	Use GKeyFile instead and kill egg-* usage (bug 319987).
+
+	* src/Makefile.am: remove egg-*
+	* src/update-desktop-database.c: (process_desktop_file): use GKeyFile
+	(get_default_search_path): use g_get_system_data_dirs()
+
+2006-04-18  Vincent Untz  <vuntz@gnome.org>
+
+	Port to GOption (bug 338575)
+
+	* configure.in: remove the check for popt, depend on glib >= 2.6.0
+	* src/install.c: (parse_options_callback): rewritten
+	(main): port to GOption
+	* src/update-desktop-database.c: (sync_database): remove warning
+	(main): port to GOption
+
 2005-08-31  Ray Strode  <rstrode@redhat.com>
 	
 	* src/eggdesktopentries.[ch]:

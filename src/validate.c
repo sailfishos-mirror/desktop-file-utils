@@ -146,6 +146,92 @@ validate_strings (const char *value, const char *key, const char *locale, const 
 }
 
 static void
+validate_categories (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
+{
+  /* Category list from Desktop Menu Specification version 1.0-draft4 */
+  const char *categories_keys[] = {
+    "Core", "Development", "Building", "Debugger", "IDE", "GUIDesigner",
+    "Profiling", "RevisionControl", "Translation", "Office", "Calendar",
+    "ContactManagement", "Database", "Dictionary", "Chart", "Email",
+    "Finance", "FlowChart", "PDA", "ProjectManagement", "Presentation",
+    "Spreadsheet", "WordProcessor", "Graphics", "2DGraphics", "VectorGraphics",
+    "RasterGraphics", "3DGraphics", "Scanning", "OCR", "Photography",
+    "Viewer", "Settings", "DesktopSettings", "HardwareSettings",
+    "PackageManager", "Network", "Dialup", "InstantMessaging", "IRCClient",
+    "FileTransfer", "HamRadio", "News", "P2P", "RemoteAccess", "Telephony",
+    "WebBrowser", "WebDevelopment", "AudioVideo", "Audio", "Midi", "Mixer",
+    "Sequencer", "Tuner", "Video", "TV", "AudioVideoEditing", "Player",
+    "Recorder", "DiscBurning", "Game", "ActionGame", "AdventureGame",
+    "ArcadeGame", "BoardGame", "BlocksGame", "CardGame", "KidsGame",
+    "LogicGame", "RolePlaying", "Simulation", "SportsGame", "StrategyGame",
+    "Education", "Art", "Construction", "Music", "Languages", "Science",
+    "Astronomy", "Biology", "Chemistry", "Geology", "Math", "MedicalSoftware",
+    "Physics", "Teaching", "Amusement", "Applet", "Archiving", "Electronics",
+    "Emulator", "Engineering", "FileManager", "Shell", "ScreenSaver",
+    "TeminalEmulator", "TrayIcon", "System", "Filesystem", "Monitor",
+    "Security", "Utility", "Accessibility", "Calculator", "Clock",
+    "TextEditor", "KDE", "GNOME", "GTK", "Qt", "Motif", "Java",
+    "ConsoleOnly", NULL
+  };
+  char **vals;
+  int i;
+
+  validate_strings (value, key, locale, filename, df);
+
+  vals = g_strsplit (value, ";", G_MAXINT);
+
+  i = 0;
+  while (vals[i])
+    ++i;
+
+  if (i == 0)
+    {
+      g_strfreev (vals);
+      return;
+    }
+  
+  /* Drop the empty string g_strsplit leaves in the vector since
+   * our list of strings ends in ";"
+   */
+  --i;
+  g_free (vals[i]);
+  vals[i] = NULL;
+
+  i = 0;
+  while (vals[i])
+    {
+      int j = 0;
+
+      while (categories_keys[j])
+        {
+          if (g_ascii_strcasecmp (vals[i], categories_keys[j]) == 0)
+	    {
+	      if (strcmp (vals[i], categories_keys[j]) != 0)
+		{
+		  print_fatal (filename, "%s values are case sensitive (should be \"%s\" instead of \"%s\")\n",
+			       key, categories_keys[j], vals[i]);
+		}
+	      break;
+	    }
+	  ++j;
+	}
+
+      if (categories_keys[j] == NULL)
+	{
+	  char *valid_categories;
+
+	  valid_categories = g_strjoinv ("\", \"", (gchar **) categories_keys);
+	  print_fatal (filename, "%s values must be one of \"%s\" (found \"%s\")\n",
+		       key, valid_categories, vals[i]);
+	  g_free (valid_categories);
+	}
+      ++i;
+    }
+
+  g_strfreev (vals);
+}
+
+static void
 validate_only_show_in (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
   const char *onlyshowin_keys[] = {
@@ -374,7 +460,7 @@ struct {
   { "UnmountIcon", validate_string },
   { "SortOrder", validate_strings /* FIXME: Also comma-separated */},
   { "URL", validate_string },
-  { "Categories", validate_strings }, /* FIXME: should check that each category is known */
+  { "Categories", validate_categories }, 
   { "OnlyShowIn", validate_only_show_in },
   { "NotShowIn", validate_only_show_in },
   { "StartupNotify", validate_boolean },

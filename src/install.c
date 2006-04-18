@@ -2,12 +2,11 @@
 #include <config.h>
 
 #include <glib.h>
-#include <popt.h>
+#include <glib/gi18n.h>
 
 #include "desktop_file.h"
 #include "validate.h"
 
-#include <libintl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -15,9 +14,7 @@
 #include <sys/stat.h>
 #include <locale.h>
 
-#define _(x) gettext ((x))
-#define N_(x) x
-
+static const char** args = NULL;
 static gboolean delete_original = FALSE;
 static gboolean copy_generic_name_to_name = FALSE;
 static gboolean copy_name_to_generic_name = FALSE;
@@ -250,288 +247,269 @@ process_one_file (const char *filename,
     gnome_desktop_file_free (df);
 }
 
-static void parse_options_callback (poptContext              ctx,
-                                    enum poptCallbackReason  reason,
-                                    const struct poptOption *opt,
-                                    const char              *arg,
-                                    void                    *data);
+static gboolean parse_options_callback (const gchar  *option_name,
+                                        const gchar  *value,
+                                        gpointer      data,
+                                        GError      **error);
 
-enum {
-  OPTION_VENDOR = 1,
-  OPTION_DIR,
-  OPTION_ADD_CATEGORY,
-  OPTION_REMOVE_CATEGORY,
-  OPTION_ADD_ONLY_SHOW_IN,
-  OPTION_REMOVE_ONLY_SHOW_IN,
-  OPTION_DELETE_ORIGINAL,
-  OPTION_MODE,
-  OPTION_COPY_NAME_TO_GENERIC_NAME,
-  OPTION_COPY_GENERIC_NAME_TO_NAME,
-  OPTION_REMOVE_KEY,
-  OPTION_ADD_MIME_TYPE,
-  OPTION_REMOVE_MIME_TYPE,
-  OPTION_REBUILD_MIME_INFO_CACHE,
-  OPTION_LAST
-};
 
-struct poptOption options[] = {
+static const GOptionEntry options[] = {
   {
-    NULL, 
-    '\0', 
-    POPT_ARG_CALLBACK,
-    parse_options_callback, 
-    0, 
-    NULL, 
-    NULL
-  },
-  { 
-    NULL, 
-    '\0', 
-    POPT_ARG_INCLUDE_TABLE, 
-    poptHelpOptions,
-    0, 
-    N_("Help options"), 
-    NULL 
-  },
-  {
-    "vendor",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
+#define OPTION_VENDOR "vendor"
     OPTION_VENDOR,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
     N_("Specify the vendor prefix to be applied to the desktop file. If the file already has this prefix, nothing happens."),
     NULL
   },
   {
-    "dir",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
+#define OPTION_DIR "dir"
     OPTION_DIR,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
     N_("Specify the directory where files should be installed."),
-    NULL
-  },
-  {
-    "add-category",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
-    OPTION_ADD_CATEGORY,
-    N_("Specify a category to be added to the Categories field."),
-    NULL
-  },
-  {
-    "remove-category",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
-    OPTION_REMOVE_CATEGORY,
-    N_("Specify a category to be removed from the Categories field."),
-    NULL
-  },
-  {
-    "add-only-show-in",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
-    OPTION_ADD_ONLY_SHOW_IN,
-    N_("Specify a product name to be added to the OnlyShowIn field."),
-    NULL
-  },
-  {
-    "remove-only-show-in",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
-    OPTION_REMOVE_ONLY_SHOW_IN,
-    N_("Specify a product name to be removed from the OnlyShowIn field."),
     NULL
   },
   {
     "delete-original",
     '\0',
-    POPT_ARG_NONE,
+    '\0',
+    G_OPTION_ARG_NONE,
     &delete_original,
-    OPTION_DELETE_ORIGINAL,
     N_("Delete the source desktop file, leaving only the target file. Effectively \"renames\" a desktop file."),
     NULL
   },
   {
-    "mode",
-    'm',
-    POPT_ARG_STRING,
-    NULL,
+#define OPTION_MODE "mode"
     OPTION_MODE,
+    'm',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
     N_("Set the given permissions on the destination file."),
+    NULL
+  },
+  {
+    "rebuild-mime-info-cache",
+    '\0',
+    '\0',
+    G_OPTION_ARG_NONE,
+    &rebuild_mime_info_cache,
+    N_("After installing desktop file rebuild the mime-types application database."),
+    NULL
+  },
+  { G_OPTION_REMAINING,
+    0,
+    0,
+    G_OPTION_ARG_FILENAME_ARRAY,
+    &args,
+    NULL,
+    N_("[FILE...]") },
+  {
+    NULL
+  }
+};
+
+static const GOptionEntry edit_options[] = {
+  {
+#define OPTION_ADD_CATEGORY "add-category"
+    OPTION_ADD_CATEGORY,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Specify a category to be added to the Categories field."),
+    NULL
+  },
+  {
+#define OPTION_REMOVE_CATEGORY "remove-category"
+    OPTION_REMOVE_CATEGORY,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Specify a category to be removed from the Categories field."),
+    NULL
+  },
+  {
+#define OPTION_ADD_ONLY_SHOW_IN "add-only-show-in"
+    OPTION_ADD_ONLY_SHOW_IN,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Specify a product name to be added to the OnlyShowIn field."),
+    NULL
+  },
+  {
+#define OPTION_REMOVE_ONLY_SHOW_IN "remove-only-show-in"
+    OPTION_REMOVE_ONLY_SHOW_IN,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Specify a product name to be removed from the OnlyShowIn field."),
     NULL
   },
   {
     "copy-name-to-generic-name",
     '\0',
-    POPT_ARG_NONE,
+    '\0',
+    G_OPTION_ARG_NONE,
     &copy_name_to_generic_name,
-    OPTION_COPY_NAME_TO_GENERIC_NAME,
     N_("Copy the contents of the \"Name\" field to the \"GenericName\" field."),
     NULL
   },
   {
     "copy-generic-name-to-name",
     '\0',
-    POPT_ARG_NONE,
+    '\0',
+    G_OPTION_ARG_NONE,
     &copy_generic_name_to_name,
-    OPTION_COPY_GENERIC_NAME_TO_NAME,
     N_("Copy the contents of the \"GenericName\" field to the \"Name\" field."),
     NULL
   },
   {
-    "remove-key",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
+#define OPTION_REMOVE_KEY "remove-key"
     OPTION_REMOVE_KEY,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
     N_("Specify a field to be removed from the desktop file."),
     NULL
   },
   {
-    "add-mime-type",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
+#define OPTION_ADD_MIME_TYPE "add-mime-type"
     OPTION_ADD_MIME_TYPE,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
     N_("Specify a mime-type to be added to the MimeType field."),
     NULL
   },
   {
-    "remove-mime-type",
-    '\0',
-    POPT_ARG_STRING,
-    NULL,
+#define OPTION_REMOVE_MIME_TYPE "remove-mime-type"
     OPTION_REMOVE_MIME_TYPE,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
     N_("Specify a mime-type to be removed from the MimeType field."),
     NULL
   },
   {
-    "rebuild-mime-info-cache",
-    '\0',
-    POPT_ARG_NONE,
-    &rebuild_mime_info_cache,
-    OPTION_REBUILD_MIME_INFO_CACHE,
-    N_("After installing desktop file rebuild the mime-types application database."),
-    NULL
-  },
-  {
-    NULL,
-    '\0',
-    0,
-    NULL,
-    0,
-    NULL,
     NULL
   }
 };
 
-static void
-parse_options_callback (poptContext              ctx,
-                        enum poptCallbackReason  reason,
-                        const struct poptOption *opt,
-                        const char              *arg,
-                        void                    *data)
+static gboolean
+parse_options_callback (const gchar  *option_name,
+                        const gchar  *value,
+                        gpointer      data,
+                        GError      **error)
 {
-  const char *str;
-  
-  if (reason != POPT_CALLBACK_REASON_OPTION)
-    return;
+  /* skip "--" */
+  option_name += 2;
 
-  switch (opt->val & POPT_ARG_MASK)
+  if (strcmp (OPTION_VENDOR, option_name) == 0)
     {
-    case OPTION_VENDOR:
       if (vendor_name)
         {
-          g_printerr (_("Can only specify --vendor once\n"));
-          exit (1);
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                       _("Can only specify --vendor once"));
+          return FALSE;
         }
       
-      str = poptGetOptArg (ctx);
-      vendor_name = g_strdup (str);
-      break;
+      vendor_name = g_strdup (value);
+    }
 
-    case OPTION_DIR:
+  else if (strcmp (OPTION_DIR, option_name) == 0)
+    {
       if (target_dir)
         {
-          g_printerr (_("Can only specify --dir once\n"));
-          exit (1);
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                       _("Can only specify --dir once"));
+          return FALSE;
         }
 
-      str = poptGetOptArg (ctx);
-      target_dir = g_strdup (str);
-      break;
-
-    case OPTION_ADD_CATEGORY:
-      str = poptGetOptArg (ctx);
-      added_categories = g_slist_prepend (added_categories,
-                                          g_strdup (str));
-      break;
-
-    case OPTION_REMOVE_CATEGORY:
-      str = poptGetOptArg (ctx);
-      removed_categories = g_slist_prepend (removed_categories,
-                                            g_strdup (str));
-      break;
-
-    case OPTION_ADD_ONLY_SHOW_IN:
-      str = poptGetOptArg (ctx);
-      added_only_show_in = g_slist_prepend (added_only_show_in,
-                                            g_strdup (str));
-      break;
-
-    case OPTION_REMOVE_ONLY_SHOW_IN:
-      str = poptGetOptArg (ctx);
-      removed_only_show_in = g_slist_prepend (removed_only_show_in,
-                                              g_strdup (str));
-      break;
-
-    case OPTION_MODE:
-      {
-        unsigned long ul;
-        char *end;
-        
-        str = poptGetOptArg (ctx);
-
-        end = NULL;
-        ul = strtoul (str, &end, 8);
-        if (*str && end && *end == '\0')
-          permissions = ul;
-        else
-          {
-            g_printerr (_("Could not parse mode string \"%s\"\n"),
-                        str);
-            
-            exit (1);
-          }
-      }
-      break;
-
-    case OPTION_REMOVE_KEY:
-      str = poptGetOptArg (ctx);
-      removed_keys = g_slist_prepend (removed_keys,
-                                      g_strdup (str));
-      break;
-
-    case OPTION_ADD_MIME_TYPE:
-      str = poptGetOptArg (ctx);
-      added_mime_types = g_slist_prepend (added_mime_types,
-                                          g_strdup (str));
-      break;
-
-    case OPTION_REMOVE_MIME_TYPE:
-      str = poptGetOptArg (ctx);
-      removed_mime_types = g_slist_prepend (removed_mime_types,
-                                            g_strdup (str));
-      break;
-      
-    default:
-      break;
+      target_dir = g_strdup (value);
     }
+
+  else if (strcmp (OPTION_ADD_CATEGORY, option_name) == 0)
+    {
+      added_categories = g_slist_prepend (added_categories,
+                                          g_strdup (value));
+    }
+
+  else if (strcmp (OPTION_REMOVE_CATEGORY, option_name) == 0)
+    {
+      removed_categories = g_slist_prepend (removed_categories,
+                                            g_strdup (value));
+    }
+
+  else if (strcmp (OPTION_ADD_ONLY_SHOW_IN, option_name) == 0)
+    {
+      added_only_show_in = g_slist_prepend (added_only_show_in,
+                                            g_strdup (value));
+    }
+
+  else if (strcmp (OPTION_REMOVE_ONLY_SHOW_IN, option_name) == 0)
+    {
+      removed_only_show_in = g_slist_prepend (removed_only_show_in,
+                                              g_strdup (value));
+    }
+
+  else if (strcmp (OPTION_MODE, option_name) == 0)
+    {
+      unsigned long ul;
+      char *end;
+      
+      end = NULL;
+      ul = strtoul (value, &end, 8);
+      if (*value && end && *end == '\0')
+        permissions = ul;
+      else
+        {
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                       _("Could not parse mode string \"%s\""), value);
+          
+          return FALSE;
+        }
+    }
+
+  else if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
+    {
+      removed_keys = g_slist_prepend (removed_keys,
+                                      g_strdup (value));
+    }
+
+  else if (strcmp (OPTION_ADD_MIME_TYPE, option_name) == 0)
+    {
+      added_mime_types = g_slist_prepend (added_mime_types,
+                                          g_strdup (value));
+    }
+
+  else if (strcmp (OPTION_REMOVE_MIME_TYPE, option_name) == 0)
+    {
+      removed_mime_types = g_slist_prepend (removed_mime_types,
+                                            g_strdup (value));
+    }
+
+  else
+    {
+        g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                     _("Unknown option \"%s\""), option_name);
+        
+        return FALSE;
+    }
+
+  return TRUE;
 }
 
 static void
@@ -558,30 +536,30 @@ mkdir_and_parents (const char *dirname,
 int
 main (int argc, char **argv)
 {
-  poptContext ctx;
-  int nextopt;
+  GOptionContext *context;
+  GOptionGroup *group;
   GError* err = NULL;
-  const char** args;
   int i;
   mode_t dir_permissions;
   
   setlocale (LC_ALL, "");
   
-  ctx = poptGetContext ("desktop-file-install", argc, (const char **) argv, options, 0);
+  context = g_option_context_new ("");
+  g_option_context_add_main_entries (context, options, NULL);
 
-  poptReadDefaultConfig (ctx, TRUE);
+  group = g_option_group_new ("edit", _("Edition options for desktop file"), _("Show desktop file edition options"), NULL, NULL);
+  g_option_group_add_entries (group, edit_options);
+  g_option_context_add_group (context, group);
 
-  while ((nextopt = poptGetNextOpt (ctx)) > 0)
-    /*nothing*/;
+  err = NULL;
+  g_option_context_parse (context, &argc, &argv, &err);
 
-  if (nextopt != -1)
-    {
-      g_printerr (_("Error on option %s: %s.\nRun '%s --help' to see a full list of available command line options.\n"),
-                  poptBadOption (ctx, 0),
-                  poptStrerror (nextopt),
-                  argv[0]);
-      return 1;
-    }
+  if (err != NULL) {
+	  g_printerr ("%s\n", err->message);
+	  g_printerr (_("Run '%s --help' to see a full list of available command line options.\n"), argv[0]);
+	  g_error_free (err);
+	  return 1;
+  }
 
   if (vendor_name == NULL)
     vendor_name = g_strdup (g_getenv ("DESKTOP_FILE_VENDOR"));
@@ -617,8 +595,6 @@ main (int argc, char **argv)
 
   mkdir_and_parents (target_dir, dir_permissions);
   
-  args = poptGetArgs (ctx);
-
   i = 0;
   while (args && args[i])
     {
@@ -644,7 +620,7 @@ main (int argc, char **argv)
       return 1;
     }
   
-  poptFreeContext (ctx);
-        
+  g_option_context_free (context);
+
   return 0;
 }

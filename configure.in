@@ -94,10 +94,7 @@ CFLAGS=`echo "$CFLAGS" | sed -e 's/ +/ /g'`
 CPPFLAGS=`echo "$CPPFLAGS" | sed -e 's/ +/ /g'`
 changequote([,])dnl
 
-AC_CHECK_LIB(popt, poptStrippedArgv,, AC_MSG_ERROR([popt 1.5 or newer is required to build
-libgnome. You can download the latest version from ftp://ftp.rpm.org/pub/rpm/dist/rpm-4.0.x/]))
-
-PKG_CHECK_MODULES(DESKTOP_FILE_UTILS, glib-2.0 >= 2.2.0)
+PKG_CHECK_MODULES(DESKTOP_FILE_UTILS, glib-2.0 >= 2.6.0)
 
 AM_PATH_LISPDIR
 

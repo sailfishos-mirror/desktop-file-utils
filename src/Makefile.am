@@ -24,12 +24,7 @@ desktop_file_install_SOURCES=			\
 	install.c
 
 update_desktop_database_SOURCES =		\
-	update-desktop-database.c		\
-	eggdesktopentries.c			\
-	eggdesktopentries.h			\
-	eggintl.h				\
-	eggdirfuncs.c				\
-	eggdirfuncs.h
+	update-desktop-database.c
 
 desktop_file_validate_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
 desktop_file_install_LDADD = $(DESKTOP_FILE_UTILS_LIBS)

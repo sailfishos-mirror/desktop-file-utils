@@ -202,6 +202,12 @@ validate_categories (const char *value, const char *key, const char *locale, con
     {
       int j = 0;
 
+      if (strncmp ("X-", vals[i], 2) == 0)
+        {
+          i++;
+          continue;
+        }
+
       while (categories_keys[j])
         {
           if (g_ascii_strcasecmp (vals[i], categories_keys[j]) == 0)

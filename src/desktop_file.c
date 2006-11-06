@@ -1181,12 +1181,12 @@ gnome_desktop_file_get_locale_string (GnomeDesktopFile  *df,
           const char *encoding;
           
 	  encoding = desktop_file_get_encoding_for_locale (used_locale);
-          g_free (used_locale);
           
 	  if (encoding)
 	    {
               char *res;
               
+              g_free (used_locale);
 	      error = NULL;
 	      res = g_convert (raw, -1,            
 			       "UTF-8",

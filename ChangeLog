@@ -1,5 +1,13 @@
 2006-11-06  Ray Strode <rstrode@redhat.com>
 
+	* src/validate.c: fix category typos:
+	TeminalEmulator -> TerminalEmulator
+	ScreenSaver -> Screensaver
+	spotted by Vincent Fretin (in gnome bug
+	342799)
+
+2006-11-06  Ray Strode <rstrode@redhat.com>
+
 	* src/validate.c: add patch from Vincent Untz to
 	not validate categories that start with X-
 	(gnome bug 343799)

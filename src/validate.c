@@ -167,8 +167,8 @@ validate_categories (const char *value, const char *key, const char *locale, con
     "Education", "Art", "Construction", "Music", "Languages", "Science",
     "Astronomy", "Biology", "Chemistry", "Geology", "Math", "MedicalSoftware",
     "Physics", "Teaching", "Amusement", "Applet", "Archiving", "Electronics",
-    "Emulator", "Engineering", "FileManager", "Shell", "ScreenSaver",
-    "TeminalEmulator", "TrayIcon", "System", "Filesystem", "Monitor",
+    "Emulator", "Engineering", "FileManager", "Shell", "Screensaver",
+    "TerminalEmulator", "TrayIcon", "System", "Filesystem", "Monitor",
     "Security", "Utility", "Accessibility", "Calculator", "Clock",
     "TextEditor", "KDE", "GNOME", "GTK", "Qt", "Motif", "Java",
     "ConsoleOnly", NULL

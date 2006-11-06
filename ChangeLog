@@ -1,6 +1,12 @@
 2006-11-06  Ray Strode <rstrode@redhat.com>
 
 	* src/desktop_file.c: 
+	fix a couple of mem leaks.  Patch from Pascal Terjan
+	(gnoem bug 345686)
+
+2006-11-06  Ray Strode <rstrode@redhat.com>
+
+	* src/desktop_file.c: 
 	move g_free inside if branch to prevent a double free in
 	the else case. Patch from Pascal Terjan (gnome bug
 	345309)

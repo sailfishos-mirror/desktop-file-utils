@@ -1166,7 +1166,10 @@ gnome_desktop_file_get_locale_string (GnomeDesktopFile  *df,
   g_free (with_territory);
 
   if (raw == NULL)
-    return FALSE;
+    {
+      g_free (used_locale);
+      return FALSE;
+    }
   
   if (gnome_desktop_file_get_encoding (df) == GNOME_DESKTOP_FILE_ENCODING_UTF8)
     {
@@ -1226,6 +1229,7 @@ gnome_desktop_file_get_locale_string (GnomeDesktopFile  *df,
   else
     {
       g_printerr ("Desktop file doesn't have its encoding marked, can't parse it.\n");
+      g_free (used_locale);
       return FALSE;
     }
 }

@@ -1,5 +1,11 @@
 2006-11-07  Ray Strode  <rstrode@redhat.com>
 
+	* src/validate.c: Validate keywords as localestrings
+	 instead of strings (red hat bug 172423).  Patch from
+	 Ville Skyttä <ville.skytta@iki.fi>
+
+2006-11-07  Ray Strode  <rstrode@redhat.com>
+
 	* src/validate.c: update categories
 	to match the latest version of the desktop menu
 	specification, and reorder to make it easier to resync

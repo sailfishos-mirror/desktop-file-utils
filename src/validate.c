@@ -483,7 +483,7 @@ struct {
   { "DocPath", validate_string },                 /* 0.9.4: within KDE only */
   { "Extensions", validate_string, TRUE },        /* 0.9.3: deprecated */
   { "InitialPreference", validate_string },       /* 0.9.4: within KDE only */
-  { "Keywords", validate_string },                /* 0.9.4: within KDE only */
+  { "Keywords", validate_localestring },          /* 0.9.4: within KDE only */
   { "MapNotify", validate_string, TRUE },         /* 0.9.3: deprecated */
   { "Protocols", validate_string, TRUE },         /* 0.9.3: deprecated */
   { "ServiceTypes", validate_string },            /* 0.9.4: within KDE only */

@@ -1,5 +1,14 @@
 2006-11-07  Ray Strode  <rstrode@redhat.com>
 
+	* src/validate.c: Print a warning instead of an error
+	if categories aren't defined by the spec.  Give special
+	handling to the "Application" category since it's not
+	defined by the spec, but is in wide use, and can be
+	translated to one of the "main categories". (gnome bug
+	343799 comment 8)
+
+2006-11-07  Ray Strode  <rstrode@redhat.com>
+
 	* src/validate.c: Validate keywords as localestrings
 	 instead of strings (red hat bug 172423).  Patch from
 	 Ville Skyttä <ville.skytta@iki.fi>
@@ -37,7 +46,7 @@
 	TeminalEmulator -> TerminalEmulator
 	ScreenSaver -> Screensaver
 	spotted by Vincent Fretin (in gnome bug
-	342799)
+	343799)
 
 2006-11-06  Ray Strode  <rstrode@redhat.com>
 

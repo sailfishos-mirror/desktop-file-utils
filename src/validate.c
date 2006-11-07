@@ -148,38 +148,37 @@ validate_strings (const char *value, const char *key, const char *locale, const 
 static void
 validate_categories (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
+  #define MAIN_CATEGORIES \
+    "AudioVideo", "Audio", "Video", "Development", "Education", "Game", \
+    "Graphics", "Network", "Office", "Settings", "System", "Utility"
+
+  #define ADDITIONAL_CATEGORIES \
+    "Building", "Debugger", "IDE", "GUIDesigner", "Profiling", \
+    "RevisionControl", "Translation", "Calendar", "ContactManagement", \
+    "Database", "Dictionary", "Chart", "Email", "Finance", "FlowChart", "PDA", \
+    "ProjectManagement", "Presentation", "Spreadsheet", "WordProcessor", \
+    "2DGraphics", "VectorGraphics", "RasterGraphics", "3DGraphics", \
+    "Scanning", "OCR", "Photography", "Viewer", "DesktopSettings", \
+    "HardwareSettings", "PackageManager", "Dialup", "InstantMessaging", \
+    "IRCClient", "FileTransfer", "HamRadio", "News", "P2P", "RemoteAccess", \
+    "Telephony", "WebBrowser", "WebDevelopment", "Midi", "Mixer", "Sequencer", \
+    "Tuner", "TV", "AudioVideoEditing", "Player", "Recorder", "DiscBurning", \
+    "ActionGame", "AdventureGame", "ArcadeGame", "BoardGame", "BlocksGame", \
+    "CardGame", "KidsGame", "LogicGame", "RolePlaying", "Simulation", \
+    "SportsGame", "StrategyGame", "Art", "Construction", "Music", "Languages", \
+    "Science", "Astronomy", "Biology", "Chemistry", "Geology", "Math", \
+    "MedicalSoftware", "Physics", "Amusement", "Archiving", "Electronics", \
+    "Emulator", "Engineering", "FileManager", "TerminalEmulator", \
+    "Filesystem", "Monitor", "Security", "Accessibility", "Calculator", \
+    "Clock", "TextEditor", "Core", "KDE", "GNOME", "GTK", "Qt", "Motif", \
+    "Java", "ConsoleOnly"
+
+  #define RESERVED_CATEGORIES \
+    "Screensaver", "TrayIcon", "Applet", "Shell"
+
   /* Category list from Desktop Menu Specification version 1.0 */
-  const char *categories_keys[] = {
-
-    /* Main categories */
-    "AudioVideo", "Audio", "Video", "Development", "Education", "Game",
-    "Graphics", "Network", "Office", "Settings", "System", "Utility",
-
-    /* Additional categories */
-    "Building", "Debugger", "IDE", "GUIDesigner", "Profiling",
-    "RevisionControl", "Translation", "Calendar", "ContactManagement",
-    "Database", "Dictionary", "Chart", "Email", "Finance", "FlowChart", "PDA",
-    "ProjectManagement", "Presentation", "Spreadsheet", "WordProcessor",
-    "2DGraphics", "VectorGraphics", "RasterGraphics", "3DGraphics",
-    "Scanning", "OCR", "Photography", "Viewer", "DesktopSettings",
-    "HardwareSettings", "PackageManager", "Dialup", "InstantMessaging",
-    "IRCClient", "FileTransfer", "HamRadio", "News", "P2P", "RemoteAccess",
-    "Telephony", "WebBrowser", "WebDevelopment", "Midi", "Mixer", "Sequencer",
-    "Tuner", "TV", "AudioVideoEditing", "Player", "Recorder", "DiscBurning",
-    "ActionGame", "AdventureGame", "ArcadeGame", "BoardGame", "BlocksGame",
-    "CardGame", "KidsGame", "LogicGame", "RolePlaying", "Simulation",
-    "SportsGame", "StrategyGame", "Art", "Construction", "Music", "Languages",
-    "Science", "Astronomy", "Biology", "Chemistry", "Geology", "Math",
-    "MedicalSoftware", "Physics", "Amusement", "Archiving", "Electronics",
-    "Emulator", "Engineering", "FileManager", "TerminalEmulator",
-    "Filesystem", "Monitor", "Security", "Accessibility", "Calculator",
-    "Clock", "TextEditor", "Core", "KDE", "GNOME", "GTK", "Qt", "Motif",
-    "Java", "ConsoleOnly",
-
-    /* Reserved categories */
-    "Screensaver", "TrayIcon", "Applet", "Shell",
-
-    NULL
+  static const char *categories_keys[] = {
+    MAIN_CATEGORIES, ADDITIONAL_CATEGORIES, RESERVED_CATEGORIES, NULL
   };
   char **vals;
   int i;
@@ -222,10 +221,11 @@ validate_categories (const char *value, const char *key, const char *locale, con
 	    {
 	      if (strcmp (vals[i], categories_keys[j]) != 0)
 		{
-		  print_fatal (filename, "%s values are case sensitive (should be \"%s\" instead of \"%s\")\n",
+		  print_warning (filename, "%s values are case sensitive (should be \"%s\" instead of \"%s\")\n",
 			       key, categories_keys[j], vals[i]);
 		}
-	      break;
+
+              break;
 	    }
 	  ++j;
 	}
@@ -234,9 +234,17 @@ validate_categories (const char *value, const char *key, const char *locale, con
 	{
 	  char *valid_categories;
 
-	  valid_categories = g_strjoinv ("\", \"", (gchar **) categories_keys);
-	  print_fatal (filename, "%s values must be one of \"%s\" (found \"%s\")\n",
-		       key, valid_categories, vals[i]);
+          if ((g_ascii_strcasecmp (vals[i], "Application") == 0) ||
+	      (g_ascii_strcasecmp (vals[i], "Applications") == 0))
+          {
+            valid_categories = g_strjoin ("\", \"", MAIN_CATEGORIES, NULL);
+            print_warning (filename, "The 'Application' category is not defined by the desktop entry specification.  Please use one of \"%s\" instead\n",
+                           valid_categories);
+          } else {
+            valid_categories = g_strjoinv ("\", \"", (gchar **) categories_keys);
+            print_warning (filename, "%s values must be one of \"%s\" (found \"%s\")\n",
+                           key, valid_categories, vals[i]);
+          }
 	  g_free (valid_categories);
 	}
       ++i;

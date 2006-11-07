@@ -148,30 +148,38 @@ validate_strings (const char *value, const char *key, const char *locale, const 
 static void
 validate_categories (const char *value, const char *key, const char *locale, const char *filename, GnomeDesktopFile *df)
 {
-  /* Category list from Desktop Menu Specification version 1.0-draft4 */
+  /* Category list from Desktop Menu Specification version 1.0 */
   const char *categories_keys[] = {
-    "Core", "Development", "Building", "Debugger", "IDE", "GUIDesigner",
-    "Profiling", "RevisionControl", "Translation", "Office", "Calendar",
-    "ContactManagement", "Database", "Dictionary", "Chart", "Email",
-    "Finance", "FlowChart", "PDA", "ProjectManagement", "Presentation",
-    "Spreadsheet", "WordProcessor", "Graphics", "2DGraphics", "VectorGraphics",
-    "RasterGraphics", "3DGraphics", "Scanning", "OCR", "Photography",
-    "Viewer", "Settings", "DesktopSettings", "HardwareSettings",
-    "PackageManager", "Network", "Dialup", "InstantMessaging", "IRCClient",
-    "FileTransfer", "HamRadio", "News", "P2P", "RemoteAccess", "Telephony",
-    "WebBrowser", "WebDevelopment", "AudioVideo", "Audio", "Midi", "Mixer",
-    "Sequencer", "Tuner", "Video", "TV", "AudioVideoEditing", "Player",
-    "Recorder", "DiscBurning", "Game", "ActionGame", "AdventureGame",
-    "ArcadeGame", "BoardGame", "BlocksGame", "CardGame", "KidsGame",
-    "LogicGame", "RolePlaying", "Simulation", "SportsGame", "StrategyGame",
-    "Education", "Art", "Construction", "Music", "Languages", "Science",
-    "Astronomy", "Biology", "Chemistry", "Geology", "Math", "MedicalSoftware",
-    "Physics", "Teaching", "Amusement", "Applet", "Archiving", "Electronics",
-    "Emulator", "Engineering", "FileManager", "Shell", "Screensaver",
-    "TerminalEmulator", "TrayIcon", "System", "Filesystem", "Monitor",
-    "Security", "Utility", "Accessibility", "Calculator", "Clock",
-    "TextEditor", "KDE", "GNOME", "GTK", "Qt", "Motif", "Java",
-    "ConsoleOnly", NULL
+
+    /* Main categories */
+    "AudioVideo", "Audio", "Video", "Development", "Education", "Game",
+    "Graphics", "Network", "Office", "Settings", "System", "Utility",
+
+    /* Additional categories */
+    "Building", "Debugger", "IDE", "GUIDesigner", "Profiling",
+    "RevisionControl", "Translation", "Calendar", "ContactManagement",
+    "Database", "Dictionary", "Chart", "Email", "Finance", "FlowChart", "PDA",
+    "ProjectManagement", "Presentation", "Spreadsheet", "WordProcessor",
+    "2DGraphics", "VectorGraphics", "RasterGraphics", "3DGraphics",
+    "Scanning", "OCR", "Photography", "Viewer", "DesktopSettings",
+    "HardwareSettings", "PackageManager", "Dialup", "InstantMessaging",
+    "IRCClient", "FileTransfer", "HamRadio", "News", "P2P", "RemoteAccess",
+    "Telephony", "WebBrowser", "WebDevelopment", "Midi", "Mixer", "Sequencer",
+    "Tuner", "TV", "AudioVideoEditing", "Player", "Recorder", "DiscBurning",
+    "ActionGame", "AdventureGame", "ArcadeGame", "BoardGame", "BlocksGame",
+    "CardGame", "KidsGame", "LogicGame", "RolePlaying", "Simulation",
+    "SportsGame", "StrategyGame", "Art", "Construction", "Music", "Languages",
+    "Science", "Astronomy", "Biology", "Chemistry", "Geology", "Math",
+    "MedicalSoftware", "Physics", "Amusement", "Archiving", "Electronics",
+    "Emulator", "Engineering", "FileManager", "TerminalEmulator",
+    "Filesystem", "Monitor", "Security", "Accessibility", "Calculator",
+    "Clock", "TextEditor", "Core", "KDE", "GNOME", "GTK", "Qt", "Motif",
+    "Java", "ConsoleOnly",
+
+    /* Reserved categories */
+    "Screensaver", "TrayIcon", "Applet", "Shell",
+
+    NULL
   };
   char **vals;
   int i;

@@ -1,5 +1,13 @@
 2006-11-07  Ray Strode  <rstrode@redhat.com>
 
+	* src/validate.c: update categories
+	to match the latest version of the desktop menu
+	specification, and reorder to make it easier to resync
+	in the future.  Patch from 
+	Ville Skyttä <ville.skytta@iki.fi> (red hat bug 212705)
+
+2006-11-07  Ray Strode  <rstrode@redhat.com>
+
 	* misc/desktop-entry-mode.el: apply fixes
 	from Ville Skyttä <ville.skytta@iki.fi> to match the
 	latest version of the spec

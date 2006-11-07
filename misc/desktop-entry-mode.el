@@ -1,6 +1,6 @@
 ;;; desktop-entry-mode.el --- freedesktop.org desktop entry editing
 
-;; Copyright (C) 2003-2004, Ville Skyttä, <scop at xemacs.org>
+;; Copyright (C) 2003-2004, 2006, Ville Skyttä, <scop at xemacs.org>
 
 ;; Author:   Ville Skyttä, <scop at xemacs.org>
 ;; Keywords: unix, desktop entry
@@ -19,8 +19,8 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with XEmacs; see the file COPYING.  If not, write to the Free
-;; Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
-;; 02111-1307, USA.
+;; Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+;; MA 02110-1301 USA.
 
 ;;; Commentary:
 
@@ -45,11 +45,11 @@
 ;; For more information about desktop entry files, see
 ;;   <http://www.freedesktop.org/Standards/desktop-entry-spec>
 ;;
-;; This version is up to date with version 0.9.4 of the specification.
+;; This version is up to date with version 0.9.8 of the specification.
 
 ;;; Code:
 
-(defconst desktop-entry-mode-version "0.94 (spec 0.9.4)"
+(defconst desktop-entry-mode-version "0.98 (spec 0.9.8)"
   "Version of `desktop-entry-mode'.")
 
 (defgroup desktop-entry nil
@@ -97,39 +97,48 @@
       '(
         "Type"
         "Version"
-        "Encoding"
         "Name"
         "GenericName"
         "NoDisplay"
         "Comment"
         "Icon"
         "Hidden"
-        "FilePattern"
+        "OnlyShowIn"
+        "NotShowIn"
         "TryExec"
         "Exec"
         "Path"
         "Terminal"
-        "SwallowTitle"
-        "SwallowExec"
-        "Actions"
         "MimeType"
-        "SortOrder"
+        "Categories"
+        "StartupNotify"
+        "StartupWMClass"
+        "URL"
+        ;; Reserved for use with KDE
+        "ServiceTypes"
+        "DocPath"
+        "KeyWords"
+        "InitialPreference"
+        ;; Used by KDE for entries of the FSDevice type
         "Dev"
         "FSType"
         "MountPoint"
         "ReadOnly"
         "UnmountIcon"
-        "URL"
-        "Categories"
-        "OnlyShowIn"
-        "NotShowIn"
-        "StartupNotify"
-        "StartupWMClass"
-        ;; Reserved for use with KDE as of spec 0.9.4.
-        "ServiceTypes"
-        "DocPath"
-        "KeyWords"
-        "InitialPreference"
+        ;; Deprecated
+        "Patterns"
+        "DefaultApp"
+        "Encoding"
+        "MiniIcon"
+        "TerminalOptions"
+        "Protocols"
+        "Extensions"
+        "BinaryPattern"
+        "MapNotify"
+        "SwallowTitle"
+        "SwallowExec"
+        "SortOrder"
+        "FilePattern"
         ) 'words)
      "\\|X-[A-Za-z0-9-]+\\)"))
   "Expression for matching desktop entry keys.")

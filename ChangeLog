@@ -1,17 +1,23 @@
-2006-11-06  Ray Strode <rstrode@redhat.com>
+2006-11-07  Ray Strode  <rstrode@redhat.com>
+
+	* misc/desktop-entry-mode.el: apply fixes
+	from Ville Skyttä <ville.skytta@iki.fi> to match the
+	latest version of the spec
+
+2006-11-06  Ray Strode  <rstrode@redhat.com>
 
 	* src/desktop_file.c: 
 	fix a couple of mem leaks.  Patch from Pascal Terjan
-	(gnoem bug 345686)
+	(gnome bug 345686)
 
-2006-11-06  Ray Strode <rstrode@redhat.com>
+2006-11-06  Ray Strode  <rstrode@redhat.com>
 
 	* src/desktop_file.c: 
 	move g_free inside if branch to prevent a double free in
 	the else case. Patch from Pascal Terjan (gnome bug
 	345309)
 
-2006-11-06  Ray Strode <rstrode@redhat.com>
+2006-11-06  Ray Strode  <rstrode@redhat.com>
 
 	* src/validate.c: fix category typos:
 	TeminalEmulator -> TerminalEmulator
@@ -19,23 +25,23 @@
 	spotted by Vincent Fretin (in gnome bug
 	342799)
 
-2006-11-06  Ray Strode <rstrode@redhat.com>
+2006-11-06  Ray Strode  <rstrode@redhat.com>
 
 	* src/validate.c: add patch from Vincent Untz to
 	not validate categories that start with X-
 	(gnome bug 343799)
 
-2006-07-25  Ray Strode <rstrode@redhat.com>
+2006-07-25  Ray Strode  <rstrode@redhat.com>
 
 	* src/egg*: remove from cvs
 
-2006-04-18  Ray Strode <rstrode@redhat.com>
+2006-04-18  Ray Strode  <rstrode@redhat.com>
 
 	* configure.in: post-release bump to 0.12.
 
 ==================== 0.11 ====================
 
-2006-04-18  Ray Strode <rstrode@redhat.com>
+2006-04-18  Ray Strode  <rstrode@redhat.com>
 
 	Validate that desktop file categories match those
 	specified in the spec.  Patch from Emmet Hikory

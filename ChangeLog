@@ -1,5 +1,11 @@
 2006-11-07  Ray Strode  <rstrode@redhat.com>
 
+	* src/validate.c: If a desktop file contains
+	"Applications" instead of "Application" make the warning
+	reflect that.
+
+2006-11-07  Ray Strode  <rstrode@redhat.com>
+
 	* src/validate.c: Print a warning instead of an error
 	if categories aren't defined by the spec.  Give special
 	handling to the "Application" category since it's not

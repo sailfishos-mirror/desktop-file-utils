@@ -238,8 +238,8 @@ validate_categories (const char *value, const char *key, const char *locale, con
 	      (g_ascii_strcasecmp (vals[i], "Applications") == 0))
           {
             valid_categories = g_strjoin ("\", \"", MAIN_CATEGORIES, NULL);
-            print_warning (filename, "The 'Application' category is not defined by the desktop entry specification.  Please use one of \"%s\" instead\n",
-                           valid_categories);
+            print_warning (filename, "The '%s' category is not defined by the desktop entry specification.  Please use one of \"%s\" instead\n",
+                           vals[i], valid_categories);
           } else {
             valid_categories = g_strjoinv ("\", \"", (gchar **) categories_keys);
             print_warning (filename, "%s values must be one of \"%s\" (found \"%s\")\n",

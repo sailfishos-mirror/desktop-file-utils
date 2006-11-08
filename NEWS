@@ -1,4 +1,12 @@
 ============
+Version 0.12
+============
+
+  o improves category validation code to not catch false positives (Vincent Fretin, Ville Skyttä, Ray Strode, Vincent Untz) 
+  o make category validation code non-fatal (Ray)
+  o fix mem leaks and double frees (Pascal Terjan)
+
+============
 Version 0.11
 ============
 
@@ -20,7 +28,7 @@ Version 0.10
 Version 0.9
 ===========
 
-  o Many update-desktop-database improvements (Ray Strode,  Dan Williams)
+  o Many update-desktop-database improvements (Ray Strode, Dan Williams)
   o Fix desktop-file-install --remove-only-show-in (Ray Strode)
 
 ===========

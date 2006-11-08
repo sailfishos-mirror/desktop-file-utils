@@ -1,5 +1,11 @@
 2006-11-08  Ray Strode  <rstrode@redhat.com>
 
+	* configure.in: post-release bump to 0.13.
+
+==================== 0.12 ====================
+
+2006-11-08  Ray Strode  <rstrode@redhat.com>
+
 	* NEWS: update news file
 
 2006-11-07  Ray Strode  <rstrode@redhat.com>

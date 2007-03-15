@@ -9,7 +9,7 @@ cd $srcdir
 
 PROJECT=desktop-file-utils
 TEST_TYPE=-f
-FILE=src/desktop_file.h
+FILE=src/validate.h
 
 DIE=0
 

@@ -10,15 +10,15 @@ bin_PROGRAMS =					\
 	update-desktop-database
 
 desktop_file_validate_SOURCES=			\
-	desktop_file.c				\
-	desktop_file.h				\
+	keyfileutils.c				\
+	keyfileutils.h				\
 	validate.c				\
 	validate.h				\
 	validator.c
 
 desktop_file_install_SOURCES=			\
-	desktop_file.c				\
-	desktop_file.h				\
+	keyfileutils.c				\
+	keyfileutils.h				\
 	validate.c				\
 	validate.h				\
 	install.c

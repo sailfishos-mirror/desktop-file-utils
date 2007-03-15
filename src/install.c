@@ -2,10 +2,8 @@
 #include <config.h>
 
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <glib/gi18n.h>
-
-#include "desktop_file.h"
-#include "validate.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +11,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <locale.h>
+
+#include "keyfileutils.h"
+#include "validate.h"
 
 static const char** args = NULL;
 static gboolean delete_original = FALSE;
@@ -92,11 +93,110 @@ process_one_file (const char *filename,
   char *new_filename;
   char *dirname;
   char *basename;
-  GnomeDesktopFile *df = NULL;
+  GKeyFile *kf = NULL;
   GError *rebuild_error;
   GSList *tmp;
   
   g_assert (vendor_name);
+
+  kf = g_key_file_new ();
+  if (!g_key_file_load_from_file (kf, filename,
+			          G_KEY_FILE_KEEP_COMMENTS|
+				  G_KEY_FILE_KEEP_TRANSLATIONS,
+				  NULL)) {
+    g_key_file_free (kf);
+    return;
+  }
+
+  if (!desktop_file_fixup (kf, filename)) {
+    g_key_file_free (kf);
+    exit (1);
+  }
+
+  if (copy_name_to_generic_name)
+    dfu_key_file_copy_key (kf, GROUP_DESKTOP_ENTRY, "Name",
+                               GROUP_DESKTOP_ENTRY, "GenericName");
+
+  if (copy_generic_name_to_name)
+    dfu_key_file_copy_key (kf, GROUP_DESKTOP_ENTRY, "GenericName",
+                               GROUP_DESKTOP_ENTRY, "Name");
+  
+  /* Mark file as having been processed by us, so automated
+   * tools can check that desktop files went through our
+   * munging
+   */
+  g_key_file_set_string (kf, GROUP_DESKTOP_ENTRY,
+                         "X-Desktop-File-Install-Version", VERSION);
+
+  /* Add categories */
+  tmp = added_categories;
+  while (tmp != NULL)
+    {
+      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,
+                               "Categories", tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Remove categories */
+  tmp = removed_categories;
+  while (tmp != NULL)
+    {
+      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
+                                "Categories", tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Add onlyshowin */
+  tmp = added_only_show_in;
+  while (tmp != NULL)
+    {
+      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,
+                               "OnlyShowIn", tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Remove onlyshowin */
+  tmp = removed_only_show_in;
+  while (tmp != NULL)
+    {
+      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
+                                "OnlyShowIn", tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Remove keys */
+  tmp = removed_keys;
+  while (tmp != NULL)
+    {
+      g_key_file_remove_key (kf, GROUP_DESKTOP_ENTRY, tmp->data, NULL);
+
+      tmp = tmp->next;
+    }
+
+  /* Add mime-types */
+  tmp = added_mime_types;
+  while (tmp != NULL)
+    {
+      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,
+                               "MimeType", tmp->data);
+
+      tmp = tmp->next;
+    }
+
+  /* Remove mime-types */
+  tmp = removed_mime_types;
+  while (tmp != NULL)
+    {
+      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
+                                "MimeType", tmp->data);
+
+      tmp = tmp->next;
+    }
+
 
   dirname = g_path_get_dirname (filename);
   basename = g_path_get_basename (filename);
@@ -115,119 +215,40 @@ process_one_file (const char *filename,
 
   g_free (dirname);
   g_free (basename);
-
-  df = gnome_desktop_file_load (filename, err);
-  if (df == NULL)
-    goto cleanup;
-
-  if (!desktop_file_fixup (df, filename))
-    exit (1);
-
-  if (copy_name_to_generic_name)
-    gnome_desktop_file_copy_key (df, NULL, "Name", "GenericName");
-
-  if (copy_generic_name_to_name)
-    gnome_desktop_file_copy_key (df, NULL, "GenericName", "Name");
   
-  /* Mark file as having been processed by us, so automated
-   * tools can check that desktop files went through our
-   * munging
-   */
-  gnome_desktop_file_set_raw (df, NULL, "X-Desktop-File-Install-Version", NULL, VERSION);
-
-  /* Add categories */
-  tmp = added_categories;
-  while (tmp != NULL)
-    {
-      gnome_desktop_file_merge_string_into_list (df, NULL, "Categories",
-                                                 NULL, tmp->data);
-
-      tmp = tmp->next;
-    }
-
-  /* Remove categories */
-  tmp = removed_categories;
-  while (tmp != NULL)
-    {
-      gnome_desktop_file_remove_string_from_list (df, NULL, "Categories",
-                                                  NULL, tmp->data);
-
-      tmp = tmp->next;
-    }
-
-  /* Add onlyshowin */
-  tmp = added_only_show_in;
-  while (tmp != NULL)
-    {
-      gnome_desktop_file_merge_string_into_list (df, NULL, "OnlyShowIn",
-                                                 NULL, tmp->data);
-
-      tmp = tmp->next;
-    }
-
-  /* Remove onlyshowin */
-  tmp = removed_only_show_in;
-  while (tmp != NULL)
-    {
-      gnome_desktop_file_remove_string_from_list (df, NULL, "OnlyShowIn",
-                                                  NULL, tmp->data);
-
-      tmp = tmp->next;
-    }
-
-  /* Remove keys */
-  tmp = removed_keys;
-  while (tmp != NULL)
-    {
-      gnome_desktop_file_unset (df, NULL, tmp->data);
-      
-      tmp = tmp->next;
-    }
-
-  /* Add mime-types */
-  tmp = added_mime_types;
-  while (tmp != NULL)
-    {
-      gnome_desktop_file_merge_string_into_list (df, NULL, "MimeType",
-                                                 NULL, tmp->data);
-
-      tmp = tmp->next;
-    }
-
-  /* Remove mime-types */
-  tmp = removed_mime_types;
-  while (tmp != NULL)
-    {
-      gnome_desktop_file_remove_string_from_list (df, NULL, "MimeType",
-                                                  NULL, tmp->data);
-
-      tmp = tmp->next;
-    }
-
-
+  if (!dfu_key_file_to_file (kf, new_filename, err)) {
+    g_key_file_free (kf);
+    g_free (new_filename);
+    return;
+  }
   
-  if (!gnome_desktop_file_save (df, new_filename,
-                                permissions, err))
-    goto cleanup;
-  
+  g_key_file_free (kf);
+
+  if (g_chmod (new_filename, permissions) < 0)
+    {
+      g_set_error (err, G_FILE_ERROR,
+                   g_file_error_from_errno (errno),
+                   _("Failed to set permissions %o on \"%s\": %s"),
+                   permissions, new_filename, g_strerror (errno));
+
+      g_unlink (new_filename);
+      g_free (new_filename);
+      return;
+    }
+
   if (delete_original &&
       !files_are_the_same (filename, new_filename))
     {
-      if (unlink (filename) < 0)
+      if (g_unlink (filename) < 0)
         g_printerr (_("Error removing original file \"%s\": %s\n"),
                     filename, g_strerror (errno));
     }
 
-  gnome_desktop_file_free (df);
-
   /* Load and validate the file we just wrote */
-  df = gnome_desktop_file_load (new_filename, err);
-  if (df == NULL)
-    goto cleanup;
-  
-  if (!desktop_file_validate (df, new_filename))
+  if (!desktop_file_validate (new_filename, FALSE, TRUE))
     {
       g_printerr (_("desktop-file-install created an invalid desktop file!\n"));
+      g_free (new_filename);
       exit (1);
     }
 
@@ -240,11 +261,7 @@ process_one_file (const char *filename,
         g_propagate_error (err, rebuild_error);
     }
   
- cleanup:
   g_free (new_filename);
-  
-  if (df)
-    gnome_desktop_file_free (df);
 }
 
 static gboolean parse_options_callback (const gchar  *option_name,
@@ -323,7 +340,7 @@ static const GOptionEntry edit_options[] = {
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
     N_("Specify a category to be added to the Categories field."),
-    NULL
+    N_("CATEGORY")
   },
   {
 #define OPTION_REMOVE_CATEGORY "remove-category"
@@ -333,7 +350,7 @@ static const GOptionEntry edit_options[] = {
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
     N_("Specify a category to be removed from the Categories field."),
-    NULL
+    N_("CATEGORY")
   },
   {
 #define OPTION_ADD_ONLY_SHOW_IN "add-only-show-in"
@@ -343,7 +360,7 @@ static const GOptionEntry edit_options[] = {
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
     N_("Specify a product name to be added to the OnlyShowIn field."),
-    NULL
+    N_("PRODUCT")
   },
   {
 #define OPTION_REMOVE_ONLY_SHOW_IN "remove-only-show-in"
@@ -353,7 +370,7 @@ static const GOptionEntry edit_options[] = {
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
     N_("Specify a product name to be removed from the OnlyShowIn field."),
-    NULL
+    N_("PRODUCT")
   },
   {
     "copy-name-to-generic-name",
@@ -381,7 +398,7 @@ static const GOptionEntry edit_options[] = {
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
     N_("Specify a field to be removed from the desktop file."),
-    NULL
+    N_("KEY")
   },
   {
 #define OPTION_ADD_MIME_TYPE "add-mime-type"
@@ -391,7 +408,7 @@ static const GOptionEntry edit_options[] = {
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
     N_("Specify a mime-type to be added to the MimeType field."),
-    NULL
+    N_("MIME-TYPE")
   },
   {
 #define OPTION_REMOVE_MIME_TYPE "remove-mime-type"
@@ -401,7 +418,7 @@ static const GOptionEntry edit_options[] = {
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
     N_("Specify a mime-type to be removed from the MimeType field."),
-    NULL
+    N_("MIME-TYPE")
   },
   {
     NULL

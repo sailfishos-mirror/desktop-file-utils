@@ -4,5 +4,3 @@ desktop-file-validate: validates a desktop file and prints warnings/errors about
 
 desktop-file-install: installs a desktop file to the applications directory, optionally munging
                       it a bit in transit.
-
-desktop-menu-tool: loads .vfolder-info and .menu files and does stuff with them

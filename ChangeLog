@@ -1,3 +1,32 @@
+2007-03-15  Vincent Untz  <vuntz@gnome.org>
+
+	* README: remove mention of desktop-menu-tool
+	* acconfig.h: kill, was useless and deprecated
+
+	* src/eggintl.h: kill, was useless since quite some time
+
+	* autogen.sh:
+	* configure.in: updated because of src/desktop_file.h removal
+
+	* src/Makefile.am: updated for file removals/additions
+	* src/desktop_file.[ch]: removed. We don't use this anymore (it was
+	based on GnomeDesktopItem which nobody maintains and is too complex
+	for what we need)
+	* keyfileutils.[ch]: new, contains some useful functions based on
+	GKeyFile
+	* src/install.c: updated for changes (GnomeDesktopFile -> GKeyFile)
+	(process_one_file): ditto
+	also, improves a bit the --help output
+	* src/validate.[ch]: pretty much a rewrite. This is based on GKeyFile
+	for now, but it'll be moved to a small parser soon, so we are not
+	limited because of the GKeyFile parser. The validator verifies more
+	things, warns about usage of deprecated stuff, and contains some other
+	nice improvements. It probably contains some bugs, though.
+	* src/validator.c: updated (well, rewritten, since it's only the
+	main() function). We also now have some command line arguments:
+	--warn-kde to warn about usage of KDE reserved stuff
+	--no-warn-deprecated to not warn about usage of deprecated stuff
+
 2006-11-08  Ray Strode  <rstrode@redhat.com>
 
 	* configure.in: post-release bump to 0.13.

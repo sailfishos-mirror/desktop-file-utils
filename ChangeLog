@@ -1,3 +1,52 @@
+2007-06-04  Vincent Untz  <vuntz@gnome.org>
+
+	Don't use GKeyFile in the validator, so we really control everything.
+
+	* src/validate.c: remove some FIXME/TODO
+	(validate_string_key): use g_ascii_iscntrl() instead of
+	!g_ascii_isprint(), small update for the current group
+	(validate_localestring_key): small update for the current group, don't
+	use GKeyFile
+	(validate_boolean_key): small update for the current group
+	(validate_numeric_key): ditto
+	(validate_string_regexp_list_key): use g_ascii_iscntrl() instead of
+	!g_ascii_isprint(), small update for the current group
+	(handle_type_key): small update for the current group
+	(handle_version_key): ditto
+	(handle_show_in_key): ditto
+	(handle_exec_key): ditto
+	(handle_path_key): ditto
+	(handle_mime_key): ditto
+	(handle_categories_key): small update for the current group, don't
+	use GKeyFile
+	(handle_actions_key): ditto
+	(handle_dev_key): ditto
+	(handle_mountpoint_key): ditto
+	(handle_encoding_key): ditto
+	(validate_desktop_key): ditto, the value is an argument now
+	(validate_keys_for_current_group): renamed from
+	validate_keys_for_group(), small update for the current group, don't
+	use GKeyFile and build a hashtable of all the keys in the current
+	group, also don't validate the key for Desktop Entry groups if the
+	name of the key couldn't be validated since this means we'll get
+	another error
+	(validate_group_name): use g_ascii_iscntrl() instead of
+	!g_ascii_isprint()
+	(validate_groups_and_keys): killed
+	(validate_required_keys): don't use GKeyFile
+	(validate_line_is_comment): new
+	(validate_line_looks_like_group): new
+	(validate_line_looks_like_entry): new
+	(validate_parse_line): new
+	(validate_parse_data): new (inspired from gkeyfile.c)
+	(validate_flush_parse_buffer): new (inspired from gkeyfile.c)
+	(validate_parse_from_fd): new (inspired from gkeyfile.c)
+	(validate_load_and_parse): new (inspired from gkeyfile.c)
+	(groups_hashtable_free): new
+	(desktop_file_validate): updated
+	(desktop_file_fixup): small update to avoid confusion
+	* src/validator.c: (main): fix leak
+
 2007-03-15  Vincent Untz  <vuntz@gnome.org>
 
 	* README: remove mention of desktop-menu-tool

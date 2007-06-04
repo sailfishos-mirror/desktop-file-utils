@@ -59,6 +59,8 @@ main (int argc, char *argv[])
     return 1;
   }
 
+  g_option_context_free (context);
+
   /* only accept one desktop file argument */
   if (filename == NULL || filename[0] == NULL || filename[1] != NULL) {
     g_printerr ("See \"%s --help\" for correct usage.\n", g_get_prgname ());

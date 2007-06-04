@@ -8,6 +8,11 @@
  *  Havoc Pennington
  *  Ray Strode
  *
+ * A portion of this code comes from glib (gkeyfile.c)
+ * Authors of gkeyfile.c are:
+ *  Ray Strode
+ *  Matthias Clasen
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -24,33 +29,27 @@
  * USA.
  */
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <glib.h>
+#include <glib/gstdio.h>
 
 #include "keyfileutils.h"
 #include "validate.h"
 
-/* We're trying to not use GKeyFile APIs as much as possible, so we don't
- * have to "trust" what GKeyFile is doing, and GKeyFile can be less
- * strict than this validator.
- * FIXME: maybe it's a good idea to just not use GKeyFile and do all the
- * parsing ourselves. This way, we know we're doing exactly what we want.
- */
-
-//FIXME: document where GKeyFile is stricter than the spec
+//FIXME: document where we are stricter than the spec
 // * only UTF-8 (so no Legacy-Mixed encoding)
-// * "Historically lists have been comma separated."
-// Add this information to --usage
 
 /*TODO:
- * + Desktop entry files are encoded as lines of 8-bit characters separated by
- *   LF characters.
- * + Multiple groups may not have the same name.
  * + Lecagy-Mixed Encoding (annexe D)
  * + The escape sequences \s, \n, \t, \r, and \\ are supported for values of
  *   type string and localestring, meaning ASCII space, newline, tab, carriage
  *   return, and backslash, respectively.
- *   GKeyFile handles this, but we don't.
  */
 
 typedef enum {
@@ -85,11 +84,25 @@ typedef enum {
   DESKTOP_REGEXP_LIST_TYPE
 } DesktopKeyType;
 
+typedef struct _kf_keyvalue kf_keyvalue;
+
+struct _kf_keyvalue {
+  char *key;
+  char *value;
+};
+
 typedef struct _kf_validator kf_validator;
 
 struct _kf_validator {
   const char  *filename;
-  GKeyFile    *keyfile;
+
+  GString     *parse_buffer;
+  gboolean     utf8_warning;
+  gboolean     cr_error;
+
+  char        *current_group;
+  GHashTable  *groups;
+  GHashTable  *current_keys;
 
   gboolean     kde_reserved_warnings;
   gboolean     no_deprecated_warnings;
@@ -401,7 +414,7 @@ validate_string_key (kf_validator *kf,
   error = FALSE;
 
   for (i = 0; value[i] != '\0'; i++) {
-    if (!g_ascii_isprint (value[i])) {
+    if (g_ascii_iscntrl (value[i])) {
       error = TRUE;
       break;
     }
@@ -411,7 +424,7 @@ validate_string_key (kf_validator *kf,
     print_fatal (kf, "value \"%s\" for string key \"%s\" in group \"%s\" "
                      "contains invalid characters, string values may contain "
                      "all ASCII characters except for control characters\n",
-                     value, key, kf->main_group);
+                     value, key, kf->current_group);
 
     return FALSE;
   }
@@ -443,16 +456,16 @@ validate_localestring_key (kf_validator *kf,
     print_fatal (kf, "value \"%s\" for locale string key \"%s\" in group "
                      "\"%s\" contains invalid UTF-8 characters, locale string "
                      "values should be encoded in UTF-8\n",
-                     value, locale_key, kf->main_group);
+                     value, locale_key, kf->current_group);
     g_free (locale_key);
 
     return FALSE;
   }
 
-  if (!g_key_file_has_key (kf->keyfile, kf->main_group, key, NULL)) {
+  if (!g_hash_table_lookup (kf->current_keys, key)) {
     print_fatal (kf, "key \"%s\" in group \"%s\" is a localized key, but "
                      "there is no non-localized key \"%s\"\n",
-                     locale_key, kf->main_group, key);
+                     locale_key, kf->current_group, key);
     g_free (locale_key);
 
     return FALSE;
@@ -483,7 +496,7 @@ validate_boolean_key (kf_validator *kf,
     print_fatal (kf, "value \"%s\" for boolean key \"%s\" in group \"%s\" "
                      "contains invalid characters, boolean values must be "
                      "\"false\" or \"true\"\n",
-                     value, key, kf->main_group);
+                     value, key, kf->current_group);
     return FALSE;
   }
 
@@ -492,7 +505,7 @@ validate_boolean_key (kf_validator *kf,
     print_warning (kf, "boolean key \"%s\" in group \"%s\" has value \"%s\", "
                        "which is deprecated: boolean values should be "
                        "\"false\" or \"true\"\n",
-                       key, kf->main_group, value);
+                       key, kf->current_group, value);
 
   return TRUE;
 }
@@ -515,7 +528,7 @@ validate_numeric_key (kf_validator *kf,
     print_fatal (kf, "value \"%s\" for numeric key \"%s\" in group \"%s\" "
                      "contains invalid characters, numeric values must be "
                      "valid floating point numbers\n",
-                     value, key, kf->main_group);
+                     value, key, kf->current_group);
     return FALSE;
   }
 
@@ -543,7 +556,7 @@ validate_string_regexp_list_key (kf_validator *kf,
   error = FALSE;
 
   for (i = 0; value[i] != '\0'; i++) {
-    if (!g_ascii_isprint (value[i])) {
+    if (g_ascii_iscntrl (value[i])) {
       error = TRUE;
       break;
     }
@@ -554,7 +567,7 @@ validate_string_regexp_list_key (kf_validator *kf,
                      "contains invalid character '%c', %s list values may "
                      "contain all ASCII characters except for control "
                      "characters\n",
-                     value, type, key, kf->main_group, value[i], type);
+                     value, type, key, kf->current_group, value[i], type);
 
     return FALSE;
   }
@@ -563,7 +576,7 @@ validate_string_regexp_list_key (kf_validator *kf,
     print_fatal (kf, "value \"%s\" for %s list key \"%s\" in group \"%s\" "
                      "does not have a semicolon (';') as trailing "
                      "character\n",
-                     value, type, key, kf->main_group);
+                     value, type, key, kf->current_group);
 
     return FALSE;
   }
@@ -572,7 +585,7 @@ validate_string_regexp_list_key (kf_validator *kf,
       (i < 3 || value[i - 3] != '\\')) {
     print_fatal (kf, "value \"%s\" for %s list key \"%s\" in group \"%s\" "
                      "has an escaped semicolon (';') as trailing character\n",
-                     value, type, key, kf->main_group);
+                     value, type, key, kf->current_group);
 
     return FALSE;
   }
@@ -625,19 +638,19 @@ handle_type_key (kf_validator *kf,
     print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                      "is not a registered type value (\"Application\", "
                      "\"Link\" and \"Directory\")\n",
-                     value, locale_key, kf->main_group);
+                     value, locale_key, kf->current_group);
     return FALSE;
   }
 
   if (registered_types[i].kde_reserved && kf->kde_reserved_warnings)
     print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "is a reserved value for KDE\n",
-                       value, locale_key, kf->main_group);
+                       value, locale_key, kf->current_group);
 
   if (registered_types[i].deprecated && !kf->no_deprecated_warnings)
     print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "is deprecated\n",
-                       value, locale_key, kf->main_group);
+                       value, locale_key, kf->current_group);
 
   kf->type = registered_types[i].type;
   kf->type_string = registered_types[i].name;
@@ -669,7 +682,7 @@ handle_version_key (kf_validator *kf,
 
   print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                    "is not a known version\n",
-                   value, locale_key, kf->main_group);
+                   value, locale_key, kf->current_group);
   return FALSE;
 }
 
@@ -692,6 +705,7 @@ handle_comment_key (kf_validator *kf,
  *   Checked.
  *   FIXME: this is not perfect because it could fail if a new value with
  *   a semicolon is registered.
+ * + FIXME: is this okay to have only ";"? (gnome-theme-installer.desktop does)
  */
 static gboolean
 handle_show_in_key (kf_validator *kf,
@@ -709,7 +723,7 @@ handle_show_in_key (kf_validator *kf,
   if (kf->show_in) {
     print_fatal (kf, "only one of \"OnlyShowIn\" and \"NotShowInkey\" keys "
                      "may appear in group \"%s\"\n",
-                     kf->main_group);
+                     kf->current_group);
     retval = FALSE;
   }
   kf->show_in = TRUE;
@@ -726,7 +740,7 @@ handle_show_in_key (kf_validator *kf,
     if (g_hash_table_lookup (hashtable, show[i])) {
       print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                          "contains \"%s\" more than once\n",
-                         value, locale_key, kf->main_group, show[i]);
+                         value, locale_key, kf->current_group, show[i]);
       continue;
     }
 
@@ -740,7 +754,7 @@ handle_show_in_key (kf_validator *kf,
     if (j == G_N_ELEMENTS (show_in_registered)) {
       print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "contains an unregistered value \"%s\"\n",
-                       value, locale_key, kf->main_group, show[i]);
+                       value, locale_key, kf->current_group, show[i]);
       retval = FALSE;
     }
   }
@@ -825,7 +839,7 @@ handle_exec_key (kf_validator *kf,
   if (flag) {                                                       \
     print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" " \
                      "contains an invalid field code \"%%%c\"\n",   \
-                     value, locale_key, kf->main_group, *c);   \
+                     value, locale_key, kf->current_group, *c);     \
     retval = FALSE;                                                 \
     flag = FALSE;                                                   \
     break;                                                          \
@@ -848,7 +862,7 @@ handle_exec_key (kf_validator *kf,
                              "contains an escaped double quote (\\\\\") "
                              "outside of a quote, but the double quote is "
                              "a reserved character\n",
-                             value, locale_key, kf->main_group);
+                             value, locale_key, kf->current_group);
             retval = FALSE;
 
             escaped = FALSE;
@@ -864,7 +878,7 @@ handle_exec_key (kf_validator *kf,
                              "contains a non-escaped character '%c' in a "
                              "quote, but it should be escaped with two "
                              "backslashes (\"\\\\%c\")\n",
-                             value, locale_key, kf->main_group, *c, *c);
+                             value, locale_key, kf->current_group, *c, *c);
             retval = FALSE;
           } else
             escaped = FALSE;
@@ -872,7 +886,7 @@ handle_exec_key (kf_validator *kf,
           print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                            "contains a reserved character '%c' outside of a "
                            "quote\n",
-                           value, locale_key, kf->main_group, *c);
+                           value, locale_key, kf->current_group, *c);
           retval = FALSE;
         }
         break;
@@ -906,7 +920,7 @@ handle_exec_key (kf_validator *kf,
           print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                            "contains a reserved character '%c' outside of a "
                            "quote\n",
-                           value, locale_key, kf->main_group, *c);
+                           value, locale_key, kf->current_group, *c);
           retval = FALSE;
         }
         break;
@@ -922,7 +936,7 @@ handle_exec_key (kf_validator *kf,
             print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                              "may contain at most one \"%f\", \"%u\", "
                              "\"%F\" or \"%U\" field code\n",
-                             value, locale_key, kf->main_group);
+                             value, locale_key, kf->current_group);
             retval = FALSE;
           }
 
@@ -937,7 +951,7 @@ handle_exec_key (kf_validator *kf,
             print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                              "may contain at most one \"%f\", \"%u\", "
                              "\"%F\" or \"%U\" field code\n",
-                             value, locale_key, kf->main_group);
+                             value, locale_key, kf->current_group);
             retval = FALSE;
           }
 
@@ -961,7 +975,7 @@ handle_exec_key (kf_validator *kf,
           if (!kf->no_deprecated_warnings)
             print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                                "contains a deprecated field code \"%%%c\"\n",
-                                value, locale_key, kf->main_group, *c);
+                                value, locale_key, kf->current_group, *c);
           flag = FALSE;
         }
         break;
@@ -977,14 +991,14 @@ handle_exec_key (kf_validator *kf,
   if (in_quote) {
     print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" contains a "
                      "quote which is not closed\n",
-                     value, locale_key, kf->main_group);
+                     value, locale_key, kf->current_group);
     retval = FALSE;
   }
 
   if (flag) {
     print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" contains a "
                      "non-complete field code\n",
-                     value, locale_key, kf->main_group);
+                     value, locale_key, kf->current_group);
     retval = FALSE;
   }
 
@@ -994,6 +1008,7 @@ handle_exec_key (kf_validator *kf,
 /* + If entry is of type Application, the working directory to run the program
  *   in. (probably implies an absolute path)
  *   Checked.
+ * + FIXME: is it okay to have an empty string here? (wireshark.desktop does)
  */
 static gboolean
 handle_path_key (kf_validator *kf,
@@ -1005,7 +1020,7 @@ handle_path_key (kf_validator *kf,
   if (!g_path_is_absolute (value))
     print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "does not look like an absolute path\n",
-                       value, locale_key, kf->main_group);
+                       value, locale_key, kf->current_group);
 
   return TRUE;
 }
@@ -1043,7 +1058,7 @@ handle_mime_key (kf_validator *kf,
     if (g_hash_table_lookup (hashtable, types[i])) {
       print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                          "contains \"%s\" more than once\n",
-                         value, locale_key, kf->main_group, types[i]);
+                         value, locale_key, kf->current_group, types[i]);
       continue;
     }
 
@@ -1054,7 +1069,7 @@ handle_mime_key (kf_validator *kf,
       print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "contains value \"%s\" which does not look like "
                        "a MIME type\n",
-                       value, locale_key, kf->main_group, types[i]);
+                       value, locale_key, kf->current_group, types[i]);
       retval = FALSE;
     }
   }
@@ -1065,7 +1080,7 @@ handle_mime_key (kf_validator *kf,
   return retval;
 }
 
-/* + FIXME: is there restrictions on how a category should be named?
+/* + FIXME: are there restrictions on how a category should be named?
  * + Categories in which the entry should be shown in a menu (for possible
  *   values see the Desktop Menu Specification).
  *   Checked.
@@ -1108,7 +1123,7 @@ handle_categories_key (kf_validator *kf,
     if (g_hash_table_lookup (hashtable, categories[i])) {
       print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                          "contains \"%s\" more than once\n",
-                         value, locale_key, kf->main_group, categories[i]);
+                         value, locale_key, kf->current_group, categories[i]);
       continue;
     }
 
@@ -1129,12 +1144,11 @@ handle_categories_key (kf_validator *kf,
     IF_CHECK_REGISTERED_CATEGORIES (additional_categories_registered)
       continue;
     IF_CHECK_REGISTERED_CATEGORIES (reserved_categories_registered) {
-      if (!g_key_file_has_key (kf->keyfile, kf->main_group,
-                               "OnlyShowIn", NULL)) {
+      if (!g_hash_table_lookup (kf->current_keys, "OnlyShowIn")) {
         print_fatal (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
                          "is a reserved category, so a \"OnlyShowIn\" key "
                          "must be included\n",
-                         categories[i], locale_key, kf->main_group);
+                         categories[i], locale_key, kf->current_group);
         retval = FALSE;
       }
       continue;
@@ -1143,14 +1157,14 @@ handle_categories_key (kf_validator *kf,
       if (!kf->no_deprecated_warnings)
         print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                            "contains a deprecated value \"%s\"\n",
-                            value, locale_key, kf->main_group,
+                            value, locale_key, kf->current_group,
                             categories[i]);
       continue;
     }
 
     print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                      "contains an unregistered value \"%s\"\n",
-                     value, locale_key, kf->main_group, categories[i]);
+                     value, locale_key, kf->current_group, categories[i]);
     retval = FALSE;
   }
 
@@ -1184,14 +1198,14 @@ handle_actions_key (kf_validator *kf,
       if (actions[i + 1] != NULL)
         print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                            "contains an empty action\n",
-                           value, locale_key, kf->main_group);
+                           value, locale_key, kf->current_group);
       continue;
     }
 
     if (g_hash_table_lookup (kf->action_values, actions[i])) {
       print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                          "contains action \"%s\" more than once\n",
-                         value, locale_key, kf->main_group, actions[i]);
+                         value, locale_key, kf->current_group, actions[i]);
       continue;
     }
 
@@ -1217,7 +1231,7 @@ handle_dev_key (kf_validator *kf,
   if (!g_path_is_absolute (value))
     print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "does not look like an absolute path\n",
-                       value, locale_key, kf->main_group);
+                       value, locale_key, kf->current_group);
 
   return TRUE;
 }
@@ -1236,7 +1250,7 @@ handle_mountpoint_key (kf_validator *kf,
   if (!g_path_is_absolute (value))
     print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "does not look like an absolute path\n",
-                       value, locale_key, kf->main_group);
+                       value, locale_key, kf->current_group);
 
   return TRUE;
 }
@@ -1255,7 +1269,7 @@ handle_encoding_key (kf_validator *kf,
   print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                    "is not a registered encoding value (\"UTF-8\", and "
                    "\"Legacy-Mixed\")\n",
-                   value, locale_key, kf->main_group);
+                   value, locale_key, kf->current_group);
 
   return FALSE;
 }
@@ -1369,11 +1383,11 @@ static gboolean
 validate_desktop_key (kf_validator *kf,
                       const char   *locale_key,
                       const char   *key,
-                      const char   *locale)
+                      const char   *locale,
+                      const char   *value)
 {
   unsigned int i;
   unsigned int j;
-  char         *value;
 
   if (!strncmp (key, "X-", 2))
     return TRUE;
@@ -1386,7 +1400,7 @@ validate_desktop_key (kf_validator *kf,
         locale != NULL) {
       print_fatal (kf, "file contains key \"%s\" in group \"%s\", "
                        "but \"%s\" is not defined as a locale string\n",
-                       locale_key, kf->main_group, key);
+                       locale_key, kf->current_group, key);
       return FALSE;
     }
 
@@ -1399,34 +1413,21 @@ validate_desktop_key (kf_validator *kf,
 
     if (!kf->no_deprecated_warnings && registered_desktop_keys[i].deprecated)
       print_warning (kf, "key \"%s\" in group \"%s\" is deprecated\n",
-                         locale_key, kf->main_group);
+                         locale_key, kf->current_group);
 
     if (registered_desktop_keys[i].kde_reserved && kf->kde_reserved_warnings)
       print_warning (kf, "key \"%s\" in group \"%s\" is a reserved key for "
                          "KDE\n",
-                         locale_key, kf->main_group);
+                         locale_key, kf->current_group);
 
-    value = g_key_file_get_value (kf->keyfile, kf->main_group,
-                                  locale_key, NULL);
-
-    /* this is not supposed to happen since we got the key from the list of
-     * existing keys */
-    g_assert (value != NULL);
-
-    if (!validate_for_type[j].validate (kf, key, locale, value)) {
-      g_free (value);
+    if (!validate_for_type[j].validate (kf, key, locale, value))
       return FALSE;
-    }
 
     if (registered_desktop_keys[i].handle_and_validate != NULL) {
       if (!registered_desktop_keys[i].handle_and_validate (kf, locale_key,
-                                                           value)) {
-        g_free (value);
+                                                           value))
         return FALSE;
-      }
     }
-
-    g_free (value);
 
     break;
   }
@@ -1434,7 +1435,7 @@ validate_desktop_key (kf_validator *kf,
   if (i == G_N_ELEMENTS (registered_desktop_keys)) {
     print_fatal (kf, "file contains key \"%s\" in group \"%s\", but "
                      "keys extending the format should start with "
-                     "\"X-\"\n", key, kf->main_group);
+                     "\"X-\"\n", key, kf->current_group);
     return FALSE;
   }
 
@@ -1445,53 +1446,74 @@ validate_desktop_key (kf_validator *kf,
  *   Checked.
  */
 static gboolean
-validate_keys_for_group (kf_validator *kf,
-                         const char   *group)
+validate_keys_for_current_group (kf_validator *kf)
 {
   gboolean     desktop_group;
   gboolean     retval;
-  int          i;
   char        *key;
   char        *locale;
-  char       **keys;
-  GHashTable  *hashtable;
+  GSList      *keys;
+  GSList      *sl;
 
   retval = TRUE;
 
-  desktop_group = (!strcmp (group, GROUP_DESKTOP_ENTRY) ||
-                   !strcmp (group, GROUP_KDE_DESKTOP_ENTRY));
+  desktop_group = (!strcmp (kf->current_group, GROUP_DESKTOP_ENTRY) ||
+                   !strcmp (kf->current_group, GROUP_KDE_DESKTOP_ENTRY));
 
-  keys = g_key_file_get_keys (kf->keyfile, group, NULL, NULL);
+  keys = g_slist_copy (g_hash_table_lookup (kf->groups, kf->current_group));
+  /* keys were prepended, so reverse the list (that's why we use a
+   * g_slist_copy() */
+  keys = g_slist_reverse (keys);
 
-  g_assert (keys != NULL);
+  kf->current_keys = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                            NULL, NULL);
 
-  hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+  /* we need two passes: some checks are looking if another key exists in the
+   * group */
+  for (sl = keys; sl != NULL; sl = sl->next) {
+    kf_keyvalue *keyvalue;
 
-  for (i = 0; keys[i] != NULL; i++) {
-    if (!key_extract_locale (keys[i], &key, &locale)) {
+    keyvalue = (kf_keyvalue *) sl->data;
+    g_hash_table_insert (kf->current_keys, keyvalue->key, GINT_TO_POINTER (1));
+  }
+
+  for (sl = keys; sl != NULL; sl = sl->next) {
+    kf_keyvalue *keyvalue;
+    gboolean     skip_desktop_check;
+    gpointer     hashvalue;
+
+    keyvalue = (kf_keyvalue *) sl->data;
+
+    skip_desktop_check = FALSE;
+
+    if (!key_extract_locale (keyvalue->key, &key, &locale)) {
         print_fatal (kf, "file contains key \"%s\" in group \"%s\", but "
                          "key names must contain only the characters "
                          "A-Za-z0-9- (they may have a \"[LOCALE]\" postfix)\n",
-                         keys[i], group);
+                         keyvalue->key, kf->current_group);
         retval = FALSE;
+        skip_desktop_check = TRUE;
 
-        key = g_strdup (keys[i]);
+        key = g_strdup (keyvalue->key);
     }
 
     g_assert (key != NULL);
 
-    if (g_hash_table_lookup (hashtable, keys[i])) {
+    hashvalue = g_hash_table_lookup (kf->current_keys, keyvalue->key);
+    if (GPOINTER_TO_INT (hashvalue) != 1) {
       print_fatal (kf, "file contains multiple keys named \"%s\" in "
-                       "group \"%s\"\n", keys[i], group);
+                       "group \"%s\"\n", keyvalue->key, kf->current_group);
       retval = FALSE;
+    } else {
+      g_hash_table_replace (kf->current_keys, keyvalue->key,
+                            GINT_TO_POINTER (2));
     }
 
-    if (desktop_group) {
-      if (!validate_desktop_key (kf, keys[i], key, locale))
+    if (desktop_group && !skip_desktop_check) {
+      if (!validate_desktop_key (kf, keyvalue->key,
+                                 key, locale, keyvalue->value))
         retval = FALSE;
     }
-
-    g_hash_table_insert (hashtable, keys[i], keys[i]);
 
     g_free (key);
     key = NULL;
@@ -1499,12 +1521,25 @@ validate_keys_for_group (kf_validator *kf,
     locale = NULL;
   }
 
-  g_hash_table_destroy (hashtable);
-  g_strfreev (keys);
+  g_hash_table_destroy (kf->current_keys);
+  kf->current_keys = NULL;
 
   return retval;
 }
 
+/* + Using [KDE Desktop Entry] instead of [Desktop Entry] as header is
+ *   deprecated.
+ *   Checked.
+ * + Group names may contain all ASCII characters except for [ and ] and
+ *   control characters.
+ *   Checked.
+ * + All groups extending the format should start with "X-".
+ *   Checked.
+ * + Accept "Desktop Action foobar" group if the value for the Action key
+ *   contains "foobar". (This is not in spec 1.0, but it was there before and
+ *   it wasn't deprecated)
+ *   Checked.
+ */
 static gboolean
 validate_group_name (kf_validator *kf,
                      const char   *group)
@@ -1514,7 +1549,7 @@ validate_group_name (kf_validator *kf,
 
   for (i = 0; group[i] != '\0'; i++) {
     c = group[i];
-    if (!g_ascii_isprint (c) || c == '[' || c == ']') {
+    if (g_ascii_iscntrl (c) || c == '[' || c == ']') {
       print_fatal (kf, "file contains group \"%s\", but group names "
                        "may contain all ASCII characters except for [ "
                        "and ] and control characters\n", group);
@@ -1571,70 +1606,31 @@ validate_group_name (kf_validator *kf,
   return FALSE;
 }
 
-/* + Only comments are accepted before the first group.
- *   FIXME: verify that GKeyFile handles this.
- * + Using [KDE Desktop Entry] instead of [Desktop Entry] as header is
- *   deprecated.
- *   Checked.
- * + The first group should be "Desktop Entry".
- *   Checked.
- * + Group names may contain all ASCII characters except for [ and ] and
- *   control characters.
- *   Checked.
- * + Multiple groups may not have the same name.
- *   FIXME: GKeyFile can't let us verify this.
- * + All groups extending the format should start with "X-".
- *   Checked.
- * + Accept "Desktop Action foobar" group if the value for the Action key
- *   contains "foobar". (This is not in spec 1.0, but it was there before and
- *   it wasn't deprecated)
- *   Checked.
- */
-static gboolean
-validate_groups_and_keys (kf_validator *kf)
-{
-  gboolean   retval;
-  int        i;
-  char      *group;
-  char     **groups;
-
-  retval = TRUE;
-
-  group = g_key_file_get_start_group (kf->keyfile);
-  if (!group ||
-      (strcmp (group, GROUP_DESKTOP_ENTRY) &&
-       strcmp (group, GROUP_KDE_DESKTOP_ENTRY)))
-    print_fatal (kf, "first group is not \"" GROUP_DESKTOP_ENTRY "\"\n");
-  g_free (group);
-
-  groups = g_key_file_get_groups (kf->keyfile, NULL);
-  i = 0;
-  for (i = 0; groups[i] != NULL; i++) {
-    group = groups[i];
-
-    if (!validate_group_name (kf, group))
-      retval = FALSE;
-
-    if (!validate_keys_for_group (kf, group))
-      retval = FALSE;
-  }
-
-  g_strfreev (groups);
-  return retval;
-}
-
 static gboolean
 validate_required_keys (kf_validator *kf)
 {
-  gboolean     retval;
-  unsigned int i;
+  gboolean      retval;
+  unsigned int  i;
+  GSList       *sl;
+  GSList       *keys;
+  GHashTable   *hashtable;
 
   retval = TRUE;
 
+  hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+  keys = g_hash_table_lookup (kf->groups, kf->main_group);
+
+  for (sl = keys; sl != NULL; sl = sl->next) {
+    kf_keyvalue *keyvalue;
+
+    keyvalue = (kf_keyvalue *) sl->data;
+    g_hash_table_insert (hashtable, keyvalue->key, keyvalue->key);
+  }
+
   for (i = 0; i < G_N_ELEMENTS (registered_desktop_keys); i++) {
     if (registered_desktop_keys[i].required) {
-      if (!g_key_file_has_key (kf->keyfile, kf->main_group,
-                               registered_desktop_keys[i].name, NULL)) {
+      if (!g_hash_table_lookup (hashtable,
+                                registered_desktop_keys[i].name)) {
         print_fatal (kf, "required key \"%s\" in group \"%s\" is not "
                          "present\n",
                          registered_desktop_keys[i].name, kf->main_group);
@@ -1642,6 +1638,8 @@ validate_required_keys (kf_validator *kf)
       }
     }
   }
+
+  g_hash_table_destroy (hashtable);
 
   return retval;
 }
@@ -1821,33 +1819,338 @@ validate_filename (kf_validator *kf)
   return FALSE;
 }
 
+/* + Lines beginning with a # and blank lines are considered comments.
+ *   Checked.
+ */
+static gboolean
+validate_line_is_comment (kf_validator *kf,
+                          const char   *line)
+{
+  return (*line == '#' || *line == '\0');
+}
+
+/* + A group header with name groupname is a line in the format: [groupname]
+ *   Checked.
+ * + Group names may contain all ASCII characters except for [ and ] and
+ *   control characters.
+ *   This is done in validate_group_name().
+ */
+static gboolean
+validate_line_looks_like_group (kf_validator  *kf,
+                                const char    *line,
+                                char         **group)
+{
+  char     *chomped;
+  gboolean  result;
+
+  chomped = g_strdup (line);
+  g_strchomp (chomped);
+
+  result = (*chomped == '[' && chomped[strlen (chomped) - 1] == ']');
+
+  if (result && strcmp (chomped, line))
+    print_fatal (kf, "line \"%s\" ends with a space, but looks like a group. "
+                     "The validation will continue, with the trailing spaces "
+                     "ignored.\n", line);
+
+  *group = g_strndup (chomped + 1, strlen (chomped) - 2);
+
+  g_free (chomped);
+
+  return result;
+}
+
+/* + Space before and after the equals sign should be ignored; the = sign is
+ *   the actual delimiter.
+ *   Checked.
+ */
+static gboolean
+validate_line_looks_like_entry (kf_validator  *kf,
+                                const char    *line,
+                                char         **key,
+                                char         **value)
+{
+  char *p;
+
+  p = g_utf8_strchr (line, -1, '=');
+
+  if (!p)
+    return FALSE;
+
+  /* key must be non-empty */
+  if (*p == line[0])
+    return FALSE;
+
+  if (key) {
+    *key = g_strndup (line, p - line);
+    g_strchomp (*key);
+  }
+  if (value) {
+    *value = g_strdup (p + 1);
+    g_strchug (*value);
+  }
+
+  return TRUE;
+}
+
+/* + Only comments are accepted before the first group.
+ *   Checked.
+ * + The first group should be "Desktop Entry".
+ *   Checked.
+ * + Multiple groups may not have the same name.
+ *   Checked.
+ */
+static void
+validate_parse_line (kf_validator *kf)
+{
+  char *line;
+  int   len;
+  char *group;
+  char *key;
+  char *value;
+
+  line = kf->parse_buffer->str;
+  len  = kf->parse_buffer->len;
+
+  if (!kf->utf8_warning && !g_utf8_validate (line, len, NULL)) {
+    print_warning (kf, "file contains lines that are not UTF-8 encoded. There "
+                       "is no guarantee the validator will correctly work.\n");
+    kf->utf8_warning = TRUE;
+  }
+
+  if (g_ascii_isspace (*line)) {
+    print_fatal (kf, "line \"%s\" starts with a space. Comment, group and "
+                     "key-value lines should not start with a space. The "
+                     "validation will continue, with the leading spaces "
+                     "ignored.\n", line);
+    while (g_ascii_isspace (*line))
+      line++;
+  }
+
+  if (validate_line_is_comment (kf, line))
+    return;
+
+  if (validate_line_looks_like_group (kf, line, &group)) {
+    if (!kf->current_group &&
+        (strcmp (group, GROUP_DESKTOP_ENTRY) &&
+         strcmp (group, GROUP_KDE_DESKTOP_ENTRY)))
+      print_fatal (kf, "first group is not \"" GROUP_DESKTOP_ENTRY "\"\n");
+
+    if (kf->current_group && strcmp (kf->current_group, group))
+      validate_keys_for_current_group (kf);
+
+    if (g_hash_table_lookup_extended (kf->groups, group, NULL, NULL)) {
+      print_fatal (kf, "file contains multiple groups named \"%s\", but "
+                       "multiple groups may not have the same name\n", group);
+    } else {
+      validate_group_name (kf, group);
+      g_hash_table_insert (kf->groups, g_strdup (group), NULL);
+    }
+
+    if (kf->current_group)
+      g_free (kf->current_group);
+    kf->current_group = group;
+
+    return;
+  }
+
+  if (validate_line_looks_like_entry (kf, line, &key, &value)) {
+    if (kf->current_group) {
+      GSList      *keys;
+      kf_keyvalue *keyvalue;
+
+      keyvalue = g_slice_new (kf_keyvalue);
+      keyvalue->key = key;
+      keyvalue->value = value;
+
+      keys = g_hash_table_lookup (kf->groups, kf->current_group);
+      keys = g_slist_prepend (keys, keyvalue);
+      g_hash_table_replace (kf->groups, g_strdup (kf->current_group), keys);
+    } else {
+      print_fatal (kf, "file contains entry \"%s\" before the first group, "
+                       "but only comments are accepted before the first "
+                       "group\n", line);
+    }
+
+    return;
+  }
+
+  print_fatal (kf, "file contains line \"%s\", which is not a comment, "
+                   "a group or an entry\n", line);
+}
+
+/* + Desktop entry files are encoded as lines of 8-bit characters separated by
+ *   LF characters.
+ *   Checked.
+ */
+static void
+validate_parse_data (kf_validator *kf,
+                     char         *data,
+                     int           length)
+{
+  int i;
+
+  for (i = 0; i < length; i++) {
+    if (data[i] == '\n') {
+      if (i > 0 && data[i - 1] == '\r') {
+        g_string_erase (kf->parse_buffer, kf->parse_buffer->len - 1, 1);
+
+        if (!kf->cr_error) {
+          print_fatal (kf, "file contains at least one line ending with a "
+                           "carriage return before the line feed, while lines "
+                           "should only be separated by a line feed "
+                           "character. First such line is: \"%s\"\n",
+                           kf->parse_buffer->str);
+          kf->cr_error = TRUE;
+        }
+      }
+          
+      if (kf->parse_buffer->len > 0) {
+        validate_parse_line (kf);
+        g_string_erase (kf->parse_buffer, 0, -1);
+      }
+
+    } else if (data[i] == '\r') {
+        if (!kf->cr_error) {
+          print_fatal (kf, "file contains at least one line ending with a "
+                           "carriage return, while lines should only be "
+                           "separated by a line feed character. First such "
+                           "line is: \"%s\"\n", kf->parse_buffer->str);
+          kf->cr_error = TRUE;
+        }
+
+        data[i] = '\n';
+        i--;
+    } else
+      g_string_append_c (kf->parse_buffer, data[i]);
+  }
+}
+
+static void
+validate_flush_parse_buffer (kf_validator *kf)
+{
+  if (kf->parse_buffer->len > 0) {
+      validate_parse_line (kf);
+      g_string_erase (kf->parse_buffer, 0, -1);
+  }
+
+  if (kf->current_group)
+    validate_keys_for_current_group (kf);
+}
+
+#define VALIDATE_READ_SIZE 4096
+static gboolean
+validate_parse_from_fd (kf_validator *kf,
+                        int           fd)
+{
+  int         bytes_read;
+  struct stat stat_buf;
+  char        read_buf[VALIDATE_READ_SIZE];
+
+  if (fstat (fd, &stat_buf) < 0) {
+    print_fatal (kf, "while reading the file: %s\n", g_strerror (errno));
+    return FALSE;
+  }
+
+  if (!S_ISREG (stat_buf.st_mode)) {
+    print_fatal (kf, "file is not a regular file\n");
+    return FALSE;
+  }
+
+  if (stat_buf.st_size == 0) {
+    print_fatal (kf, "file is empty\n");
+    return FALSE;
+  }
+
+  bytes_read = 0;
+  while (1) {
+    bytes_read = read (fd, read_buf, VALIDATE_READ_SIZE);
+
+    if (bytes_read == 0)  /* End of File */
+      break;
+
+    if (bytes_read < 0) {
+      if (errno == EINTR || errno == EAGAIN)
+        continue;
+
+      /* let's validate what we already have */
+      validate_flush_parse_buffer (kf);
+
+      print_fatal (kf, "while reading the file: %s\n", g_strerror (errno));
+      return FALSE;
+    }
+
+    validate_parse_data (kf, read_buf, bytes_read);
+  }
+
+  validate_flush_parse_buffer (kf);
+
+  return TRUE;
+}
+
+static gboolean
+validate_load_and_parse (kf_validator *kf)
+{
+  int      fd;
+  gboolean ret;
+
+  fd = g_open (kf->filename, O_RDONLY, 0);
+
+  if (fd < 0) {
+    print_fatal (kf, "while reading the file: %s\n", g_strerror (errno));
+    return FALSE;
+  }
+
+  ret = validate_parse_from_fd (kf, fd);
+
+  close (fd);
+
+  return ret;
+}
+
+static gboolean
+groups_hashtable_free (gpointer key,
+                       gpointer value,
+                       gpointer data)
+{
+  GSList *list;
+  GSList *sl;
+
+  list = (GSList *) value;
+  for (sl = list; sl != NULL; sl = sl->next) {
+    kf_keyvalue *keyvalue;
+
+    keyvalue = (kf_keyvalue *) sl->data;
+    g_free (keyvalue->key);
+    g_free (keyvalue->value);
+    g_slice_free (kf_keyvalue, keyvalue);
+  }
+
+  g_slist_free (list);
+
+  return TRUE;
+}
+
 gboolean
 desktop_file_validate (const char *filename,
                        gboolean    warn_kde,
                        gboolean    no_warn_deprecated)
 {
-  GError       *error;
-  kf_validator  kf;
+  kf_validator kf;
 
   /* just a consistency check */
   g_assert (G_N_ELEMENTS (registered_types) == LAST_TYPE - 1);
 
   kf.filename               = filename;
-  kf.keyfile                = g_key_file_new ();
+  kf.parse_buffer           = g_string_new ("");
+  kf.utf8_warning           = FALSE;
+  kf.cr_error               = FALSE;
+  kf.current_group          = NULL;
+  kf.groups                 = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                     g_free, NULL);
+  kf.current_keys           = NULL;
   kf.kde_reserved_warnings  = warn_kde;
   kf.no_deprecated_warnings = no_warn_deprecated;
-
-  error = NULL;
-  if (!g_key_file_load_from_file (kf.keyfile, filename,
-			  	  G_KEY_FILE_KEEP_COMMENTS|
-                                  G_KEY_FILE_KEEP_TRANSLATIONS,
-				  &error)) {
-    print_fatal (&kf, "parse error: %s\n", error->message);
-    g_error_free (error);
-    g_key_file_free (kf.keyfile);
-
-    return FALSE;
-  }
 
   kf.main_group       = NULL;
   kf.type             = INVALID_TYPE;
@@ -1863,7 +2166,7 @@ desktop_file_validate (const char *filename,
                                                NULL, g_free);
   kf.fatal_error      = FALSE;
 
-  validate_groups_and_keys (&kf);
+  validate_load_and_parse (&kf);
   //FIXME: this does not work well if there are both a Desktop Entry and a KDE
   //Desktop Entry groups since only the last one will be validated for this.
   if (kf.main_group) {
@@ -1885,23 +2188,30 @@ desktop_file_validate (const char *filename,
   g_hash_table_destroy (kf.action_values);
   g_hash_table_destroy (kf.action_groups);
 
-  g_key_file_free (kf.keyfile);
+  g_assert (kf.current_keys == NULL);
+  /* we can't add an automatic destroy handler for the value because we replace
+   * it when adding keys, and this means we'd have to copy the value each time
+   * we replace it */
+  g_hash_table_foreach_remove (kf.groups, groups_hashtable_free, NULL);
+  g_hash_table_destroy (kf.groups);
+  g_free (kf.current_group);
+  g_string_free (kf.parse_buffer, TRUE);
 
   return (!kf.fatal_error);
 }
 
 /* return FALSE if we were unable to fix the file */
 gboolean
-desktop_file_fixup (GKeyFile   *kf,
+desktop_file_fixup (GKeyFile   *keyfile,
                     const char *filename)
 {
   char         *value;
   unsigned int  i;
   
-  if (g_key_file_has_group (kf, GROUP_KDE_DESKTOP_ENTRY)) {
+  if (g_key_file_has_group (keyfile, GROUP_KDE_DESKTOP_ENTRY)) {
     g_printerr ("%s: renaming deprecated \"%s\" group to \"%s\"\n",
                 filename, GROUP_KDE_DESKTOP_ENTRY, GROUP_DESKTOP_ENTRY);
-    dfu_key_file_rename_group (kf,
+    dfu_key_file_rename_group (keyfile,
                                GROUP_KDE_DESKTOP_ENTRY, GROUP_DESKTOP_ENTRY);
   }
   
@@ -1911,7 +2221,7 @@ desktop_file_fixup (GKeyFile   *kf,
         registered_desktop_keys[i].type != DESKTOP_REGEXP_LIST_TYPE)
       continue;
 
-    value = g_key_file_get_value (kf, GROUP_DESKTOP_ENTRY,
+    value = g_key_file_get_value (keyfile, GROUP_DESKTOP_ENTRY,
                                   registered_desktop_keys[i].name, NULL);
     if (value) {
       int len;
@@ -1928,7 +2238,7 @@ desktop_file_fixup (GKeyFile   *kf,
                       filename, registered_desktop_keys[i].name);
           
           str = g_strconcat (value, ";", NULL);
-          g_key_file_set_value (kf, GROUP_DESKTOP_ENTRY,
+          g_key_file_set_value (keyfile, GROUP_DESKTOP_ENTRY,
                                 registered_desktop_keys[i].name, str);
           g_free (str);
       }

@@ -1,5 +1,13 @@
 2007-06-04  Vincent Untz  <vuntz@gnome.org>
 
+	* src/install.c: (process_one_file): check if we have a vendor name
+	before using it
+	(main): fix bug when no vendor name or target dir is specified (we'd
+	use an empty string in this case), don't require vendor name
+	Fix bug #9988
+
+2007-06-04  Vincent Untz  <vuntz@gnome.org>
+
 	Don't use GKeyFile in the validator, so we really control everything.
 
 	* src/validate.c: remove some FIXME/TODO

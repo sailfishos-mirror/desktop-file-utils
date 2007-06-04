@@ -97,8 +97,6 @@ process_one_file (const char *filename,
   GError *rebuild_error;
   GSList *tmp;
   
-  g_assert (vendor_name);
-
   kf = g_key_file_new ();
   if (!g_key_file_load_from_file (kf, filename,
 			          G_KEY_FILE_KEEP_COMMENTS|
@@ -201,7 +199,7 @@ process_one_file (const char *filename,
   dirname = g_path_get_dirname (filename);
   basename = g_path_get_basename (filename);
   
-  if (!g_str_has_prefix (basename, vendor_name))
+  if (vendor_name && !g_str_has_prefix (basename, vendor_name))
     {
       char *new_base;
       new_base = g_strconcat (vendor_name, "-", basename, NULL);
@@ -578,22 +576,16 @@ main (int argc, char **argv)
 	  return 1;
   }
 
-  if (vendor_name == NULL)
+  if (vendor_name == NULL && g_getenv ("DESKTOP_FILE_VENDOR"))
     vendor_name = g_strdup (g_getenv ("DESKTOP_FILE_VENDOR"));
   
-  if (vendor_name == NULL)
-    {
-      g_printerr (_("Must specify the vendor namespace for these files with --vendor\n"));
-      return 1;
-    }
-
   if (copy_generic_name_to_name && copy_name_to_generic_name)
     {
       g_printerr (_("Specifying both --copy-name-to-generic-name and --copy-generic-name-to-name at once doesn't make much sense.\n"));
       return 1;
     }
   
-  if (target_dir == NULL)
+  if (target_dir == NULL && g_getenv ("DESKTOP_FILE_INSTALL_DIR"))
     target_dir = g_strdup (g_getenv ("DESKTOP_FILE_INSTALL_DIR"));
 
   if (target_dir == NULL)

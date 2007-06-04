@@ -49,7 +49,7 @@ main (int argc, char *argv[])
                                          ".\n"
                                          "For information about this "
                                          "specification, see:\n\t"
-                                         "http://freedesktop.org/wiki/Standards/desktop-entry-spec");
+                                         "http://freedesktop.org/wiki/Specifications/desktop-entry-spec");
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   error = NULL;

@@ -1,5 +1,9 @@
 2007-06-05  Vincent Untz  <vuntz@gnome.org>
 
+	* NEWS: version 0.13
+
+2007-06-05  Vincent Untz  <vuntz@gnome.org>
+
 	* AUTHORS: add myself
 	* src/validator.c: (main): update URL of the desktop entry spec
 

@@ -1,4 +1,17 @@
 ============
+Version 0.13
+============
+
+  o rewrite validator, and update it for desktop entry specification 1.0.
+    The validator should be stricter and report more useful messages.
+    (Vincent)
+  o add --warn-kde and --no-warn-deprecated command line options to
+    desktop-file-validate (Vincent)
+  o port desktop-file-install to GKeyFile (Vincent)
+  o don't require --vendor for desktop-file-install (Vincent)
+  o some general module cleanup (Vincent)
+
+============
 Version 0.12
 ============
 

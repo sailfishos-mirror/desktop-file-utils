@@ -1,8 +1,8 @@
 ;;; desktop-entry-mode.el --- freedesktop.org desktop entry editing
 
-;; Copyright (C) 2003-2004, 2006, Ville Skytt‰, <scop at xemacs.org>
+;; Copyright (C) 2003-2004, 2006-2007 Ville Skytt√§, <scop at xemacs.org>
 
-;; Author:   Ville Skytt‰, <scop at xemacs.org>
+;; Author:   Ville Skytt√§, <scop at xemacs.org>
 ;; Keywords: unix, desktop entry
 
 ;; This file is part of XEmacs.
@@ -45,11 +45,14 @@
 ;; For more information about desktop entry files, see
 ;;   <http://www.freedesktop.org/Standards/desktop-entry-spec>
 ;;
-;; This version is up to date with version 0.9.8 of the specification.
+;; This version is up to date with version 1.0 of the specification.
 
 ;;; Code:
 
-(defconst desktop-entry-mode-version "0.98 (spec 0.9.8)"
+(eval-when-compile
+  (require 'regexp-opt))
+
+(defconst desktop-entry-mode-version "1.0 (spec 1.0)"
   "Version of `desktop-entry-mode'.")
 
 (defgroup desktop-entry nil
@@ -74,6 +77,19 @@
   "*Face for highlighting desktop entry group headers."
   :group 'desktop-entry-faces)
 
+(defface desktop-entry-deprecated-keyword-face
+  '((((class color)) (:background "yellow" :foreground "black" :strikethru t))
+    )
+  "*Face for highlighting deprecated desktop entry keys."
+  :group 'desktop-entry-faces)
+
+(defface desktop-entry-unknown-keyword-face
+  '((((class color)) (:foreground "red3" :underline t))
+    (t (:underline t))
+    )
+  "*Face for highlighting unknown desktop entry keys."
+  :group 'desktop-entry-faces)
+
 (defface desktop-entry-value-face
   '((((class color) (background light)) (:foreground "darkgreen"))
     (((class color) (background dark)) (:foreground "lightgreen"))
@@ -90,7 +106,6 @@
 
 (defconst desktop-entry-keywords
   (eval-when-compile
-    (require 'regexp-opt)
     (concat
      "\\(?:"
      (regexp-opt
@@ -125,7 +140,16 @@
         "MountPoint"
         "ReadOnly"
         "UnmountIcon"
-        ;; Deprecated
+        ) 'words)
+     "\\|X-[A-Za-z0-9-]+\\)"))
+  "Expression for matching desktop entry keys.")
+
+(defconst desktop-entry-deprecated-keywords
+  (eval-when-compile
+    (concat
+     "\\(\\<Type\\s-*=\\s-*MimeType\\>\\|"
+     (regexp-opt
+      '(
         "Patterns"
         "DefaultApp"
         "Encoding"
@@ -140,8 +164,8 @@
         "SortOrder"
         "FilePattern"
         ) 'words)
-     "\\|X-[A-Za-z0-9-]+\\)"))
-  "Expression for matching desktop entry keys.")
+     "\\)"))
+  "Expression for matching deprecated desktop entry keys.")
 
 (defconst desktop-entry-group-header-re
   "^\\[\\(X-[^\][]+\\|\\(?:Desktop \\(?:Entry\\|Action [a-zA-Z]+\\)\\)\\)\\]"
@@ -150,7 +174,10 @@
 (defconst desktop-entry-font-lock-keywords
   (list
    (cons "^\\s-*#.*$" '(0 'font-lock-comment-face))
+   (cons (concat "^" desktop-entry-deprecated-keywords)
+         '(0 'desktop-entry-deprecated-keyword-face))
    (cons (concat "^" desktop-entry-keywords) '(0 'font-lock-keyword-face))
+   (cons "^[A-Za-z0-9-]+" '(0 'desktop-entry-unknown-keyword-face))
    (cons desktop-entry-group-header-re '(1 'desktop-entry-group-header-face))
    (cons "^[A-Za-z0-9-]+?\\s-*=\\s-*\\(.*\\)"
          '(1 'desktop-entry-value-face))

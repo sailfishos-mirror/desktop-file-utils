@@ -1,3 +1,9 @@
+2007-07-08  Vincent Untz  <vuntz@gnome.org>
+
+	* src/install.c: (process_one_file): pass the GError to
+	g_key_file_load_from_file(), so we know when we can't load a file and
+	print an error about this. Fix bug #11500.
+
 2007-06-30  Vincent Untz  <vuntz@gnome.org>
 
 	* misc/desktop-entry-mode.el: updated to desktop entry spec 1.0.

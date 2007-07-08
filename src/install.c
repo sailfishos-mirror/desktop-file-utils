@@ -101,7 +101,7 @@ process_one_file (const char *filename,
   if (!g_key_file_load_from_file (kf, filename,
 			          G_KEY_FILE_KEEP_COMMENTS|
 				  G_KEY_FILE_KEEP_TRANSLATIONS,
-				  NULL)) {
+				  err)) {
     g_key_file_free (kf);
     return;
   }

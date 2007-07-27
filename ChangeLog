@@ -1,3 +1,10 @@
+2007-07-27  Vincent Untz  <vuntz@gnome.org>
+
+	* src/validate.c: (handle_icon_key): new, checks that the value is
+	either an absolute path to a file, or that the value looks like an
+	icon name without an extension (png, xpm or svg). Rejects relative
+	pathes too.
+
 2007-07-08  Vincent Untz  <vuntz@gnome.org>
 
 	* src/install.c: (process_one_file): pass the GError to

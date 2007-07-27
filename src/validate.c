@@ -167,6 +167,10 @@ handle_comment_key (kf_validator *kf,
                     const char   *locale_key,
                     const char   *value);
 static gboolean
+handle_icon_key (kf_validator *kf,
+                 const char   *locale_key,
+                 const char   *value);
+static gboolean
 handle_show_in_key (kf_validator *kf,
                     const char   *locale_key,
                     const char   *value);
@@ -267,7 +271,7 @@ struct {
   { DESKTOP_LOCALESTRING_TYPE, "GenericName",       FALSE, FALSE, FALSE, NULL },
   { DESKTOP_BOOLEAN_TYPE,      "NoDisplay",         FALSE, FALSE, FALSE, NULL },
   { DESKTOP_LOCALESTRING_TYPE, "Comment",           FALSE, FALSE, FALSE, handle_comment_key },
-  { DESKTOP_LOCALESTRING_TYPE, "Icon",              FALSE, FALSE, FALSE, NULL },
+  { DESKTOP_LOCALESTRING_TYPE, "Icon",              FALSE, FALSE, FALSE, handle_icon_key },
   { DESKTOP_BOOLEAN_TYPE,      "Hidden",            FALSE, FALSE, FALSE, NULL },
   { DESKTOP_STRING_LIST_TYPE,  "OnlyShowIn",        FALSE, FALSE, FALSE, handle_show_in_key },
   { DESKTOP_STRING_LIST_TYPE,  "NotShowIn",         FALSE, FALSE, FALSE, handle_show_in_key },
@@ -695,6 +699,52 @@ handle_comment_key (kf_validator *kf,
                     const char   *locale_key,
                     const char   *value)
 {
+  return TRUE;
+}
+
+/* + If the name is an absolute path, the given file will be used.
+ *   Checked.
+ * + If the name is not an absolute path, the algorithm described in the Icon
+ *   Theme Specification will be used to locate the icon.
+ *   Checked.
+ *   FIXME: add clarification to desktop entry spec that the name doesn't
+ *   contain an extension
+ */
+static gboolean
+handle_icon_key (kf_validator *kf,
+                 const char   *locale_key,
+                 const char   *value)
+{
+  if (g_path_is_absolute (value)) {
+    if (g_str_has_suffix (value, "/")) {
+      print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" is an "
+                       "absolute path to a directory, instead of being an "
+                       "absolute path to an icon or an icon name\n",
+                       value, locale_key, kf->current_group);
+      return FALSE;
+    } else
+      return TRUE;
+  }
+
+  if (strchr (value, '/')) {
+    print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" looks like "
+                     "a relative path, instead of being an absolute path to "
+                     "an icon or an icon name\n",
+                     value, locale_key, kf->current_group);
+    return FALSE;
+  }
+
+  if (g_str_has_suffix (value, ".png") ||
+      g_str_has_suffix (value, ".xpm") ||
+      g_str_has_suffix (value, ".svg")) {
+    print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" is an icon "
+                     "name with an extension, but there should be no extension "
+                     "as described in the Icon Theme Specification if the "
+                     "value is not an absolute path\n",
+                     value, locale_key, kf->current_group);
+    return FALSE;
+  }
+
   return TRUE;
 }
 

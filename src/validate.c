@@ -755,6 +755,8 @@ handle_icon_key (kf_validator *kf,
  *   Checked.
  *   FIXME: this is not perfect because it could fail if a new value with
  *   a semicolon is registered.
+ * + All values extending the format should start with "X-".
+ *   Checked.
  * + FIXME: is this okay to have only ";"? (gnome-theme-installer.desktop does)
  */
 static gboolean
@@ -796,6 +798,9 @@ handle_show_in_key (kf_validator *kf,
 
     g_hash_table_insert (hashtable, show[i], show[i]);
 
+    if (!strncmp (show[i], "X-", 2))
+      continue;
+
     for (j = 0; j < G_N_ELEMENTS (show_in_registered); j++) {
       if (!strcmp (show[i], show_in_registered[j]))
         break;
@@ -803,7 +808,8 @@ handle_show_in_key (kf_validator *kf,
 
     if (j == G_N_ELEMENTS (show_in_registered)) {
       print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                       "contains an unregistered value \"%s\"\n",
+                       "contains an unregistered value \"%s\"; values "
+		       "extending the format should start with \"X-\"\n",
                        value, locale_key, kf->current_group, show[i]);
       retval = FALSE;
     }
@@ -1213,7 +1219,8 @@ handle_categories_key (kf_validator *kf,
     }
 
     print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                     "contains an unregistered value \"%s\"\n",
+                     "contains an unregistered value \"%s\"; values "
+		     "extending the format should start with \"X-\"\n",
                      value, locale_key, kf->current_group, categories[i]);
     retval = FALSE;
   }

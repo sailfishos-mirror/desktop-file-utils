@@ -1,3 +1,13 @@
+2007-08-18  Vincent Untz  <vuntz@gnome.org>
+
+	Handle X-Foo in environments.
+	Based on patch by Stanislav Brabec <sbrabec@suse.cz>.
+	Fix bug #11565.
+
+	* src/validate.c: (handle_show_in_key): handle "X-Foo" and change the
+	error message to mention X-
+	(handle_categories_key): change a bit the error message to mention X-
+
 2007-07-27  Vincent Untz  <vuntz@gnome.org>
 
 	* src/validate.c: (handle_icon_key): new, checks that the value is

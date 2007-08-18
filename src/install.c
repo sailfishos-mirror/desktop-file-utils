@@ -429,8 +429,10 @@ parse_options_callback (const gchar  *option_name,
                         gpointer      data,
                         GError      **error)
 {
-  /* skip "--" */
-  option_name += 2;
+  /* skip "-" or "--" */
+  option_name++;
+  if (*option_name == '-')
+    option_name++;
 
   if (strcmp (OPTION_VENDOR, option_name) == 0)
     {
@@ -480,7 +482,8 @@ parse_options_callback (const gchar  *option_name,
                                               g_strdup (value));
     }
 
-  else if (strcmp (OPTION_MODE, option_name) == 0)
+  else if (strcmp (OPTION_MODE, option_name) == 0 ||
+           strcmp ("m", option_name) == 0)
     {
       unsigned long ul;
       char *end;

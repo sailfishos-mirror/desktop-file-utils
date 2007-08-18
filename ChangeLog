@@ -1,5 +1,11 @@
 2007-08-18  Vincent Untz  <vuntz@gnome.org>
 
+	* src/install.c: (parse_options_callback): handle -m too.
+	Fix bug #12018.
+	Patch by Matthias Clasen <mclasen@redhat.com>
+
+2007-08-18  Vincent Untz  <vuntz@gnome.org>
+
 	Handle X-Foo in environments.
 	Based on patch by Stanislav Brabec <sbrabec@suse.cz>.
 	Fix bug #11565.

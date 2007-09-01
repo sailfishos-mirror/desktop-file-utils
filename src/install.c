@@ -191,6 +191,16 @@ process_one_file (const char *filename,
   
   g_key_file_free (kf);
 
+  /* Load and validate the file we just wrote */
+  if (!desktop_file_validate (new_filename, FALSE, TRUE))
+    {
+      g_set_error (err, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_PARSE,
+                   _("Failed to validate the created desktop file"));
+      g_unlink (new_filename);
+      g_free (new_filename);
+      return;
+    }
+
   if (g_chmod (new_filename, permissions) < 0)
     {
       g_set_error (err, G_FILE_ERROR,
@@ -209,15 +219,6 @@ process_one_file (const char *filename,
       if (g_unlink (filename) < 0)
         g_printerr (_("Error removing original file \"%s\": %s\n"),
                     filename, g_strerror (errno));
-    }
-
-  /* Load and validate the file we just wrote */
-  if (!desktop_file_validate (new_filename, FALSE, TRUE))
-    {
-      g_free (new_filename);
-      g_set_error (err, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_PARSE,
-                   _("Failed to validate the created desktop file"));
-      return;
     }
 
   if (rebuild_mime_info_cache)

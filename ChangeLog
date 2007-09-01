@@ -1,5 +1,12 @@
 2007-09-01  Vincent Untz  <vuntz@gnome.org>
 
+	* src/install.c: (process_one_file): validate the desktop file after
+	modifying its content, but before doing anything else, so that we
+	don't unlink the original file if the created one is not valid.
+	Also, unlink the created file if it's not valid.
+
+2007-09-01  Vincent Untz  <vuntz@gnome.org>
+
 	Don't exit(), but let the main() function do it with a proper error
 	message.
 

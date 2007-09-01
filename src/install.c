@@ -46,13 +46,13 @@ files_are_the_same (const char *first,
   if (stat (first, &first_sb) < 0)
     {
       g_printerr (_("Could not stat \"%s\": %s\n"), first, g_strerror (errno));
-      exit (1);
+      return TRUE;
     }
 
   if (stat (second, &second_sb) < 0)
     {
       g_printerr (_("Could not stat \"%s\": %s\n"), first, g_strerror (errno));
-      exit (1);
+      return TRUE;
     }
   
   return ((first_sb.st_dev == second_sb.st_dev) &&
@@ -107,7 +107,9 @@ process_one_file (const char *filename,
 
   if (!desktop_file_fixup (kf, filename)) {
     g_key_file_free (kf);
-    exit (1);
+    g_set_error (err, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_PARSE,
+                 _("Failed to fix the content of the desktop file"));
+    return;
   }
 
   if (copy_name_to_generic_name)
@@ -212,9 +214,10 @@ process_one_file (const char *filename,
   /* Load and validate the file we just wrote */
   if (!desktop_file_validate (new_filename, FALSE, TRUE))
     {
-      g_printerr (_("desktop-file-install created an invalid desktop file!\n"));
       g_free (new_filename);
-      exit (1);
+      g_set_error (err, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_PARSE,
+                   _("Failed to validate the created desktop file"));
+      return;
     }
 
   if (rebuild_mime_info_cache)

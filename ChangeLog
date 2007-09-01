@@ -1,5 +1,15 @@
 2007-09-01  Vincent Untz  <vuntz@gnome.org>
 
+	Don't exit(), but let the main() function do it with a proper error
+	message.
+
+	* src/install.c: (files_are_the_same): it's useless to exit() here if
+	we can't stat() the files. Just continue the operations without
+	removing the original file, that's the best option.
+	(process_one_file): don't exit(), but set the GError
+
+2007-09-01  Vincent Untz  <vuntz@gnome.org>
+
 	* configure.in: require glib 2.8.0
 	* src/install.c: (mkdir_and_parents): kill
 	(main): directly use g_mkdir_with_parents()

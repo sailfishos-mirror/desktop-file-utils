@@ -126,45 +126,30 @@ process_one_file (const char *filename,
   g_key_file_set_string (kf, GROUP_DESKTOP_ENTRY,
                          "X-Desktop-File-Install-Version", VERSION);
 
-  /* Add categories */
-  tmp = added_categories;
-  while (tmp != NULL)
-    {
-      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,
-                               "Categories", tmp->data);
-
-      tmp = tmp->next;
+#define PROCESS_LIST(key, added, removed)                       \
+  /* Add to the list */                                         \
+  tmp = added;                                                  \
+  while (tmp != NULL)                                           \
+    {                                                           \
+      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,         \
+                               key, tmp->data);                 \
+      tmp = tmp->next;                                          \
+    }                                                           \
+                                                                \
+  /* Remove from the list */                                    \
+  tmp = removed;                                                \
+  while (tmp != NULL)                                           \
+    {                                                           \
+      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,        \
+                                key, tmp->data);                \
+      tmp = tmp->next;                                          \
     }
 
-  /* Remove categories */
-  tmp = removed_categories;
-  while (tmp != NULL)
-    {
-      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
-                                "Categories", tmp->data);
+  /* Add/remove categories */
+  PROCESS_LIST ("Categories", added_categories, removed_categories);
 
-      tmp = tmp->next;
-    }
-
-  /* Add onlyshowin */
-  tmp = added_only_show_in;
-  while (tmp != NULL)
-    {
-      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,
-                               "OnlyShowIn", tmp->data);
-
-      tmp = tmp->next;
-    }
-
-  /* Remove onlyshowin */
-  tmp = removed_only_show_in;
-  while (tmp != NULL)
-    {
-      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
-                                "OnlyShowIn", tmp->data);
-
-      tmp = tmp->next;
-    }
+  /* Add/remove onlyshowin */
+  PROCESS_LIST ("OnlyShowIn", added_only_show_in, removed_only_show_in);
 
   /* Remove keys */
   tmp = removed_keys;
@@ -175,25 +160,8 @@ process_one_file (const char *filename,
       tmp = tmp->next;
     }
 
-  /* Add mime-types */
-  tmp = added_mime_types;
-  while (tmp != NULL)
-    {
-      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,
-                               "MimeType", tmp->data);
-
-      tmp = tmp->next;
-    }
-
-  /* Remove mime-types */
-  tmp = removed_mime_types;
-  while (tmp != NULL)
-    {
-      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
-                                "MimeType", tmp->data);
-
-      tmp = tmp->next;
-    }
+  /* Add/remove mime-types */
+  PROCESS_LIST ("MimeType", added_mime_types, removed_mime_types);
 
 
   dirname = g_path_get_dirname (filename);
@@ -429,6 +397,9 @@ parse_options_callback (const gchar  *option_name,
                         gpointer      data,
                         GError      **error)
 {
+  char **list;
+  int    i;
+
   /* skip "-" or "--" */
   option_name++;
   if (*option_name == '-')
@@ -458,28 +429,36 @@ parse_options_callback (const gchar  *option_name,
       target_dir = g_strdup (value);
     }
 
+#define PARSE_OPTION_LIST(glist)                                        \
+  do {                                                                  \
+    list = g_strsplit (value, ";", 0);                                  \
+    for (i = 0; list[i]; i++)                                           \
+      {                                                                 \
+        if (*list[i] == '\0')                                           \
+          continue;                                                     \
+                                                                        \
+        glist = g_slist_prepend (glist, g_strdup (list[i]));            \
+      }                                                                 \
+  } while (0)
+
   else if (strcmp (OPTION_ADD_CATEGORY, option_name) == 0)
     {
-      added_categories = g_slist_prepend (added_categories,
-                                          g_strdup (value));
+      PARSE_OPTION_LIST (added_categories);
     }
 
   else if (strcmp (OPTION_REMOVE_CATEGORY, option_name) == 0)
     {
-      removed_categories = g_slist_prepend (removed_categories,
-                                            g_strdup (value));
+      PARSE_OPTION_LIST (removed_categories);
     }
 
   else if (strcmp (OPTION_ADD_ONLY_SHOW_IN, option_name) == 0)
     {
-      added_only_show_in = g_slist_prepend (added_only_show_in,
-                                            g_strdup (value));
+      PARSE_OPTION_LIST (added_only_show_in);
     }
 
   else if (strcmp (OPTION_REMOVE_ONLY_SHOW_IN, option_name) == 0)
     {
-      removed_only_show_in = g_slist_prepend (removed_only_show_in,
-                                              g_strdup (value));
+      PARSE_OPTION_LIST (removed_only_show_in);
     }
 
   else if (strcmp (OPTION_MODE, option_name) == 0 ||
@@ -509,14 +488,12 @@ parse_options_callback (const gchar  *option_name,
 
   else if (strcmp (OPTION_ADD_MIME_TYPE, option_name) == 0)
     {
-      added_mime_types = g_slist_prepend (added_mime_types,
-                                          g_strdup (value));
+      PARSE_OPTION_LIST (added_mime_types);
     }
 
   else if (strcmp (OPTION_REMOVE_MIME_TYPE, option_name) == 0)
     {
-      removed_mime_types = g_slist_prepend (removed_mime_types,
-                                            g_strdup (value));
+      PARSE_OPTION_LIST (removed_mime_types);
     }
 
   else

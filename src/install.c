@@ -9,7 +9,6 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <sys/stat.h>
 #include <locale.h>
 
 #include "keyfileutils.h"
@@ -507,27 +506,6 @@ parse_options_callback (const gchar  *option_name,
   return TRUE;
 }
 
-static void
-mkdir_and_parents (const char *dirname,
-                   mode_t      mode)
-{
-  char *parent;
-  char *slash;
-  
-  parent = g_strdup (dirname);
-  slash = NULL;
-  if (*parent != '\0')
-    slash = strrchr (parent, '/');
-  if (slash != NULL)
-    {
-      *slash = '\0';
-      mkdir_and_parents (parent, mode);
-    }
-  g_free (parent);
-  
-  mkdir (dirname, mode);
-}
-
 int
 main (int argc, char **argv)
 {
@@ -582,7 +560,7 @@ main (int argc, char **argv)
   if (permissions & 0004)
     dir_permissions |= 0001;
 
-  mkdir_and_parents (target_dir, dir_permissions);
+  g_mkdir_with_parents (target_dir, dir_permissions);
   
   i = 0;
   while (args && args[i])

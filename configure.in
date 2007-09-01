@@ -94,7 +94,7 @@ CFLAGS=`echo "$CFLAGS" | sed -e 's/ +/ /g'`
 CPPFLAGS=`echo "$CPPFLAGS" | sed -e 's/ +/ /g'`
 changequote([,])dnl
 
-PKG_CHECK_MODULES(DESKTOP_FILE_UTILS, glib-2.0 >= 2.6.0)
+PKG_CHECK_MODULES(DESKTOP_FILE_UTILS, glib-2.0 >= 2.8.0)
 
 AM_PATH_LISPDIR
 

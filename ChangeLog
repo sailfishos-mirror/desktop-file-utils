@@ -1,5 +1,11 @@
 2007-09-01  Vincent Untz  <vuntz@gnome.org>
 
+	* configure.in: require glib 2.8.0
+	* src/install.c: (mkdir_and_parents): kill
+	(main): directly use g_mkdir_with_parents()
+
+2007-09-01  Vincent Untz  <vuntz@gnome.org>
+
 	* src/install.c: (process_one_file): simplify the code with a macro
 	(parse_options_callback): if --add-category="GNOME;GTK" is passed as
 	argument, parse the list of categories instead of assuming the user

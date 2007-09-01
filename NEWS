@@ -1,4 +1,23 @@
 ============
+Version 0.14
+============
+
+  o update of the Emacs editing mode for .desktop files (Ville Skyttä)
+  o make desktop-file-install print an error when trying to install a
+    non-existing desktop file, or a desktop file that can't be read (Vincent)
+  o make the validator check the content of the Icon key (Vincent)
+  o make the validator accept X-Foo as a valid environment (this was added to
+    the spec) (Stanislav Brabec, Vincent)
+  o really handle the -m command line argument for desktop-file-install
+    (Matthias Clasen)
+  o make desktop-file-install accept as one valid argument multiple
+    categories/only-show-in/mime-types values. Now --add-category="GNOME;GTK"
+    works as expected. (Vincent)
+  o make desktop-file-install validate the created desktop file before removing
+    the original file, and unlink it if it's not valid (Vincent)
+  o code cleanups for desktop-file-install (Vincent)
+
+============
 Version 0.13
 ============
 

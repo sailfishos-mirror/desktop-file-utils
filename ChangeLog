@@ -1,5 +1,9 @@
 2007-09-01  Vincent Untz  <vuntz@gnome.org>
 
+	* README: small improvements
+
+2007-09-01  Vincent Untz  <vuntz@gnome.org>
+
 	* src/install.c: (process_one_file): validate the desktop file after
 	modifying its content, but before doing anything else, so that we
 	don't unlink the original file if the created one is not valid.

@@ -1,3 +1,8 @@
+2006-11-07  Ray Strode  <rstrode@redhat.com>
+
+	* src/validate.c: Consider icon names with extensions a
+	warning and not an error for now.
+
 2007-09-01  Vincent Untz  <vuntz@gnome.org>
 
 	* configure.in: post-release bump to 0.15

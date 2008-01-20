@@ -734,6 +734,7 @@ handle_icon_key (kf_validator *kf,
     return FALSE;
   }
 
+  /* FIXME: in the future, we should make this fatal again */
   if (g_str_has_suffix (value, ".png") ||
       g_str_has_suffix (value, ".xpm") ||
       g_str_has_suffix (value, ".svg")) {

@@ -1,3 +1,15 @@
+2008-02-05  Vincent Untz  <vuntz@gnome.org>
+
+	Fix crash with really small lines that are invalid, like just "a".
+	Fox bug #14386.
+
+	* src/validate.c: (validate_line_looks_like_group): only return
+	something in *group if the group argument is not NULL, and if the line
+	is actually a group one
+	(validate_parse_line): ensure we pass NULL initial values to some
+	functions, and don't leak key and value when processing a key-value
+	line before the first group
+
 2008-01-20  Vincent Untz  <vuntz@gnome.org>
 
 	* src/update-desktop-database.c: (process_desktop_file): don't get the

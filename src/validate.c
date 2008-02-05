@@ -1911,7 +1911,8 @@ validate_line_looks_like_group (kf_validator  *kf,
                      "The validation will continue, with the trailing spaces "
                      "ignored.\n", line);
 
-  *group = g_strndup (chomped + 1, strlen (chomped) - 2);
+  if (group && result)
+    *group = g_strndup (chomped + 1, strlen (chomped) - 2);
 
   g_free (chomped);
 
@@ -1988,6 +1989,7 @@ validate_parse_line (kf_validator *kf)
   if (validate_line_is_comment (kf, line))
     return;
 
+  group = NULL;
   if (validate_line_looks_like_group (kf, line, &group)) {
     if (!kf->current_group &&
         (strcmp (group, GROUP_DESKTOP_ENTRY) &&
@@ -2012,6 +2014,8 @@ validate_parse_line (kf_validator *kf)
     return;
   }
 
+  key = NULL;
+  value = NULL;
   if (validate_line_looks_like_entry (kf, line, &key, &value)) {
     if (kf->current_group) {
       GSList      *keys;
@@ -2025,6 +2029,11 @@ validate_parse_line (kf_validator *kf)
       keys = g_slist_prepend (keys, keyvalue);
       g_hash_table_replace (kf->groups, g_strdup (kf->current_group), keys);
     } else {
+      if (key)
+        g_free (key);
+      if (value)
+        g_free (value);
+
       print_fatal (kf, "file contains entry \"%s\" before the first group, "
                        "but only comments are accepted before the first "
                        "group\n", line);

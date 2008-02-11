@@ -1,3 +1,7 @@
+2008-02-11  Vincent Untz  <vuntz@gnome.org>
+
+	* NEWS: version 0.15
+
 2008-02-05  Vincent Untz  <vuntz@gnome.org>
 
 	Fix crash with really small lines that are invalid, like just "a".

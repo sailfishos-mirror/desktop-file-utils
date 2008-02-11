@@ -1,4 +1,13 @@
 ============
+Version 0.15
+============
+
+  o make the extension check for Icon key a warning instead of an error for now
+    (Ray Strode)
+  o Fix a crash in update-desktop-database when there's no group (Vincent)
+  o Fix a crash in the validator happening for very small lines (Vincent)
+
+============
 Version 0.14
 ============
 

@@ -196,7 +196,10 @@ process_one_file (const char *filename,
     {
       g_set_error (err, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_PARSE,
                    _("Failed to validate the created desktop file"));
-      g_unlink (new_filename);
+
+      if (!files_are_the_same (filename, new_filename))
+        g_unlink (new_filename);
+
       g_free (new_filename);
       return;
     }
@@ -208,7 +211,9 @@ process_one_file (const char *filename,
                    _("Failed to set permissions %o on \"%s\": %s"),
                    permissions, new_filename, g_strerror (errno));
 
-      g_unlink (new_filename);
+      if (!files_are_the_same (filename, new_filename))
+        g_unlink (new_filename);
+
       g_free (new_filename);
       return;
     }

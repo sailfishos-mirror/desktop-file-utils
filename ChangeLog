@@ -1,5 +1,16 @@
 2008-04-26  Vincent Untz  <vuntz@gnome.org>
 
+	* src/validate.c: make a few more structure static, change the way we
+	store data about the know catgories so that we have more information
+	(like dependencies)
+	(handle_categories_key): updated for the previous change. We now
+	additionally check that categories required by another one are present.
+	Fix bug #15672.
+	* src/validator.c: init warn_kde to FALSE. Fix the "warnings about KDE
+	specific uses are always shown" bug.
+
+2008-04-26  Vincent Untz  <vuntz@gnome.org>
+
 	* src/validate.c: (handle_categories_key): at least one main category
 	must be included in the Categories. Output an error if it's not the
 	case.

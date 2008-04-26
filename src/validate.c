@@ -224,7 +224,7 @@ handle_key_for_mimetype (kf_validator *kf,
                          const char   *locale_key,
                          const char   *value);
 
-struct {
+static struct {
   DesktopType  type;
   char        *name;
   gboolean     kde_reserved;
@@ -239,7 +239,7 @@ struct {
   { MIMETYPE_TYPE,     "MimeType",    FALSE, TRUE  }
 };
 
-struct {
+static struct {
   DesktopKeyType type;
   gboolean       (* validate) (kf_validator *kf,
                                const char   *key,
@@ -254,7 +254,7 @@ struct {
   { DESKTOP_REGEXP_LIST_TYPE,  validate_regexp_list_key  }
 };
 
-struct {
+static struct {
   DesktopKeyType  type;
   char           *name;
   gboolean        required;
@@ -328,43 +328,153 @@ static const char *show_in_registered[] = {
   "KDE", "GNOME", "ROX", "XFCE", "Old"
 };
 
-static const char *main_categories_registered[] = {
-  "AudioVideo", "Audio", "Video", "Development", "Education", "Game",
-  "Graphics", "Network", "Office", "Settings", "System", "Utility"
-};
-
-static const char *additional_categories_registered[] = {
-  "Building", "Debugger", "IDE", "GUIDesigner", "Profiling", "RevisionControl",
-  "Translation", "Calendar", "ContactManagement", "Database", "Dictionary",
-  "Chart", "Email", "Finance", "FlowChart", "PDA", "ProjectManagement",
-  "Presentation", "Spreadsheet", "WordProcessor", "2DGraphics",
-  "VectorGraphics", "RasterGraphics", "3DGraphics", "Scanning", "OCR",
-  "Photography", "Publishing", "Viewer", "TextTools", "DesktopSettings",
-  "HardwareSettings", "Printing", "PackageManager", "Dialup",
-  "InstantMessaging", "Chat", "IRCClient", "FileTransfer", "HamRadio", "News",
-  "P2P", "RemoteAccess", "Telephony", "TelephonyTools", "VideoConference",
-  "WebBrowser", "WebDevelopment", "Midi", "Mixer", "Sequencer", "Tuner", "TV",
-  "AudioVideoEditing", "Player", "Recorder", "DiscBurning", "ActionGame",
-  "AdventureGame", "ArcadeGame", "BoardGame", "BlocksGame", "CardGame",
-  "KidsGame", "LogicGame", "RolePlaying", "Simulation", "SportsGame",
-  "StrategyGame", "Art", "Construction", "Music", "Languages", "Science",
-  "ArtificialIntelligence", "Astronomy", "Biology", "Chemistry",
-  "ComputerScience", "DataVisualization", "Economy", "Electricity",
-  "Geography", "Geology", "Geoscience", "History", "ImageProcessing",
-  "Literature", "Math", "NumericalAnalysis", "MedicalSoftware", "Physics",
-  "Robotics", "Sports", "ParallelComputing", "Amusement", "Archiving",
-  "Compression", "Electronics", "Emulator", "Engineering", "FileTools",
-  "FileManager", "TerminalEmulator", "Filesystem", "Monitor", "Security",
-  "Accessibility", "Calculator", "Clock", "TextEditor", "Documentation",
-  "Core", "KDE", "GNOME", "GTK", "Qt", "Motif", "Java", "ConsoleOnly"
-};
-
-static const char *reserved_categories_registered[] = {
-  "Screensaver", "TrayIcon", "Applet", "Shell"
-};
-
-static const char *deprecated_categories_registered[] = {
-  "Application", "Applications"
+static struct {
+  const char *name;
+  gboolean    main;
+  gboolean    require_only_show_in;
+  gboolean    deprecated;
+  const char *requires[4];
+} registered_categories[] = {
+  { "AudioVideo",             TRUE,  FALSE, FALSE, { NULL } },
+  { "Audio",                  TRUE,  FALSE, FALSE, { "AudioVideo", NULL } },
+  { "Video",                  TRUE,  FALSE, FALSE, { "AudioVideo", NULL } },
+  { "Development",            TRUE,  FALSE, FALSE, { NULL } },
+  { "Education",              TRUE,  FALSE, FALSE, { NULL } },
+  { "Game",                   TRUE,  FALSE, FALSE, { NULL } },
+  { "Graphics",               TRUE,  FALSE, FALSE, { NULL } },
+  { "Network",                TRUE,  FALSE, FALSE, { NULL } },
+  { "Office",                 TRUE,  FALSE, FALSE, { NULL } },
+  { "Settings",               TRUE,  FALSE, FALSE, { NULL } },
+  { "System",                 TRUE,  FALSE, FALSE, { NULL } },
+  { "Utility",                TRUE,  FALSE, FALSE, { NULL } },
+  { "Audio",                  FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "Video",                  FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "Building",               FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "Debugger",               FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "IDE",                    FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "GUIDesigner",            FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "Profiling",              FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "RevisionControl",        FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "Translation",            FALSE, FALSE, FALSE, { "Development", NULL } },
+  { "Calendar",               FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "ContactManagement",      FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "Database",               FALSE, FALSE, FALSE, { "Office", "Development", "AudioVideo", NULL } },
+  { "Dictionary",             FALSE, FALSE, FALSE, { "Office;TextTools", NULL } },
+  { "Chart",                  FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "Email",                  FALSE, FALSE, FALSE, { "Office;Network", NULL } },
+  { "Finance",                FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "FlowChart",              FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "PDA",                    FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "ProjectManagement",      FALSE, FALSE, FALSE, { "Office;Development", NULL } },
+  { "Presentation",           FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "Spreadsheet",            FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "WordProcessor",          FALSE, FALSE, FALSE, { "Office", NULL } },
+  { "2DGraphics",             FALSE, FALSE, FALSE, { "Graphics", NULL } },
+  { "VectorGraphics",         FALSE, FALSE, FALSE, { "Graphics;2DGraphics", NULL } },
+  { "RasterGraphics",         FALSE, FALSE, FALSE, { "Graphics;2DGraphics", NULL } },
+  { "3DGraphics",             FALSE, FALSE, FALSE, { "Graphics", NULL } },
+  { "Scanning",               FALSE, FALSE, FALSE, { "Graphics", NULL } },
+  { "OCR",                    FALSE, FALSE, FALSE, { "Graphics;Scanning", NULL } },
+  { "Photography",            FALSE, FALSE, FALSE, { "Graphics", "Office", NULL } },
+  { "Publishing",             FALSE, FALSE, FALSE, { "Graphics", "Office", NULL } },
+  { "Viewer",                 FALSE, FALSE, FALSE, { "Graphics", "Office", NULL } },
+  { "TextTools",              FALSE, FALSE, FALSE, { "Utility", NULL } },
+  { "DesktopSettings",        FALSE, FALSE, FALSE, { "Settings", NULL } },
+  { "HardwareSettings",       FALSE, FALSE, FALSE, { "Settings", NULL } },
+  { "Printing",               FALSE, FALSE, FALSE, { "HardwareSettings;Settings", NULL } },
+  { "PackageManager",         FALSE, FALSE, FALSE, { "Settings", NULL } },
+  { "Dialup",                 FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "InstantMessaging",       FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "Chat",                   FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "IRCClient",              FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "FileTransfer",           FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "HamRadio",               FALSE, FALSE, FALSE, { "Network", "Audio", NULL } },
+  { "News",                   FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "P2P",                    FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "RemoteAccess",           FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "Telephony",              FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "TelephonyTools",         FALSE, FALSE, FALSE, { "Utility", NULL } },
+  { "VideoConference",        FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "WebBrowser",             FALSE, FALSE, FALSE, { "Network", NULL } },
+  { "WebDevelopment",         FALSE, FALSE, FALSE, { "Network", "Development", NULL } },
+  { "Midi",                   FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
+  { "Mixer",                  FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
+  { "Sequencer",              FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
+  { "Tuner",                  FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
+  { "TV",                     FALSE, FALSE, FALSE, { "AudioVideo;Video", NULL } },
+  { "AudioVideoEditing",      FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
+  { "Player",                 FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
+  { "Recorder",               FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
+  { "DiscBurning",            FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
+  { "ActionGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "AdventureGame",          FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "ArcadeGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "BoardGame",              FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "BlocksGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "CardGame",               FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "KidsGame",               FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "LogicGame",              FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "RolePlaying",            FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "Simulation",             FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "SportsGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "StrategyGame",           FALSE, FALSE, FALSE, { "Game", NULL } },
+  { "Art",                    FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "Construction",           FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "Music",                  FALSE, FALSE, FALSE, { "AudioVideo;Education", NULL } },
+  { "Languages",              FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "Science",                FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "ArtificialIntelligence", FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Astronomy",              FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Biology",                FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Chemistry",              FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "ComputerScience",        FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "DataVisualization",      FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Economy",                FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "Electricity",            FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Geography",              FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "Geology",                FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Geoscience",             FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "History",                FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "ImageProcessing",        FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Literature",             FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "Math",                   FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "NumericalAnalysis",      FALSE, FALSE, FALSE, { "Education;Science;Math", NULL } },
+  { "MedicalSoftware",        FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Physics",                FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Robotics",               FALSE, FALSE, FALSE, { "Education;Science", NULL } },
+  { "Sports",                 FALSE, FALSE, FALSE, { "Education", NULL } },
+  { "ParallelComputing",      FALSE, FALSE, FALSE, { "Education;Science;ComputerScience", NULL } },
+  { "Amusement",              FALSE, FALSE, FALSE, { NULL } },
+  { "Archiving",              FALSE, FALSE, FALSE, { "Utility", NULL } },
+  { "Compression",            FALSE, FALSE, FALSE, { "Utility;Archiving", NULL } },
+  { "Electronics",            FALSE, FALSE, FALSE, { NULL } },
+  { "Emulator",               FALSE, FALSE, FALSE, { "System", "Game", NULL } },
+  { "Engineering",            FALSE, FALSE, FALSE, { NULL } },
+  { "FileTools",              FALSE, FALSE, FALSE, { "Utility", "System", NULL } },
+  { "FileManager",            FALSE, FALSE, FALSE, { "System;FileTools", NULL } },
+  { "TerminalEmulator",       FALSE, FALSE, FALSE, { "System", NULL } },
+  { "Filesystem",             FALSE, FALSE, FALSE, { "System", NULL } },
+  { "Monitor",                FALSE, FALSE, FALSE, { "System", NULL } },
+  { "Security",               FALSE, FALSE, FALSE, { "Settings", "System", NULL } },
+  { "Accessibility",          FALSE, FALSE, FALSE, { "Settings", "Utility", NULL } },
+  { "Calculator",             FALSE, FALSE, FALSE, { "Utility", NULL } },
+  { "Clock",                  FALSE, FALSE, FALSE, { "Utility", NULL } },
+  { "TextEditor",             FALSE, FALSE, FALSE, { "Utility", NULL } },
+  { "Documentation",          FALSE, FALSE, FALSE, { NULL } },
+  { "Core",                   FALSE, FALSE, FALSE, { NULL } },
+  { "KDE",                    FALSE, FALSE, FALSE, { "Qt", NULL } },
+  { "GNOME",                  FALSE, FALSE, FALSE, { "GTK", NULL } },
+  { "GTK",                    FALSE, FALSE, FALSE, { NULL } },
+  { "Qt",                     FALSE, FALSE, FALSE, { NULL } },
+  { "Motif",                  FALSE, FALSE, FALSE, { NULL } },
+  { "Java",                   FALSE, FALSE, FALSE, { NULL } },
+  { "ConsoleOnly",            FALSE, FALSE, FALSE, { NULL } },
+  { "Screensaver",            FALSE, TRUE,  FALSE, { NULL } },
+  { "TrayIcon",               FALSE, TRUE,  FALSE, { NULL } },
+  { "Applet",                 FALSE, TRUE,  FALSE, { NULL } },
+  { "Shell",                  FALSE, TRUE,  FALSE, { NULL } },
+  { "Application",            FALSE, FALSE, TRUE,  { NULL } },
+  { "Applications",           FALSE, FALSE, TRUE,  { NULL } }
 };
 
 static void
@@ -1159,7 +1269,7 @@ handle_mime_key (kf_validator *kf,
  * + Some categories, if include, require that another category is included.
  *   Eg: if Audio is there, AudioVideo must be there. Same for most additional
  *   categories.
- *   TODO
+ *   Checked.
  */
 static gboolean
 handle_categories_key (kf_validator *kf,
@@ -1176,11 +1286,14 @@ handle_categories_key (kf_validator *kf,
   handle_key_for_application (kf, locale_key, value);
 
   retval = TRUE;
-  main_category_present = FALSE;
 
   hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
   categories = g_strsplit (value, ";", 0);
 
+  /* this is a two-pass check: we first put the categories in a hash table so
+   * that they are easy-to-find, and we then do many checks */
+
+  /* first pass */
   for (i = 0; categories[i]; i++) {
     /* since the value ends with a semicolon, we'll have an empty string
      * at the end */
@@ -1195,24 +1308,48 @@ handle_categories_key (kf_validator *kf,
     }
 
     g_hash_table_insert (hashtable, categories[i], categories[i]);
+  }
+
+  /* second pass */
+  main_category_present = FALSE;
+
+  for (i = 0; categories[i]; i++) {
+    unsigned int k;
+
+    /* since the value ends with a semicolon, we'll have an empty string
+     * at the end */
+    if (*categories[i] == '\0' && categories[i + 1] == NULL)
+      break;
 
     if (!strncmp (categories[i], "X-", 2))
       continue;
 
-#define IF_CHECK_REGISTERED_CATEGORIES(table) \
-    for (j = 0; j < G_N_ELEMENTS (table); j++) { \
-      if (!strcmp (categories[i], table[j]))     \
-        break;                                   \
-    }                                            \
-    if (j != G_N_ELEMENTS (table))
+    for (j = 0; j < G_N_ELEMENTS (registered_categories); j++) {
+      if (!strcmp (categories[i], registered_categories[j].name))
+        break;
+    }
 
-    IF_CHECK_REGISTERED_CATEGORIES (main_categories_registered) {
-      main_category_present = TRUE;
+    if (j == G_N_ELEMENTS (registered_categories)) {
+      print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                       "contains an unregistered value \"%s\"; values "
+		       "extending the format should start with \"X-\"\n",
+                       value, locale_key, kf->current_group, categories[i]);
+      retval = FALSE;
       continue;
     }
-    IF_CHECK_REGISTERED_CATEGORIES (additional_categories_registered)
-      continue;
-    IF_CHECK_REGISTERED_CATEGORIES (reserved_categories_registered) {
+
+    if (registered_categories[j].main)
+      main_category_present = TRUE;
+
+    if (registered_categories[j].deprecated) {
+      if (!kf->no_deprecated_warnings)
+        print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                           "contains a deprecated value \"%s\"\n",
+                            value, locale_key, kf->current_group,
+                            categories[i]);
+    }
+
+    if (registered_categories[j].require_only_show_in) {
       if (!g_hash_table_lookup (kf->current_keys, "OnlyShowIn")) {
         print_fatal (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
                          "is a reserved category, so a \"OnlyShowIn\" key "
@@ -1220,22 +1357,49 @@ handle_categories_key (kf_validator *kf,
                          categories[i], locale_key, kf->current_group);
         retval = FALSE;
       }
-      continue;
-    }
-    IF_CHECK_REGISTERED_CATEGORIES (deprecated_categories_registered) {
-      if (!kf->no_deprecated_warnings)
-        print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                           "contains a deprecated value \"%s\"\n",
-                            value, locale_key, kf->current_group,
-                            categories[i]);
-      continue;
     }
 
-    print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                     "contains an unregistered value \"%s\"; values "
-		     "extending the format should start with \"X-\"\n",
-                     value, locale_key, kf->current_group, categories[i]);
-    retval = FALSE;
+    for (k = 0; registered_categories[j].requires[k] != NULL; k++) {
+      char **required_categories;
+      int    l;
+
+      required_categories = g_strsplit (registered_categories[j].requires[k],
+                                        ";", 0);
+
+      for (l = 0; required_categories[l]; l++) {
+        if (!g_hash_table_lookup (hashtable, required_categories[l]))
+          break;
+      }
+
+      /* we've reached the end of a list of required categories, so
+       * the condition is satisfied */
+      if (required_categories[l] == NULL) {
+        g_strfreev (required_categories);
+        break;
+      }
+
+      g_strfreev (required_categories);
+    }
+
+    /* there was a required category and it wasn't found */
+    if (k != 0 && registered_categories[j].requires[k] == NULL) {
+      GString *output_required;
+
+      output_required = g_string_new (registered_categories[j].requires[0]);
+      for (k = 1; registered_categories[j].requires[k] != NULL; k++)
+        g_string_append_printf (output_required, ", or %s",
+                                registered_categories[j].requires[k]);
+
+      print_fatal (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
+                       "requires another category to be present among the "
+                       "following categories: %s\n",
+                       categories[i], locale_key, kf->current_group,
+                       output_required->str);
+
+      g_string_free (output_required, TRUE);
+      retval = FALSE;
+    }
+
   }
 
   g_strfreev (categories);

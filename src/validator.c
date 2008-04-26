@@ -25,7 +25,7 @@
 
 #include "validate.h"
 
-static gboolean   warn_kde = TRUE;
+static gboolean   warn_kde = FALSE;
 static gboolean   no_warn_deprecated = FALSE;
 static char     **filename = NULL;
 

@@ -1,3 +1,9 @@
+2008-04-26  Vincent Untz  <vuntz@gnome.org>
+
+	* src/validate.c: (handle_categories_key): at least one main category
+	must be included in the Categories. Output an error if it's not the
+	case.
+
 2008-03-06  Vincent Untz  <vuntz@gnome.org>
 
 	* src/install.c: (process_one_file): don't unlink the destination file

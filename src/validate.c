@@ -42,8 +42,9 @@
 #include "keyfileutils.h"
 #include "validate.h"
 
-//FIXME: document where we are stricter than the spec
-// * only UTF-8 (so no Legacy-Mixed encoding)
+/*FIXME: document where we are stricter than the spec
+ * + only UTF-8 (so no Legacy-Mixed encoding)
+ */
 
 /*TODO:
  * + Lecagy-Mixed Encoding (annexe D)
@@ -1152,6 +1153,13 @@ handle_mime_key (kf_validator *kf,
  *   FIXME: it's not really deprecated, so the error message is wrong
  * + All categories extending the format should start with "X-".
  *   Checked.
+ * + At least one main category must be included.
+ *   Checked.
+ *   FIXME: decide if it's okay to have an empty list of categories.
+ * + Some categories, if include, require that another category is included.
+ *   Eg: if Audio is there, AudioVideo must be there. Same for most additional
+ *   categories.
+ *   TODO
  */
 static gboolean
 handle_categories_key (kf_validator *kf,
@@ -1163,10 +1171,12 @@ handle_categories_key (kf_validator *kf,
   GHashTable    *hashtable;
   int            i;
   unsigned int   j;
+  gboolean       main_category_present;
 
   handle_key_for_application (kf, locale_key, value);
 
   retval = TRUE;
+  main_category_present = FALSE;
 
   hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
   categories = g_strsplit (value, ";", 0);
@@ -1196,8 +1206,10 @@ handle_categories_key (kf_validator *kf,
     }                                            \
     if (j != G_N_ELEMENTS (table))
 
-    IF_CHECK_REGISTERED_CATEGORIES (main_categories_registered)
+    IF_CHECK_REGISTERED_CATEGORIES (main_categories_registered) {
+      main_category_present = TRUE;
       continue;
+    }
     IF_CHECK_REGISTERED_CATEGORIES (additional_categories_registered)
       continue;
     IF_CHECK_REGISTERED_CATEGORIES (reserved_categories_registered) {
@@ -1228,6 +1240,13 @@ handle_categories_key (kf_validator *kf,
 
   g_strfreev (categories);
   g_hash_table_destroy (hashtable);
+
+  if (!main_category_present) {
+    print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                     "does not contain a registered main category\n",
+                     value, locale_key, kf->current_group, categories[i]);
+    retval = FALSE;
+  }
 
   return retval;
 }

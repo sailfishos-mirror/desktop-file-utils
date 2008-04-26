@@ -803,13 +803,42 @@ handle_version_key (kf_validator *kf,
 
 /* + Tooltip for the entry, for example "View sites on the Internet", should
  *   not be redundant with Name or GenericName.
- *   FIXME
+ *   Checked.
  */
 static gboolean
 handle_comment_key (kf_validator *kf,
                     const char   *locale_key,
                     const char   *value)
 {
+  char        *locale_compare_key;
+  kf_keyvalue *keyvalue;
+
+  locale_compare_key = g_strdup_printf ("Name%s",
+                                        locale_key + strlen ("Comment"));
+  keyvalue = g_hash_table_lookup (kf->current_keys, locale_compare_key);
+  g_free (locale_compare_key);
+
+  if (keyvalue && g_ascii_strcasecmp (value, keyvalue->value) == 0) {
+    print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                       "looks redundant with value \"%s\" of key \"%s\"\n",
+                       value, locale_key, kf->current_group,
+                       keyvalue->value, keyvalue->key);
+    return FALSE;
+  }
+
+  locale_compare_key = g_strdup_printf ("GenericName%s",
+                                        locale_key + strlen ("Comment"));
+  keyvalue = g_hash_table_lookup (kf->current_keys, locale_compare_key);
+  g_free (locale_compare_key);
+
+  if (keyvalue && g_ascii_strcasecmp (value, keyvalue->value) == 0) {
+    print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                       "looks redundant with value \"%s\" of key \"%s\"\n",
+                       value, locale_key, kf->current_group,
+                       keyvalue->value, keyvalue->key);
+    return FALSE;
+  }
+
   return TRUE;
 }
 
@@ -1691,10 +1720,12 @@ validate_keys_for_current_group (kf_validator *kf)
 {
   gboolean     desktop_group;
   gboolean     retval;
+  GHashTable  *duplicated_keys_hash;
   char        *key;
   char        *locale;
   GSList      *keys;
   GSList      *sl;
+  gpointer     hashvalue;
 
   retval = TRUE;
 
@@ -1708,6 +1739,8 @@ validate_keys_for_current_group (kf_validator *kf)
 
   kf->current_keys = g_hash_table_new_full (g_str_hash, g_str_equal,
                                             NULL, NULL);
+  duplicated_keys_hash = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                NULL, NULL);
 
   /* we need two passes: some checks are looking if another key exists in the
    * group */
@@ -1715,13 +1748,23 @@ validate_keys_for_current_group (kf_validator *kf)
     kf_keyvalue *keyvalue;
 
     keyvalue = (kf_keyvalue *) sl->data;
-    g_hash_table_insert (kf->current_keys, keyvalue->key, GINT_TO_POINTER (1));
+    g_hash_table_insert (kf->current_keys, keyvalue->key, keyvalue);
+
+    /* we could display the error about duplicate keys here, but it's better
+     * to display it with the first occurence of this key */
+    hashvalue = g_hash_table_lookup (duplicated_keys_hash, keyvalue->key);
+    if (!hashvalue)
+      g_hash_table_insert (duplicated_keys_hash, keyvalue->key,
+                           GINT_TO_POINTER (1));
+    else {
+      g_hash_table_replace (duplicated_keys_hash, keyvalue->key,
+                            GINT_TO_POINTER (GPOINTER_TO_INT (hashvalue) + 1));
+    }
   }
 
   for (sl = keys; sl != NULL; sl = sl->next) {
     kf_keyvalue *keyvalue;
     gboolean     skip_desktop_check;
-    gpointer     hashvalue;
 
     keyvalue = (kf_keyvalue *) sl->data;
 
@@ -1740,14 +1783,12 @@ validate_keys_for_current_group (kf_validator *kf)
 
     g_assert (key != NULL);
 
-    hashvalue = g_hash_table_lookup (kf->current_keys, keyvalue->key);
-    if (GPOINTER_TO_INT (hashvalue) != 1) {
+    hashvalue = g_hash_table_lookup (duplicated_keys_hash, keyvalue->key);
+    if (GPOINTER_TO_INT (hashvalue) > 1) {
+      g_hash_table_remove (duplicated_keys_hash, keyvalue->key);
       print_fatal (kf, "file contains multiple keys named \"%s\" in "
                        "group \"%s\"\n", keyvalue->key, kf->current_group);
       retval = FALSE;
-    } else {
-      g_hash_table_replace (kf->current_keys, keyvalue->key,
-                            GINT_TO_POINTER (2));
     }
 
     if (desktop_group && !skip_desktop_check) {
@@ -1762,6 +1803,8 @@ validate_keys_for_current_group (kf_validator *kf)
     locale = NULL;
   }
 
+  g_slist_free (keys);
+  g_hash_table_destroy (duplicated_keys_hash);
   g_hash_table_destroy (kf->current_keys);
   kf->current_keys = NULL;
 

@@ -1,5 +1,15 @@
 2008-04-26  Vincent Untz  <vuntz@gnome.org>
 
+	* src/validate.c: (handle_comment_key): check that the Comment does not
+	look like the Name of the GenericName
+	(validate_keys_for_current_group): instead of storing only the
+	information that a group contain a key, also link to the content of the
+	key. Also report the error of multiple keys with the same name the
+	first time we have a key (instead of the second time).
+	Plug a small leak.
+
+2008-04-26  Vincent Untz  <vuntz@gnome.org>
+
 	* src/validate.c: make a few more structure static, change the way we
 	store data about the know catgories so that we have more information
 	(like dependencies)

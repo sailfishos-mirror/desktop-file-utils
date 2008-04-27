@@ -40,6 +40,7 @@
 #include <glib/gstdio.h>
 
 #include "keyfileutils.h"
+#include "mimeutils.h"
 #include "validate.h"
 
 /*FIXME: document where we are stricter than the spec
@@ -1225,8 +1226,6 @@ handle_path_key (kf_validator *kf,
 /* + The MIME type(s) supported by this application. Check they are valid
  *   MIME types.
  *   Checked.
- *   FIXME: need to verify what is the exact definition of a MIME type.
- *   Look at is_valid_mime_type()
  */
 static gboolean
 handle_mime_key (kf_validator *kf,
@@ -1235,9 +1234,10 @@ handle_mime_key (kf_validator *kf,
 {
   gboolean       retval;
   char         **types;
-  char          *slash;
   GHashTable    *hashtable;
   int            i;
+  char          *valid_error;
+  MimeUtilsValidity valid;
 
   handle_key_for_application (kf, locale_key, value);
 
@@ -1261,13 +1261,31 @@ handle_mime_key (kf_validator *kf,
 
     g_hash_table_insert (hashtable, types[i], types[i]);
 
-    slash = strchr (types[i], '/');
-    if (!slash || strchr (slash + 1, '/')) {
-      print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                       "contains value \"%s\" which does not look like "
-                       "a MIME type\n",
-                       value, locale_key, kf->current_group, types[i]);
-      retval = FALSE;
+    valid = mu_mime_type_is_valid (types[i], &valid_error);
+    switch (valid) {
+      case MU_VALID:
+        break;
+      case MU_DISCOURAGED:
+        print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                           "contains value \"%s\" which is a MIME type that "
+                           "should probably not be used: %s\n",
+                           value, locale_key, kf->current_group,
+                           types[i], valid_error);
+
+        g_free (valid_error);
+        break;
+      case MU_INVALID:
+        print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "contains value \"%s\" which is an invalid MIME "
+                         "type: %s\n",
+                         value, locale_key, kf->current_group,
+                         types[i], valid_error);
+
+        retval = FALSE;
+        g_free (valid_error);
+        break;
+      default:
+        g_assert_not_reached ();
     }
   }
 

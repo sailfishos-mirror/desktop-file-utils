@@ -34,6 +34,7 @@
 #include <glib/gi18n.h>
 
 #include "keyfileutils.h"
+#include "mimeutils.h"
 
 #define NAME "update-desktop-database"
 #define CACHE_FILENAME "mimeinfo.cache"
@@ -50,8 +51,6 @@ static void sync_database (const char *dir, GError **error);
 static void cache_desktop_file (const char  *desktop_file, 
                                 const char  *mime_type,
                                 GError     **error);
-static gboolean is_valid_mime_type (const char *desktop_file, 
-                                    const char *mime_type);
 static void process_desktop_file (const char  *desktop_file, 
                                   const char  *name,
                                   GError     **error);
@@ -85,88 +84,6 @@ cache_desktop_file (const char  *desktop_file,
   g_hash_table_insert (mime_types_map, g_strdup (mime_type), desktop_files);
 }
 
-
-static gboolean
-is_valid_mime_type_char (const guchar c)
-{
-  char invalid_chars [] = "()<>@,;:\\/[]?=\"";
-  
-  if ((c <= 32) || (c == 127)) 
-    {
-      /* Filter out control chars and space */
-      return FALSE;
-    }
-  
-  if (memchr (invalid_chars, c, sizeof (invalid_chars)) != NULL) 
-    {
-      return FALSE;
-    }
-  
-  return TRUE;
-}
-
-
-static gboolean
-is_valid_mime_type (const char *desktop_file, 
-                    const char *mime_type)
-{
-  gulong subtype_offset;
-  gulong valid_chars;
-  
-  valid_chars = 0;
-  subtype_offset = 0;
-  
-  while (mime_type[valid_chars] != '\0') 
-    {
-      if (mime_type[valid_chars] == '/') 
-	{
-	  if (valid_chars == 0) 
-	    {
-	      /* We encountered a / before any valid char */
-              udd_print ("File '%s' contains invalid MIME type '%s' "
-                         "that starts with a slash\n",
-                         desktop_file, mime_type);
-	      return FALSE;
-	    }
-	  if (subtype_offset != 0) 
-	    {
-	      /* We already encountered a '/' previously */
-              udd_print ("File '%s' contains invalid MIME type '%s' "
-                         "that has more than one slash\n", 
-                         desktop_file, mime_type);
-              return FALSE;
-            }
-          subtype_offset = valid_chars;
-        } 
-      else if (!is_valid_mime_type_char (mime_type[valid_chars])) 
-        {
-          udd_print ("File '%s' contains invalid MIME type '%s' "
-                     "that contains invalid characters\n", 
-                     desktop_file, mime_type);
-          return FALSE;
-        }
-
-      valid_chars++;			    
-    }
-
-  if (subtype_offset == 0) 
-    {
-      /* The mime type didn't contain any / */
-      udd_print ("File '%s' contains invalid MIME type '%s' that is "
-                 "missing a slash\n", desktop_file, mime_type);
-      return FALSE;
-    }
-
-  if ((subtype_offset != 0) && (subtype_offset == valid_chars)) 
-    {
-      /* Missing subtype name */
-      udd_print ("File '%s' contains invalid MIME type '%s' that is "
-                 "missing a subtype\n", desktop_file, mime_type);
-      return FALSE;
-    }
-  
-  return TRUE;
-}
 
 static void
 process_desktop_file (const char  *desktop_file, 
@@ -205,10 +122,30 @@ process_desktop_file (const char  *desktop_file,
   for (i = 0; mime_types[i] != NULL; i++)
     {
       char *mime_type;
+      MimeUtilsValidity valid;
+      char *valid_error;
 
       mime_type = g_strchomp (mime_types[i]);
-      if (!is_valid_mime_type (desktop_file, mime_types[i])) 
-	continue;
+      valid = mu_mime_type_is_valid (mime_types[i], &valid_error);
+      switch (valid)
+      {
+        case MU_VALID:
+          break;
+        case MU_DISCOURAGED:
+          udd_print ("Warning in file \"%s\": usage of MIME type \"%s\" is "
+                     "discouraged (%s)\n",
+                     desktop_file, mime_types[i], valid_error);
+          g_free (valid_error);
+          break;
+        case MU_INVALID:
+          udd_print ("Error in file \"%s\": \"%s\" is an invalid MIME type "
+                     "(%s)\n", desktop_file, mime_types[i], valid_error);
+          g_free (valid_error);
+          /* not a break: we continue to the next mime type */
+          continue;
+        default:
+          g_assert_not_reached ();
+      }
 
       cache_desktop_file (name, mime_type, &load_error);
 

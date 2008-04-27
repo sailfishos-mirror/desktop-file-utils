@@ -1,3 +1,17 @@
+2008-04-28  Vincent Untz  <vuntz@gnome.org>
+
+	Be stricter for the MIME type check. It's actually a bit too strict
+	right now, see the TODO at the beginning of mimeutils.c to know how to
+	improve things a bit.
+
+	* src/Makefile.am:
+	* src/mimeutils.[ch]: add new files
+	* src/update-desktop-database.c: (process_desktop_file): use the
+	improved mu_mime_type_is_valid() function instead of
+	is_valid_mime_type()
+	* src/validate.c: (handle_mime_key): use the improved
+	mu_mime_type_is_valid() function instead of a trivial check
+
 2008-04-26  Vincent Untz  <vuntz@gnome.org>
 
 	* src/validate.c: (handle_comment_key): check that the Comment does not

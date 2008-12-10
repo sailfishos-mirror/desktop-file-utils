@@ -52,7 +52,7 @@ static const char *registered_not_used_media_types[] = {
 
 /* TODO: we will break in a few cases, since we're only IANA-aware so far.
  * Known cases:
- *  inode/*: added by the fdo spec
+ *  inode/.*: added by the fdo spec
  *  flv-application/octet-stream: alias in the fdo db
  *  zz-application/zz-winassoc-cdr: alias in the fdo db
  *  misc/ultravox: widely used?

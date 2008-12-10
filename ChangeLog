@@ -1,3 +1,7 @@
+2008-12-10  Vincent Untz  <vuntz@gnome.org>
+
+	* src/mimeutils.c: fix warning in a comment
+
 2008-04-28  Vincent Untz  <vuntz@gnome.org>
 
 	Be stricter for the MIME type check. It's actually a bit too strict

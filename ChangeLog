@@ -1,3 +1,7 @@
+2009-01-10  Vincent Untz  <vuntz@gnome.org>
+
+	* src/validate.c: add LXDE in the list of registered OnlyShowIn values.
+
 2008-12-10  Vincent Untz  <vuntz@gnome.org>
 
 	* src/mimeutils.c: fix warning in a comment

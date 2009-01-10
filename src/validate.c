@@ -2520,7 +2520,7 @@ desktop_file_fixup (GKeyFile   *keyfile,
   unsigned int  i;
   
   if (g_key_file_has_group (keyfile, GROUP_KDE_DESKTOP_ENTRY)) {
-    g_printerr ("%s: renaming deprecated \"%s\" group to \"%s\"\n",
+    g_printerr ("%s: warning: renaming deprecated \"%s\" group to \"%s\"\n",
                 filename, GROUP_KDE_DESKTOP_ENTRY, GROUP_DESKTOP_ENTRY);
     dfu_key_file_rename_group (keyfile,
                                GROUP_KDE_DESKTOP_ENTRY, GROUP_DESKTOP_ENTRY);
@@ -2544,7 +2544,7 @@ desktop_file_fixup (GKeyFile   *keyfile,
                        (len < 3 || value[len - 3] != '\\')))) {
           char *str;
 
-          g_printerr ("%s: key \"%s\" is a list and does not have a "
+          g_printerr ("%s: warning: key \"%s\" is a list and does not have a "
                       "semicolon as trailing character, fixing\n",
                       filename, registered_desktop_keys[i].name);
           

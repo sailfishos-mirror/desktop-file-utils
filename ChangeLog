@@ -1,5 +1,12 @@
 2009-01-10  Vincent Untz  <vuntz@gnome.org>
 
+	* src/validate.c: (desktop_file_fixup): add "warning" to the error
+	strings that are output when fixing the desktop file so that people can
+	learn about the errors and directly fix them.
+	Fix bug #18206.
+
+2009-01-10  Vincent Untz  <vuntz@gnome.org>
+
 	* src/validate.c: add LXDE in the list of registered OnlyShowIn values.
 
 2008-12-10  Vincent Untz  <vuntz@gnome.org>

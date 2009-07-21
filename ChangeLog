@@ -1,3 +1,9 @@
+2009-07-21  Vincent Untz  <vuntz@gnome.org>
+
+	* configure.in: use AM_SILENT_RULES if available for a quiet build
+	* configure.in:
+	* Makefile.am: use the m4 directory as macro dir
+
 2009-01-10  Vincent Untz  <vuntz@gnome.org>
 
 	* src/validate.c: (desktop_file_fixup): add "warning" to the error

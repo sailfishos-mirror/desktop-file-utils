@@ -1,9 +1,0 @@
-.deps
-.libs
-Makefile
-Makefile.in
-*.lo
-*.la
-desktop-file-install
-desktop-file-validate
-update-desktop-database

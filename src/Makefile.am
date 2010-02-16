@@ -35,3 +35,5 @@ update_desktop_database_SOURCES =		\
 desktop_file_validate_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
 desktop_file_install_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
 update_desktop_database_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
+
+-include $(top_srcdir)/git.mk

@@ -21,19 +21,14 @@ DIE=0
 	DIE=1
 }
 
-AUTOMAKE=automake-1.7
-ACLOCAL=aclocal-1.7
-
-($AUTOMAKE --version) < /dev/null > /dev/null 2>&1 || {
-        AUTOMAKE=automake
-        ACLOCAL=aclocal
-}
+AUTOMAKE=automake
+ACLOCAL=aclocal
 
 ($AUTOMAKE --version) < /dev/null > /dev/null 2>&1 || {
 	echo
 	echo "You must have automake installed to compile $PROJECT."
-	echo "Get ftp://ftp.cygnus.com/pub/home/tromey/automake-1.2d.tar.gz"
-	echo "(or a newer version if it is available)"
+	echo "Download the appropriate package for your distribution,"
+	echo "or get the source tarball at ftp://ftp.gnu.org/pub/gnu/"
 	DIE=1
 }
 

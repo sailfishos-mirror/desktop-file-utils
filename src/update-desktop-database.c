@@ -461,8 +461,7 @@ main (int    argc,
 
       if (error != NULL)
         {
-          udd_verbose_print (_("Could not create cache file in directory '%s':"
-                               "\n\t%s\n"),
+          udd_verbose_print (_("Could not create cache file in '%s': %s\n"),
                              desktop_dirs[i], error->message);
           g_error_free (error);
           error = NULL;
@@ -474,8 +473,13 @@ main (int    argc,
 
   if (!found_processable_dir)
     {
-      udd_print (_("No directories in update-desktop-database search path "
-                   "could be processed and updated.\n"));
+      char *directories;
+
+      directories = g_strjoinv (":", (char **) desktop_dirs);
+      udd_print (_("The databases in %s could not be updated.\n"), directories);
+
+      g_free (directories);
+
       return 1;
     }
 

@@ -510,6 +510,23 @@ print_fatal (kf_validator *kf, const char *format, ...)
 }
 
 static void
+print_future_fatal (kf_validator *kf, const char *format, ...)
+{
+  va_list args;
+  gchar *str;
+
+  g_return_if_fail (kf != NULL && format != NULL);
+
+  va_start (args, format);
+  str = g_strdup_vprintf (format, args);
+  va_end (args);
+
+  g_print ("%s: error: (will be fatal in the future): %s", kf->filename, str);
+
+  g_free (str);
+}
+
+static void
 print_warning (kf_validator *kf, const char *format, ...)
 {
   va_list args;
@@ -1453,11 +1470,11 @@ handle_categories_key (kf_validator *kf,
         g_string_append_printf (output_required, ", or %s",
                                 registered_categories[j].requires[k]);
 
-      print_fatal (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
-                       "requires another category to be present among the "
-                       "following categories: %s\n",
-                       categories[i], locale_key, kf->current_group,
-                       output_required->str);
+      print_future_fatal (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
+                          "requires another category to be present among the "
+                          "following categories: %s\n",
+                          categories[i], locale_key, kf->current_group,
+                          output_required->str);
 
       g_string_free (output_required, TRUE);
       retval = FALSE;
@@ -1469,9 +1486,9 @@ handle_categories_key (kf_validator *kf,
   g_hash_table_destroy (hashtable);
 
   if (!main_category_present) {
-    print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                     "does not contain a registered main category\n",
-                     value, locale_key, kf->current_group, categories[i]);
+    print_future_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                        "does not contain a registered main category\n",
+                        value, locale_key, kf->current_group, categories[i]);
     retval = FALSE;
   }
 

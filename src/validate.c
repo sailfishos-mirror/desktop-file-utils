@@ -1304,11 +1304,11 @@ handle_mime_key (kf_validator *kf,
         g_free (valid_error);
         break;
       case MU_INVALID:
-        print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                         "contains value \"%s\" which is an invalid MIME "
-                         "type: %s\n",
-                         value, locale_key, kf->current_group,
-                         types[i], valid_error);
+        print_future_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                            "contains value \"%s\" which is an invalid MIME "
+                            "type: %s\n",
+                            value, locale_key, kf->current_group,
+                            types[i], valid_error);
 
         retval = FALSE;
         g_free (valid_error);

@@ -879,7 +879,7 @@ handle_icon_key (kf_validator *kf,
       return TRUE;
   }
 
-  if (strchr (value, G_DIR_SEPARATOR)) {
+  if (g_utf8_strchr (value, -1, G_DIR_SEPARATOR)) {
     print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" looks like "
                      "a relative path, instead of being an absolute path to "
                      "an icon or an icon name\n",

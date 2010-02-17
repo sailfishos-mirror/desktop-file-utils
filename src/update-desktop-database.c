@@ -470,8 +470,9 @@ main (int    argc,
     {
       char *directories;
 
-      directories = g_strjoinv (":", (char **) desktop_dirs);
-      udd_print (_("The databases in %s could not be updated.\n"), directories);
+      directories = g_strjoinv (", ", (char **) desktop_dirs);
+      udd_print (_("The databases in [%s] could not be updated.\n"),
+                 directories);
 
       g_free (directories);
 

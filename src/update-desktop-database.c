@@ -1,9 +1,12 @@
-/* update-desktop-database.c - maintains mimetype<->desktop mapping
- * cache
+/* update-desktop-database.c - maintains mimetype<->desktop mapping cache
+ * vim: set ts=2 sw=2 et: */
+
+/*
+ * Copyright (C) 2004-2006  Red Hat, Inc.
+ * Copyright (C) 2006, 2008  Vincent Untz
  *
- * Copyright 2004  Red Hat, Inc. 
- * 
  * Program written by Ray Strode <rstrode@redhat.com>
+ *                    Vincent Untz <vuntz@gnome.org>
  *
  * update-desktop-database is free software; you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as

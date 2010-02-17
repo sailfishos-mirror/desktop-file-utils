@@ -139,7 +139,7 @@ is_valid_media_type (const char  *media_type,
         if (error)
           *error = g_strdup_printf ("\"%s\" a media type that contains "
                                     "an invalid character", media_type);
-        return FALSE;
+        return MU_INVALID;
       }
     }
 

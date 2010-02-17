@@ -1346,6 +1346,10 @@ handle_categories_key (kf_validator *kf,
 
   retval = TRUE;
 
+  /* accept empty value as valid: this is like having no category at all */
+  if (value[0] == '\0')
+    return retval;
+
   hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
   categories = g_strsplit (value, ";", 0);
 

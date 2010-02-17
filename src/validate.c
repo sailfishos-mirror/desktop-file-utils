@@ -212,6 +212,10 @@ handle_encoding_key (kf_validator *kf,
                      const char   *locale_key,
                      const char   *value);
 static gboolean
+handle_autostart_condition_key (kf_validator *kf,
+                                const char   *locale_key,
+                                const char   *value);
+static gboolean
 handle_key_for_application (kf_validator *kf,
                             const char   *locale_key,
                             const char   *value);
@@ -325,7 +329,12 @@ static struct {
   { DESKTOP_STRING_TYPE,       "SwallowExec",       FALSE, TRUE,  FALSE, NULL },
   /* since 0.9.6 */
   { DESKTOP_STRING_LIST_TYPE,  "SortOrder",         FALSE, TRUE,  FALSE, NULL },
-  { DESKTOP_REGEXP_LIST_TYPE,  "FilePattern",       FALSE, TRUE,  FALSE, NULL }
+  { DESKTOP_REGEXP_LIST_TYPE,  "FilePattern",       FALSE, TRUE,  FALSE, NULL },
+
+  /* Keys from other specifications */
+
+  /* Autostart spec, currently proposed; adopted by GNOME */
+  { DESKTOP_STRING_TYPE,       "AutostartCondition", FALSE, FALSE, FALSE, handle_autostart_condition_key }
 };
 
 static const char *show_in_registered[] = {
@@ -1563,6 +1572,101 @@ handle_encoding_key (kf_validator *kf,
                    value, locale_key, kf->current_group);
 
   return FALSE;
+}
+
+/* + See http://lists.freedesktop.org/archives/xdg/2007-January/007436.html
+ * + Value is one of:
+ *   - if-exists FILE
+ *   - unless-exists FILE
+ *   - DESKTOP-ENVIRONMENT-NAME [DESKTOP-SPECIFIC-TEST]
+ *   Checked.
+ * + FILE must be a path to a filename, relative to $XDG_CONFIG_HOME.
+ *   Checked.
+ * + DESKTOP-ENVIRONMENT-NAME should be a registered value (in Desktop Menu
+ *   Specification) or start with "X-".
+ *   Checked.
+ * + [DESKTOP-SPECIFIC-TEST] is optional.
+ *   Checked.
+ */
+static gboolean
+handle_autostart_condition_key (kf_validator *kf,
+                                const char   *locale_key,
+                                const char   *value)
+{
+  gboolean  retval;
+  char     *condition;
+  char     *argument;
+
+  retval = TRUE;
+
+  condition = g_strdup (value);
+  argument = g_utf8_strchr (condition, -1, ' ');
+
+  if (argument) {
+    /* make condition a 0-ended string */
+    *argument = '\0';
+
+    /* skip the space(s) */
+    argument++;
+    while (*argument == ' ') {
+      argument++;
+    }
+  }
+
+  if (!strcmp (condition, "if-exists") || !strcmp (condition, "unless-exists")) {
+    if (!argument || argument[0] == '\0') {
+      print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                       "does not contain a path to a file to test the "
+                       "condition\n",
+                       value, locale_key, kf->current_group);
+      retval = FALSE;
+    } else if (argument[0] == G_DIR_SEPARATOR) {
+      print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                       "contains a path \"%s\" that is absolute, while it "
+                       "should be relative (to $XDG_CONFIG_HOME)\n",
+                       value, locale_key, kf->current_group, argument);
+      retval = FALSE;
+    } else if (argument[0] == '.' &&
+               ((strlen (argument) == 2 &&
+                 argument[1] == '.') ||
+                (strlen (argument) >= 3 &&
+                 argument[1] == '.' &&
+                 argument[2] == G_DIR_SEPARATOR))) {
+      print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "contains a path \"%s\" that depends on the value "
+                         "of $XDG_CONFIG_HOME (\"..\" should be avoided)\n",
+                         value, locale_key, kf->current_group, argument);
+    }
+
+  } else {
+    if (strncmp (condition, "X-", 2)) {
+      unsigned int i;
+
+      for (i = 0; i < G_N_ELEMENTS (show_in_registered); i++) {
+        if (!strcmp (condition, show_in_registered[i]))
+          break;
+      }
+
+      if (i == G_N_ELEMENTS (show_in_registered)) {
+        print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "contains an unregistered value \"%s\" for the "
+                         "condition; values extending the format should "
+                         "start with \"X-\"\n",
+                         value, locale_key, kf->current_group, condition);
+        retval = FALSE;
+      }
+    }
+
+    if (argument && argument[0] == '\0') {
+      print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "has trailing space(s)\n",
+                         value, locale_key, kf->current_group);
+    }
+  }
+
+  g_free (condition);
+
+  return retval;
 }
 
 static gboolean

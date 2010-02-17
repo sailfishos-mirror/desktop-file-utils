@@ -197,7 +197,7 @@ process_desktop_files (const char  *desktop_dir,
 
           if (process_error != NULL)
             {
-              udd_verbose_print ("Could not process directory '%s':\n"
+              udd_verbose_print ("Could not process directory \"%s\":\n"
                          "\t%s\n", full_path, process_error->message);
               g_error_free (process_error);
               process_error = NULL;
@@ -221,12 +221,12 @@ process_desktop_files (const char  *desktop_dir,
                                 G_KEY_FILE_ERROR,
                                 G_KEY_FILE_ERROR_KEY_NOT_FOUND))
             {
-              udd_print ("Could not parse file '%s': %s\n", full_path,
+              udd_print ("Could not parse file \"%s\": %s\n", full_path,
                          process_error->message);
             }
           else
             {
-              udd_verbose_print ("File '%s' lacks MimeType key\n", full_path);
+              udd_verbose_print ("File \"%s\" lacks MimeType key\n", full_path);
             }
 
           g_error_free (process_error);
@@ -334,7 +334,7 @@ sync_database (const char *dir, GError **error)
     {
       g_set_error (error, G_FILE_ERROR,
                    g_file_error_from_errno (errno),
-                   _("Cache file '%s' could not be written: %s"),
+                   _("Cache file \"%s\" could not be written: %s"),
                    cache_file, g_strerror (errno));
 
       unlink (temp_cache_file);
@@ -443,7 +443,7 @@ main (int    argc,
 
   if (error != NULL) {
     g_printerr ("%s\n", error->message);
-    g_printerr (_("Run '%s --help' to see a full list of available command line options.\n"), argv[0]);
+    g_printerr (_("Run \"%s --help\" to see a full list of available command line options.\n"), argv[0]);
     g_error_free (error);
     return 1;
   }
@@ -461,7 +461,7 @@ main (int    argc,
 
       if (error != NULL)
         {
-          udd_verbose_print (_("Could not create cache file in '%s': %s\n"),
+          udd_verbose_print (_("Could not create cache file in \"%s\": %s\n"),
                              desktop_dirs[i], error->message);
           g_error_free (error);
           error = NULL;

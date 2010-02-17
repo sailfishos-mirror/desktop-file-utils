@@ -135,14 +135,15 @@ process_desktop_file (const char  *desktop_file,
         case MU_VALID:
           break;
         case MU_DISCOURAGED:
-          udd_print ("Warning in file \"%s\": usage of MIME type \"%s\" is "
-                     "discouraged (%s)\n",
+          udd_print (_("Warning in file \"%s\": usage of MIME type \"%s\" is "
+                       "discouraged (%s)\n"),
                      desktop_file, mime_types[i], valid_error);
           g_free (valid_error);
           break;
         case MU_INVALID:
-          udd_print ("Error in file \"%s\": \"%s\" is an invalid MIME type "
-                     "(%s)\n", desktop_file, mime_types[i], valid_error);
+          udd_print (_("Error in file \"%s\": \"%s\" is an invalid MIME type "
+                       "(%s)\n"),
+                     desktop_file, mime_types[i], valid_error);
           g_free (valid_error);
           /* not a break: we continue to the next mime type */
           continue;
@@ -197,8 +198,8 @@ process_desktop_files (const char  *desktop_dir,
 
           if (process_error != NULL)
             {
-              udd_verbose_print ("Could not process directory \"%s\":\n"
-                         "\t%s\n", full_path, process_error->message);
+              udd_verbose_print (_("Could not process directory \"%s\": %s\n"),
+                                 full_path, process_error->message);
               g_error_free (process_error);
               process_error = NULL;
             }
@@ -221,12 +222,13 @@ process_desktop_files (const char  *desktop_dir,
                                 G_KEY_FILE_ERROR,
                                 G_KEY_FILE_ERROR_KEY_NOT_FOUND))
             {
-              udd_print ("Could not parse file \"%s\": %s\n", full_path,
+              udd_print (_("Could not parse file \"%s\": %s\n"), full_path,
                          process_error->message);
             }
           else
             {
-              udd_verbose_print ("File \"%s\" lacks MimeType key\n", full_path);
+              udd_verbose_print (_("File \"%s\" lacks MimeType key\n"),
+                                 full_path);
             }
 
           g_error_free (process_error);

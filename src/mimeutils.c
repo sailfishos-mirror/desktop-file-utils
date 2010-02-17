@@ -38,6 +38,15 @@
 
 #include "mimeutils.h"
 
+/* Not registered with IANA, but used on a free desktop */
+static const char *known_fdo_media_types[] = {
+  "inode", "x-content"
+};
+
+static const char *known_old_fdo_media_types[] = {
+  "x-directory"
+};
+
 /* Defined in RFC 2045/2046 and RFC 2077 */
 static const char *registered_discrete_media_types[] = {
   "application", "audio", "image", "model", "text", "video"
@@ -52,12 +61,12 @@ static const char *registered_not_used_media_types[] = {
   "example"
 };
 
-/* TODO: we will break in a few cases, since we're only IANA-aware so far.
+/* TODO: we will break in a few cases.
  * Known cases:
- *  inode/.*: added by the fdo spec
  *  flv-application/octet-stream: alias in the fdo db
  *  zz-application/zz-winassoc-cdr: alias in the fdo db
  *  misc/ultravox: widely used?
+ *  message/rfc822: should not be discouraged
  *
  * TODO: might actually be nice to download at distcheck time all the
  * registered subtypes and warn when using a non-registered non-experimental
@@ -105,6 +114,25 @@ is_valid_media_type (const char  *media_type,
 {
   unsigned int i;
 
+#define IF_IS_MEDIA_TYPE_IN(list)             \
+  for (i = 0; i < G_N_ELEMENTS (list); i++) { \
+    if (strcmp (media_type, list[i]) == 0)       \
+      break;                                  \
+  }                                           \
+  if (i < G_N_ELEMENTS (list))
+
+  /* Handle known_fdo_media_types before X- types because it contains one X-
+   * type */
+  IF_IS_MEDIA_TYPE_IN (known_fdo_media_types)
+    return MU_VALID;
+
+  IF_IS_MEDIA_TYPE_IN (known_old_fdo_media_types) {
+    if (error)
+      *error = g_strdup_printf ("\"%s\" is an old media type that should be "
+                                "replaced by a modern equivalent", media_type);
+    return MU_DISCOURAGED;
+  }
+
   if (g_ascii_strncasecmp (media_type, "X-", 2) == 0) {
     for (i = 2; media_type[i]; i++) {
       if (!is_valid_mime_type_char (media_type[i]))
@@ -121,13 +149,6 @@ is_valid_media_type (const char  *media_type,
 
     return MU_DISCOURAGED;
   }
-
-#define IF_IS_MEDIA_TYPE_IN(list)             \
-  for (i = 0; i < G_N_ELEMENTS (list); i++) { \
-    if (strcmp (media_type, list[i]) == 0)       \
-      break;                                  \
-  }                                           \
-  if (i < G_N_ELEMENTS (list))
 
   IF_IS_MEDIA_TYPE_IN (registered_discrete_media_types)
     return MU_VALID;

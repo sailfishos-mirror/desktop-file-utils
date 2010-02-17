@@ -397,18 +397,11 @@ get_default_search_path (void)
 void
 print_desktop_dirs (const char **dirs)
 {
-  int i;
-  const char *delimiter;
+  char *directories;
 
-  udd_verbose_print(_("Search path is now: ["));
-  delimiter = "";
-  for (i = 0; dirs[i] != NULL; i++)
-    {
-      udd_verbose_print (delimiter);
-      delimiter = ", ";
-      udd_verbose_print (dirs[i]);
-    }
-  udd_verbose_print ("]\n");
+  directories = g_strjoinv (", ", (char **) dirs);
+  udd_verbose_print(_("Search path is now: [%s]\n"), directories);
+  g_free (directories);
 }
 
 int

@@ -44,14 +44,14 @@
 #define udd_verbose_print(...) if (verbose) g_printerr (__VA_ARGS__)
 
 static FILE *open_temp_cache_file (const char  *dir,
-				   char       **filename,
-				   GError     **error);
+                                   char       **filename,
+                                   GError     **error);
 static void add_mime_type (const char *mime_type, GList *desktop_files, FILE *f);
 static void sync_database (const char *dir, GError **error);
-static void cache_desktop_file (const char  *desktop_file, 
+static void cache_desktop_file (const char  *desktop_file,
                                 const char  *mime_type,
                                 GError     **error);
-static void process_desktop_file (const char  *desktop_file, 
+static void process_desktop_file (const char  *desktop_file,
                                   const char  *name,
                                   GError     **error);
 static void process_desktop_files (const char *desktop_dir,
@@ -86,13 +86,13 @@ cache_desktop_file (const char  *desktop_file,
 
 
 static void
-process_desktop_file (const char  *desktop_file, 
+process_desktop_file (const char  *desktop_file,
                       const char  *name,
                       GError     **error)
 {
-  GError *load_error; 
+  GError *load_error;
   GKeyFile *keyfile;
-  char **mime_types; 
+  char **mime_types;
   int i;
 
   keyfile = g_key_file_new ();
@@ -101,7 +101,7 @@ process_desktop_file (const char  *desktop_file,
   g_key_file_load_from_file (keyfile, desktop_file,
                              G_KEY_FILE_NONE, &load_error);
 
-  if (load_error != NULL) 
+  if (load_error != NULL)
     {
       g_propagate_error (error, load_error);
       return;
@@ -113,7 +113,7 @@ process_desktop_file (const char  *desktop_file,
 
   g_key_file_free (keyfile);
 
-  if (load_error != NULL) 
+  if (load_error != NULL)
     {
       g_propagate_error (error, load_error);
       return;
@@ -152,7 +152,7 @@ process_desktop_file (const char  *desktop_file,
       if (load_error != NULL)
         {
           g_propagate_error (error, load_error);
-	  g_strfreev (mime_types);
+          g_strfreev (mime_types);
           return;
         }
     }
@@ -179,7 +179,7 @@ process_desktop_files (const char  *desktop_dir,
 
   while ((filename = g_dir_read_name (dir)) != NULL)
     {
-      char *full_path, *name; 
+      char *full_path, *name;
 
       full_path = g_build_filename (desktop_dir, filename, NULL);
 
@@ -214,7 +214,7 @@ process_desktop_files (const char  *desktop_dir,
 
       if (process_error != NULL)
         {
-          if (!g_error_matches (process_error, 
+          if (!g_error_matches (process_error,
                                 G_KEY_FILE_ERROR,
                                 G_KEY_FILE_ERROR_KEY_NOT_FOUND))
             {
@@ -247,11 +247,11 @@ open_temp_cache_file (const char *dir, char **filename, GError **error)
   file = g_build_filename (dir, TEMP_CACHE_FILENAME_PREFIX, NULL);
   fd = g_mkstemp (file);
 
-  if (fd < 0) 
+  if (fd < 0)
     {
       g_set_error (error, G_FILE_ERROR,
-		   g_file_error_from_errno (errno),
-		   "%s", g_strerror (errno));
+                   g_file_error_from_errno (errno),
+                   "%s", g_strerror (errno));
       g_free (file);
       return NULL;
     }
@@ -262,11 +262,11 @@ open_temp_cache_file (const char *dir, char **filename, GError **error)
   fchmod (fd, 0666 & ~mask);
 
   fp = fdopen (fd, "w+");
-  if (fp == NULL) 
+  if (fp == NULL)
     {
       g_set_error (error, G_FILE_ERROR,
-		   g_file_error_from_errno (errno),
-		   "%s", g_strerror (errno));
+                   g_file_error_from_errno (errno),
+                   "%s", g_strerror (errno));
       g_free (file);
       close (fd);
       return NULL;
@@ -289,7 +289,7 @@ add_mime_type (const char *mime_type, GList *desktop_files, FILE *f)
   list = g_string_new (mime_type);
   g_string_append_c (list, '=');
   for (desktop_file = desktop_files;
-       desktop_file != NULL; 
+       desktop_file != NULL;
        desktop_file = desktop_file->next)
     {
       g_string_append (list, (const char *) desktop_file->data);
@@ -341,14 +341,14 @@ sync_database (const char *dir, GError **error)
 }
 
 static void
-update_database (const char  *desktop_dir, 
+update_database (const char  *desktop_dir,
                  GError     **error)
 {
   GError *update_error;
 
-  mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal, 
-					  (GDestroyNotify)g_free,
-					  NULL);
+  mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                          (GDestroyNotify)g_free,
+                                          NULL);
 
   update_error = NULL;
   process_desktop_files (desktop_dir, "", &update_error);
@@ -439,10 +439,10 @@ main (int    argc,
   g_option_context_parse (context, &argc, &argv, &error);
 
   if (error != NULL) {
-	  g_printerr ("%s\n", error->message);
-	  g_printerr (_("Run '%s --help' to see a full list of available command line options.\n"), argv[0]);
-	  g_error_free (error);
-	  return 1;
+    g_printerr ("%s\n", error->message);
+    g_printerr (_("Run '%s --help' to see a full list of available command line options.\n"), argv[0]);
+    g_error_free (error);
+    return 1;
   }
 
   if (desktop_dirs == NULL || desktop_dirs[0] == NULL)

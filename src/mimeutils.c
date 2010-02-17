@@ -75,14 +75,14 @@ static gboolean
 is_valid_mime_type_char (const guchar c)
 {
   char invalid_chars[] = "()<>@,;:\\\"/[]?=";
-  
+
   /* Filter out control chars and space */
   if ((c <= 32) || (c == 127))
     return FALSE;
-  
+
   if (memchr (invalid_chars, c, sizeof (invalid_chars)) != NULL)
     return FALSE;
-  
+
   return TRUE;
 }
 
@@ -158,7 +158,7 @@ mu_mime_type_is_valid (const char  *mime_type,
   char *media_type;
   char *subtype;
   MimeUtilsValidity media_type_validity;
-  
+
   media_type = g_strdup (mime_type);
   subtype = strchr (media_type, '/');
 
@@ -183,9 +183,10 @@ mu_mime_type_is_valid (const char  *mime_type,
 
   for (; subtype[0] != '\0'; subtype++) {
       if (!is_valid_mime_type_char (subtype[0])) {
-      if (error)
-        *error = g_strdup_printf ("\"%s\" contains an invalid character in "
-                                  "the subtype", mime_type);
+        if (error)
+          *error = g_strdup_printf ("\"%s\" contains an invalid character in "
+                                    "the subtype", mime_type);
+
         g_free (media_type);
         return MU_INVALID;
       }

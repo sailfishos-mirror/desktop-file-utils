@@ -266,7 +266,7 @@ static struct {
                                            const char   *value);
 } registered_desktop_keys[] = {
   { DESKTOP_STRING_TYPE,       "Type",              TRUE,  FALSE, FALSE, handle_type_key },
-  /* it is numeric according to the spec, but it's not true in previous 
+  /* it is numeric according to the spec, but it's not true in previous
    * versions of the spec. handle_version_key() will manage this */
   { DESKTOP_STRING_TYPE,       "Version",           FALSE, FALSE, FALSE, handle_version_key },
   { DESKTOP_LOCALESTRING_TYPE, "Name",              TRUE,  FALSE, FALSE, NULL },
@@ -483,7 +483,7 @@ print_fatal (kf_validator *kf, const char *format, ...)
 {
   va_list args;
   gchar *str;
-  
+
   g_return_if_fail (kf != NULL && format != NULL);
 
   kf->fatal_error = TRUE;
@@ -493,7 +493,7 @@ print_fatal (kf_validator *kf, const char *format, ...)
   va_end (args);
 
   g_print ("%s: error: %s", kf->filename, str);
-  
+
   g_free (str);
 }
 
@@ -502,7 +502,7 @@ print_warning (kf_validator *kf, const char *format, ...)
 {
   va_list args;
   gchar *str;
-  
+
   g_return_if_fail (kf != NULL && format != NULL);
 
   va_start (args, format);
@@ -638,7 +638,7 @@ validate_numeric_key (kf_validator *kf,
 {
   float d;
   int res;
-  
+
   res = sscanf (value, "%f", &d);
   if (res == 0) {
     print_fatal (kf, "value \"%s\" for numeric key \"%s\" in group \"%s\" "
@@ -951,7 +951,7 @@ handle_show_in_key (kf_validator *kf,
     if (j == G_N_ELEMENTS (show_in_registered)) {
       print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "contains an unregistered value \"%s\"; values "
-		       "extending the format should start with \"X-\"\n",
+                       "extending the format should start with \"X-\"\n",
                        value, locale_key, kf->current_group, show[i]);
       retval = FALSE;
     }
@@ -1379,7 +1379,7 @@ handle_categories_key (kf_validator *kf,
     if (j == G_N_ELEMENTS (registered_categories)) {
       print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                        "contains an unregistered value \"%s\"; values "
-		       "extending the format should start with \"X-\"\n",
+                       "extending the format should start with \"X-\"\n",
                        value, locale_key, kf->current_group, categories[i]);
       retval = FALSE;
       continue;
@@ -2315,7 +2315,7 @@ validate_parse_data (kf_validator *kf,
           kf->cr_error = TRUE;
         }
       }
-          
+
       if (kf->parse_buffer->len > 0) {
         validate_parse_line (kf);
         g_string_erase (kf->parse_buffer, 0, -1);
@@ -2518,14 +2518,14 @@ desktop_file_fixup (GKeyFile   *keyfile,
 {
   char         *value;
   unsigned int  i;
-  
+
   if (g_key_file_has_group (keyfile, GROUP_KDE_DESKTOP_ENTRY)) {
     g_printerr ("%s: warning: renaming deprecated \"%s\" group to \"%s\"\n",
                 filename, GROUP_KDE_DESKTOP_ENTRY, GROUP_DESKTOP_ENTRY);
     dfu_key_file_rename_group (keyfile,
                                GROUP_KDE_DESKTOP_ENTRY, GROUP_DESKTOP_ENTRY);
   }
-  
+
   /* Fix lists to have a ';' at the end if they don't */
   for (i = 0; i < G_N_ELEMENTS (registered_desktop_keys); i++) {
     if (registered_desktop_keys[i].type != DESKTOP_STRING_LIST_TYPE &&
@@ -2547,7 +2547,7 @@ desktop_file_fixup (GKeyFile   *keyfile,
           g_printerr ("%s: warning: key \"%s\" is a list and does not have a "
                       "semicolon as trailing character, fixing\n",
                       filename, registered_desktop_keys[i].name);
-          
+
           str = g_strconcat (value, ";", NULL);
           g_key_file_set_value (keyfile, GROUP_DESKTOP_ENTRY,
                                 registered_desktop_keys[i].name, str);

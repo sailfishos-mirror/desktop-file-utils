@@ -36,7 +36,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-int 
+int
 main (int argc, char *argv[])
 {
   GOptionContext *context;

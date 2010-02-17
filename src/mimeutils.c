@@ -61,14 +61,33 @@ static const char *registered_not_used_media_types[] = {
   "example"
 };
 
-/* TODO: we will break in a few cases.
- * Known cases:
- *  flv-application/octet-stream: alias in the fdo db
- *  zz-application/zz-winassoc-cdr: alias in the fdo db
- *  misc/ultravox: widely used?
- *  message/rfc822: should not be discouraged
- *
- * TODO: might actually be nice to download at distcheck time all the
+/* A few mime types that are not valid strictly-speaking (or discouraged
+ * according to the above media type), but that we know should be valid */
+static const char *valid_exceptions_mime_types[] = {
+  /* mail: a mail saved in a fail will have this mime type */
+  "message/rfc822",
+  /* some multimedia mime type; it clearly doesn't respect the mime type rules,
+   * but it's widely deployed */
+  "misc/ultravox"
+};
+
+static struct {
+  const char *mime_type;
+  const char *should_be;
+} alias_to_replace_mime_types[] = {
+  { "flv-application/octet-stream", "video/x-flv" },
+  { "zz-application/zz-winassoc-cdr", "application/vnd.corel-draw" }
+};
+
+#define IF_IS_IN(list, type)                  \
+  for (i = 0; i < G_N_ELEMENTS (list); i++) { \
+    if (strcmp (type, list[i]) == 0)          \
+      break;                                  \
+  }                                           \
+  if (i < G_N_ELEMENTS (list))
+
+
+/* TODO: it might actually be nice to download at distcheck time all the
  * registered subtypes and warn when using a non-registered non-experimental
  * subtype.
  */
@@ -114,22 +133,15 @@ is_valid_media_type (const char  *media_type,
 {
   unsigned int i;
 
-#define IF_IS_MEDIA_TYPE_IN(list)             \
-  for (i = 0; i < G_N_ELEMENTS (list); i++) { \
-    if (strcmp (media_type, list[i]) == 0)       \
-      break;                                  \
-  }                                           \
-  if (i < G_N_ELEMENTS (list))
-
   /* Handle known_fdo_media_types before X- types because it contains one X-
    * type */
-  IF_IS_MEDIA_TYPE_IN (known_fdo_media_types)
+  IF_IS_IN (known_fdo_media_types, media_type)
     return MU_VALID;
 
-  IF_IS_MEDIA_TYPE_IN (known_old_fdo_media_types) {
+  IF_IS_IN (known_old_fdo_media_types, media_type) {
     if (error)
       *error = g_strdup_printf ("\"%s\" is an old media type that should be "
-                                "replaced by a modern equivalent", media_type);
+                                "replaced with a modern equivalent", media_type);
     return MU_DISCOURAGED;
   }
 
@@ -151,17 +163,17 @@ is_valid_media_type (const char  *media_type,
     return MU_DISCOURAGED;
   }
 
-  IF_IS_MEDIA_TYPE_IN (registered_discrete_media_types)
+  IF_IS_IN (registered_discrete_media_types, media_type)
     return MU_VALID;
 
-  IF_IS_MEDIA_TYPE_IN (registered_composite_media_types) {
+  IF_IS_IN (registered_composite_media_types, media_type) {
     if (error)
       *error = g_strdup_printf ("\"%s\" is a media type that probably does "
                                 "not make sense in this context", media_type);
     return MU_DISCOURAGED;
   }
 
-  IF_IS_MEDIA_TYPE_IN (registered_not_used_media_types) {
+  IF_IS_IN (registered_not_used_media_types, media_type) {
     if (error)
       *error = g_strdup_printf ("\"%s\" is a media type that must not "
                                 "be used", media_type);
@@ -179,9 +191,13 @@ MimeUtilsValidity
 mu_mime_type_is_valid (const char  *mime_type,
                        char       **error)
 {
+  unsigned int i;
   char *media_type;
   char *subtype;
   MimeUtilsValidity media_type_validity;
+
+  if (error)
+    *error = NULL;
 
   media_type = g_strdup (mime_type);
   subtype = strchr (media_type, '/');
@@ -218,6 +234,43 @@ mu_mime_type_is_valid (const char  *mime_type,
 
   media_type_validity = is_valid_media_type (media_type, error);
   g_free (media_type);
+
+  /* Let's end with the exceptions. We do this at the end to avoid doing more
+   * work in most cases. */
+
+  if (media_type_validity != MU_VALID) {
+    IF_IS_IN (valid_exceptions_mime_types, mime_type) {
+      if (error && *error) {
+        g_free (*error);
+        *error = NULL;
+      }
+
+      return MU_VALID;
+    }
+  }
+
+  /* If the mime type is already discouraged, then it won't be an improvement
+   * to say that it's discouraged because it's an alias to something else. So
+   * we just handle invalid mime types here. */
+  if (media_type_validity == MU_INVALID) {
+    for (i = 0; i < G_N_ELEMENTS (alias_to_replace_mime_types); i++) {
+      if (strcmp (mime_type, alias_to_replace_mime_types[i].mime_type) == 0)
+        break;
+    }
+
+    if (i < G_N_ELEMENTS (alias_to_replace_mime_types)) {
+      if (error) {
+        if (*error)
+          g_free (*error);
+
+        *error = g_strdup_printf ("\"%s\" should be replaced with \"%s\"",
+                                  mime_type,
+                                  alias_to_replace_mime_types[i].should_be);
+      }
+
+      return MU_DISCOURAGED;
+    }
+  }
 
   return media_type_validity;
 }

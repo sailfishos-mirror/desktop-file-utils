@@ -1597,6 +1597,8 @@ handle_autostart_condition_key (kf_validator *kf,
   char     *condition;
   char     *argument;
 
+  handle_key_for_application (kf, locale_key, value);
+
   retval = TRUE;
 
   condition = g_strdup (value);

@@ -135,11 +135,12 @@ is_valid_media_type (const char  *media_type,
 
   if (g_ascii_strncasecmp (media_type, "X-", 2) == 0) {
     for (i = 2; media_type[i]; i++) {
-      if (!is_valid_mime_type_char (media_type[i]))
+      if (!is_valid_mime_type_char (media_type[i])) {
         if (error)
           *error = g_strdup_printf ("\"%s\" a media type that contains "
                                     "an invalid character", media_type);
         return FALSE;
+      }
     }
 
     if (error)

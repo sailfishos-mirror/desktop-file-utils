@@ -69,7 +69,7 @@ static const char *registered_not_used_media_types[] = {
 /* A few mime types that are not valid strictly-speaking (or discouraged
  * according to the above media type), but that we know should be valid */
 static const char *valid_exceptions_mime_types[] = {
-  /* mail: a mail saved in a fail will have this mime type */
+  /* mail: a mail saved in a file will have this mime type */
   "message/rfc822",
   /* some multimedia mime type; it clearly doesn't respect the mime type rules,
    * but it's widely deployed */

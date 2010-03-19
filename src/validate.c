@@ -904,15 +904,14 @@ handle_icon_key (kf_validator *kf,
     return FALSE;
   }
 
-  /* FIXME: in the future, we should make this fatal again */
   if (g_str_has_suffix (value, ".png") ||
       g_str_has_suffix (value, ".xpm") ||
       g_str_has_suffix (value, ".svg")) {
-    print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" is an icon "
-                     "name with an extension, but there should be no extension "
-                     "as described in the Icon Theme Specification if the "
-                     "value is not an absolute path\n",
-                     value, locale_key, kf->current_group);
+    print_future_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" is an icon "
+                        "name with an extension, but there should be no extension "
+                        "as described in the Icon Theme Specification if the "
+                        "value is not an absolute path\n",
+                        value, locale_key, kf->current_group);
     return FALSE;
   }
 

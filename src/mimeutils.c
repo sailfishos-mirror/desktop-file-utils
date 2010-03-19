@@ -40,7 +40,12 @@
 
 /* Not registered with IANA, but used on a free desktop */
 static const char *known_fdo_media_types[] = {
-  "inode", "x-content"
+  "inode", "x-content",
+  /* The chemical media type was never really proposed to IANA, but is
+   * well-known and in use by various applications out there. There are
+   * also some guidelines to not abuse it.
+   *   http://www.ch.ic.ac.uk/chemime/ */
+  "chemical"
 };
 
 static const char *known_old_fdo_media_types[] = {

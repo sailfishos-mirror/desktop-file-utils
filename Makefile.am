@@ -2,6 +2,8 @@ SUBDIRS = src misc
 
 ACLOCAL_AMFLAGS = -I m4
 
+EXTRA_DIST = HACKING
+
 MAINTAINERCLEANFILES = \
 	$(srcdir)/aclocal.m4 \
 	$(srcdir)/config.guess \

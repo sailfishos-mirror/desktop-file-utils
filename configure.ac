@@ -102,8 +102,9 @@ AM_PATH_LISPDIR
 
 AC_CONFIG_FILES([
 Makefile
-src/Makefile
+man/Makefile
 misc/Makefile
+src/Makefile
 ])
 
 AC_OUTPUT

@@ -313,6 +313,7 @@ sync_database (const char *dir, GError **error)
   GError *sync_error;
   char *temp_cache_file, *cache_file;
   FILE *tmp_file;
+  GList *keys, *key;
 
   temp_cache_file = NULL;
   sync_error = NULL;
@@ -325,8 +326,16 @@ sync_database (const char *dir, GError **error)
     }
 
   fputs ("[MIME Cache]\n", tmp_file);
-  g_hash_table_foreach (mime_types_map, (GHFunc) add_mime_type, tmp_file);
 
+  keys = g_hash_table_get_keys (mime_types_map);
+  keys = g_list_sort (keys, (GCompareFunc) g_strcmp0);
+
+  for (key = keys; key != NULL; key = key->next)
+    add_mime_type (key->data,
+                   g_hash_table_lookup (mime_types_map, key->data),
+                   tmp_file);
+
+  g_list_free (keys);
   fclose (tmp_file);
 
   cache_file = g_build_filename (dir, CACHE_FILENAME, NULL);

@@ -1,4 +1,22 @@
 ============
+Version 0.17
+============
+
+ desktop-file-validate
+   - accept chemical/* mime types as valid types (Vincent)
+   - make icon names with an extension for Icon key a non-fatal error (Vincent)
+
+ update-desktop-database
+   - accept chemical/* mime types as valid types (Vincent)
+   - ignore --verbose if --quiet is also passed (Vincent)
+   - make sure to always output lists in the keyfile we generate (Vincent)
+
+ misc
+   - improve build system (Vincent)
+   - update documentation (Vincent)
+   - add man pages (Vincent)
+
+============
 Version 0.16
 ============
 

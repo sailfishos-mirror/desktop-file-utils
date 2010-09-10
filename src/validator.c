@@ -33,8 +33,8 @@ static gboolean   no_warn_deprecated = FALSE;
 static char     **filename = NULL;
 
 static GOptionEntry option_entries[] = {
-  { "warn-kde", 0, 0, G_OPTION_ARG_NONE, &warn_kde, "Warn about usage of KDE extensions to the specification", NULL },
   { "no-warn-deprecated", 0, 0, G_OPTION_ARG_NONE, &no_warn_deprecated, "Do not warn about usage of deprecated items", NULL },
+  { "warn-kde", 0, 0, G_OPTION_ARG_NONE, &warn_kde, "Warn about usage of KDE extensions to the specification", NULL },
   { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &filename, NULL, "<desktop-file>" },
   { NULL }
 };
@@ -47,7 +47,7 @@ main (int argc, char *argv[])
 
   context = g_option_context_new (NULL);
   g_option_context_set_summary (context, "Validate desktop entry files "
-                                         "according to the desktop entry "
+                                         "according to the Desktop Entry "
                                          "specification "CURRENT_SPEC_VERSION
                                          ".\n"
                                          "For information about this "

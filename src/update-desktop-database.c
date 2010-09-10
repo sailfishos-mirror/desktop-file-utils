@@ -414,13 +414,13 @@ main (int    argc,
 
   const GOptionEntry options[] =
    {
+     { "quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
+       N_("Do not display any information about processing and "
+          "updating progress"), NULL},
+
      { "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
        N_("Display more information about processing and updating progress"),
        NULL},
-
-     { "quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
-       N_("Don't display any information about about processing and "
-          "updating progress"), NULL},
 
      { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &desktop_dirs,
        NULL, N_("[DIRECTORY...]") },
@@ -428,6 +428,7 @@ main (int    argc,
    };
 
   context = g_option_context_new ("");
+  g_option_context_set_summary (context, _("Build cache database of MIME types handled by desktop files."));
   g_option_context_add_main_entries (context, options, NULL);
 
   desktop_dirs = NULL;

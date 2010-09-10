@@ -271,13 +271,12 @@ static gboolean parse_options_callback (const gchar  *option_name,
 
 static const GOptionEntry options[] = {
   {
-#define OPTION_VENDOR "vendor"
-    OPTION_VENDOR,
+    "delete-original",
     '\0',
     '\0',
-    G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
-    N_("Specify the vendor prefix to be applied to the desktop file. If the file already has this prefix, nothing happens."),
+    G_OPTION_ARG_NONE,
+    &delete_original,
+    N_("Delete the source desktop files, leaving only the target files (effectively \"renames\" the desktop files)"),
     NULL
   },
   {
@@ -287,17 +286,8 @@ static const GOptionEntry options[] = {
     '\0',
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
-    N_("Specify the directory where files should be installed."),
-    NULL
-  },
-  {
-    "delete-original",
-    '\0',
-    '\0',
-    G_OPTION_ARG_NONE,
-    &delete_original,
-    N_("Delete the source desktop file, leaving only the target file. Effectively \"renames\" a desktop file."),
-    NULL
+    N_("Install desktop files to the DIR directory"),
+    N_("DIR")
   },
   {
 #define OPTION_MODE "mode"
@@ -306,8 +296,18 @@ static const GOptionEntry options[] = {
     '\0',
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
-    N_("Set the given permissions on the destination file."),
-    NULL
+    N_("Set the permissions of the destination files to MODE"),
+    N_("MODE")
+  },
+  {
+#define OPTION_VENDOR "vendor"
+    OPTION_VENDOR,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Add a vendor prefix to the desktop files, if not already present"),
+    N_("VENDOR")
   },
   {
     "rebuild-mime-info-cache",
@@ -315,7 +315,7 @@ static const GOptionEntry options[] = {
     '\0',
     G_OPTION_ARG_NONE,
     &rebuild_mime_info_cache,
-    N_("After installing desktop file rebuild the mime-types application database."),
+    N_("Rebuild the MIME types application database after installing desktop files"),
     NULL
   },
   { G_OPTION_REMAINING,
@@ -332,52 +332,12 @@ static const GOptionEntry options[] = {
 
 static const GOptionEntry edit_options[] = {
   {
-#define OPTION_ADD_CATEGORY "add-category"
-    OPTION_ADD_CATEGORY,
-    '\0',
-    '\0',
-    G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
-    N_("Specify a category to be added to the Categories field."),
-    N_("CATEGORY")
-  },
-  {
-#define OPTION_REMOVE_CATEGORY "remove-category"
-    OPTION_REMOVE_CATEGORY,
-    '\0',
-    '\0',
-    G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
-    N_("Specify a category to be removed from the Categories field."),
-    N_("CATEGORY")
-  },
-  {
-#define OPTION_ADD_ONLY_SHOW_IN "add-only-show-in"
-    OPTION_ADD_ONLY_SHOW_IN,
-    '\0',
-    '\0',
-    G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
-    N_("Specify a product name to be added to the OnlyShowIn field."),
-    N_("PRODUCT")
-  },
-  {
-#define OPTION_REMOVE_ONLY_SHOW_IN "remove-only-show-in"
-    OPTION_REMOVE_ONLY_SHOW_IN,
-    '\0',
-    '\0',
-    G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
-    N_("Specify a product name to be removed from the OnlyShowIn field."),
-    N_("PRODUCT")
-  },
-  {
     "copy-name-to-generic-name",
     '\0',
     '\0',
     G_OPTION_ARG_NONE,
     &copy_name_to_generic_name,
-    N_("Copy the contents of the \"Name\" field to the \"GenericName\" field."),
+    N_("Copy the value of the \"Name\" key to the \"GenericName\" key"),
     NULL
   },
   {
@@ -386,7 +346,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     G_OPTION_ARG_NONE,
     &copy_generic_name_to_name,
-    N_("Copy the contents of the \"GenericName\" field to the \"Name\" field."),
+    N_("Copy the value of the \"GenericName\" key to the \"Name\" key"),
     NULL
   },
   {
@@ -396,8 +356,28 @@ static const GOptionEntry edit_options[] = {
     '\0',
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
-    N_("Specify a field to be removed from the desktop file."),
+    N_("Remove the KEY key from the desktop files, if present"),
     N_("KEY")
+  },
+  {
+#define OPTION_ADD_CATEGORY "add-category"
+    OPTION_ADD_CATEGORY,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Add CATEGORY to the list of categories"),
+    N_("CATEGORY")
+  },
+  {
+#define OPTION_REMOVE_CATEGORY "remove-category"
+    OPTION_REMOVE_CATEGORY,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Remove CATEGORY from the list of categories"),
+    N_("CATEGORY")
   },
   {
 #define OPTION_ADD_MIME_TYPE "add-mime-type"
@@ -406,7 +386,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
-    N_("Specify a mime-type to be added to the MimeType field."),
+    N_("Add MIME-TYPE to the list of MIME types"),
     N_("MIME-TYPE")
   },
   {
@@ -416,8 +396,28 @@ static const GOptionEntry edit_options[] = {
     '\0',
     G_OPTION_ARG_CALLBACK,
     parse_options_callback,
-    N_("Specify a mime-type to be removed from the MimeType field."),
+    N_("Remove MIME-TYPE from the list of MIME types"),
     N_("MIME-TYPE")
+  },
+  {
+#define OPTION_ADD_ONLY_SHOW_IN "add-only-show-in"
+    OPTION_ADD_ONLY_SHOW_IN,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Add ENVIRONMENT to the list of desktop environment where the desktop files should be displayed"),
+    N_("ENVIRONMENT")
+  },
+  {
+#define OPTION_REMOVE_ONLY_SHOW_IN "remove-only-show-in"
+    OPTION_REMOVE_ONLY_SHOW_IN,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_options_callback,
+    N_("Remove ENVIRONMENT from the list of desktop environment where the desktop files should be displayed"),
+    N_("ENVIRONMENT")
   },
   {
     NULL
@@ -552,6 +552,7 @@ main (int argc, char **argv)
   setlocale (LC_ALL, "");
 
   context = g_option_context_new ("");
+  g_option_context_set_summary (context, _("Install desktop files."));
   g_option_context_add_main_entries (context, options, NULL);
 
   group = g_option_group_new ("edit", _("Edition options for desktop file"), _("Show desktop file edition options"), NULL, NULL);

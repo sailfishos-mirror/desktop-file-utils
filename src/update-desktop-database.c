@@ -298,9 +298,7 @@ add_mime_type (const char *mime_type, GList *desktop_files, FILE *f)
        desktop_file = desktop_file->next)
     {
       g_string_append (list, (const char *) desktop_file->data);
-
-      if (desktop_files->next != NULL)
-        g_string_append_c (list, ';');
+      g_string_append_c (list, ';');
     }
   g_string_append_c (list, '\n');
 

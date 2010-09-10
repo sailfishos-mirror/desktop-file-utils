@@ -44,7 +44,7 @@
 #define TEMP_CACHE_FILENAME_PREFIX ".mimeinfo.cache.XXXXXX"
 
 #define udd_print(...) if (!quiet) g_printerr (__VA_ARGS__)
-#define udd_verbose_print(...) if (verbose) g_printerr (__VA_ARGS__)
+#define udd_verbose_print(...) if (!quiet && verbose) g_printerr (__VA_ARGS__)
 
 static FILE *open_temp_cache_file (const char  *dir,
                                    char       **filename,

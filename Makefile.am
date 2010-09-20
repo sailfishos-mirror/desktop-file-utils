@@ -1,4 +1,4 @@
-SUBDIRS = man misc src
+SUBDIRS = src man misc
 
 ACLOCAL_AMFLAGS = -I m4
 

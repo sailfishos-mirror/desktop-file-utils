@@ -1,4 +1,19 @@
 ============
+Version 0.18
+============
+
+ desktop-file-validate
+   - accept x-scheme-handler/* mime types (Vincent)
+
+ update-desktop-database
+   - sort mime types alphabetically in generated cache (Vincent)
+   - accept x-scheme-handler/* mime types (Vincent)
+
+ misc
+   - improve build system (Vincent)
+   - minor documentation fixes (Vincent)
+
+============
 Version 0.17
 ============
 

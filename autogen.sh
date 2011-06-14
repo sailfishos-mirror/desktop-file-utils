@@ -46,8 +46,6 @@ if test -z "$*"; then
         echo "to pass any to it, please specify them on the $0 command line."
 fi
 
-libtoolize --copy --force
-
 echo $ACLOCAL $ACLOCAL_FLAGS
 $ACLOCAL $ACLOCAL_FLAGS
 
@@ -59,7 +57,7 @@ autoconf || echo "autoconf failed - version 2.5x is probably required"
 
 cd $ORIGDIR
 
-$srcdir/configure --enable-maintainer-mode "$@"
+$srcdir/configure "$@"
 
 echo 
 echo "Now type 'make' to compile $PROJECT."

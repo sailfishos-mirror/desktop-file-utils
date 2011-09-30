@@ -73,7 +73,11 @@ static const char *valid_exceptions_mime_types[] = {
   "message/rfc822",
   /* some multimedia mime type; it clearly doesn't respect the mime type rules,
    * but it's widely deployed */
-  "misc/ultravox"
+  "misc/ultravox",
+  /* zz-application is not a valid media type, but these mime types are widely
+   * used, so some applications claim them for interoperability */
+  "zz-application/zz-winassoc-doc",
+  "zz-application/zz-winassoc-xls",
 };
 
 static struct {
@@ -81,7 +85,15 @@ static struct {
   const char *should_be;
 } alias_to_replace_mime_types[] = {
   { "flv-application/octet-stream", "video/x-flv" },
-  { "zz-application/zz-winassoc-cdr", "application/vnd.corel-draw" }
+  { "zz-application/zz-winassoc-123", "application/vnd.lotus-1-2-3" },
+  { "zz-application/zz-winassoc-cab", "application/vnd.ms-cab-compressed" },
+  { "zz-application/zz-winassoc-cdr", "application/vnd.corel-draw" },
+  { "zz-application/zz-winassoc-hlp", "application/winhlp" },
+  { "zz-application/zz-winassoc-ini", "text/plain" },
+  { "zz-application/zz-winassoc-lwp", "application/vnd.lotus-wordpro" },
+  { "zz-application/zz-winassoc-lzh", "application/x-lzh-compressed" },
+  { "zz-application/zz-winassoc-mdb", "application/x-msaccess" },
+  { "zz-application/zz-winassoc-uu", "text/x-uuencode" },
 };
 
 #define IF_IS_IN(list, type)                  \

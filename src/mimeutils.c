@@ -73,27 +73,25 @@ static const char *valid_exceptions_mime_types[] = {
   "message/rfc822",
   /* some multimedia mime type; it clearly doesn't respect the mime type rules,
    * but it's widely deployed */
-  "misc/ultravox",
-  /* zz-application is not a valid media type, but these mime types are widely
-   * used, so some applications claim them for interoperability */
-  "zz-application/zz-winassoc-doc",
-  "zz-application/zz-winassoc-xls",
+  "misc/ultravox"
 };
 
 static struct {
   const char *mime_type;
   const char *should_be;
 } alias_to_replace_mime_types[] = {
-  { "flv-application/octet-stream", "video/x-flv" },
-  { "zz-application/zz-winassoc-123", "application/vnd.lotus-1-2-3" },
-  { "zz-application/zz-winassoc-cab", "application/vnd.ms-cab-compressed" },
+  { "flv-application/octet-stream",   "video/x-flv" },
+  { "zz-application/zz-winassoc-123", "application/vnd.lotus-1-2-3" }, /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
+  { "zz-application/zz-winassoc-cab", "application/vnd.ms-cab-compressed" }, /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
   { "zz-application/zz-winassoc-cdr", "application/vnd.corel-draw" },
-  { "zz-application/zz-winassoc-hlp", "application/winhlp" },
+  { "zz-application/zz-winassoc-doc", "application/vnd.ms-word" } /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
+  { "zz-application/zz-winassoc-hlp", "application/winhlp" }, /* not yet in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41708 */
   { "zz-application/zz-winassoc-ini", "text/plain" },
-  { "zz-application/zz-winassoc-lwp", "application/vnd.lotus-wordpro" },
-  { "zz-application/zz-winassoc-lzh", "application/x-lzh-compressed" },
-  { "zz-application/zz-winassoc-mdb", "application/x-msaccess" },
-  { "zz-application/zz-winassoc-uu", "text/x-uuencode" },
+  { "zz-application/zz-winassoc-lwp", "application/vnd.lotus-wordpro" }, /* not yet in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=36036 */
+  { "zz-application/zz-winassoc-lzh", "application/x-lzh-compressed" }, /* not yet in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41680 */
+  { "zz-application/zz-winassoc-mdb", "application/vnd.ms-access" }, /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
+  { "zz-application/zz-winassoc-uu",  "text/x-uuencode" }, /* not yet in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41684 */
+  { "zz-application/zz-winassoc-xls", "application/vnd.ms-excel" } /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
 };
 
 #define IF_IS_IN(list, type)                  \

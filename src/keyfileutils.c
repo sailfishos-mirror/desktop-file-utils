@@ -86,16 +86,14 @@ dfu_key_file_drop_locale_strings (GKeyFile   *keyfile,
   g_strfreev (keys);
 }
 
-gboolean
-dfu_key_file_copy_key (GKeyFile   *keyfile,
-                       const char *fromgroup,
-                       const char *fromkey,
-                       const char *togroup,
-                       const char *tokey)
+static gboolean
+_dfu_key_file_copy_key_helper (GKeyFile   *keyfile,
+                               const char *fromgroup,
+                               const char *fromkey,
+                               const char *togroup,
+                               const char *tokey)
 {
   char *value;
-
-  g_return_val_if_fail (keyfile != NULL, FALSE);
 
   if (!g_key_file_has_group (keyfile, fromgroup))
     return FALSE;
@@ -107,6 +105,56 @@ dfu_key_file_copy_key (GKeyFile   *keyfile,
   g_key_file_set_value (keyfile, togroup, tokey, value);
 
   g_free (value);
+
+  return TRUE;
+}
+
+gboolean
+dfu_key_file_copy_key (GKeyFile   *keyfile,
+                       const char *fromgroup,
+                       const char *fromkey,
+                       const char *togroup,
+                       const char *tokey)
+{
+  char  **fromkeys;
+  gsize   len;
+  char   *fromprefix;
+  gsize   i;
+
+  g_return_val_if_fail (keyfile != NULL, FALSE);
+  g_return_val_if_fail (fromgroup != NULL, FALSE);
+  g_return_val_if_fail (fromkey != NULL, FALSE);
+  g_return_val_if_fail (togroup != NULL, FALSE);
+  g_return_val_if_fail (tokey != NULL, FALSE);
+
+  if (!_dfu_key_file_copy_key_helper (keyfile, fromgroup, fromkey,
+                                      togroup, tokey))
+    return FALSE;
+
+  /* Also copy translations if we're not dealing with localized keys already
+   * (first drop old ones) */
+  if (strchr (fromkey, '[') != NULL || strchr (tokey, '[') != NULL)
+    return TRUE;
+
+  dfu_key_file_drop_locale_strings (keyfile, togroup, tokey);
+
+  fromkeys = g_key_file_get_keys (keyfile, fromgroup, &len, NULL);
+  fromprefix = g_strdup_printf ("%s[", fromkey);
+
+  for (i = 0; i < len; i++)
+    {
+      if (g_str_has_prefix (fromkeys[i], fromprefix))
+        {
+          const char *locale = fromkeys[i] + strlen (fromkey);
+          char       *tolocalekey = g_strdup_printf ("%s%s", tokey, locale);
+          _dfu_key_file_copy_key_helper (keyfile, fromgroup, fromkeys[i],
+                                         togroup, tolocalekey);
+          g_free (tolocalekey);
+        }
+    }
+
+  g_free (fromprefix);
+  g_strfreev (fromkeys);
 
   return TRUE;
 }

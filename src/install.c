@@ -444,6 +444,26 @@ static const GOptionEntry edit_options[] = {
     N_("ENVIRONMENT")
   },
   {
+#define OPTION_ADD_NOT_SHOW_IN "add-not-show-in"
+    OPTION_ADD_NOT_SHOW_IN,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Add ENVIRONMENT to the list of desktop environment where the desktop files should not be displayed"),
+    N_("ENVIRONMENT")
+  },
+  {
+#define OPTION_REMOVE_NOT_SHOW_IN "remove-not-show-in"
+    OPTION_REMOVE_NOT_SHOW_IN,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Remove ENVIRONMENT from the list of desktop environment where the desktop files should not be displayed"),
+    N_("ENVIRONMENT")
+  },
+  {
     NULL
   }
 };
@@ -589,6 +609,16 @@ parse_edit_options_callback (const gchar  *option_name,
   else if (strcmp (OPTION_REMOVE_ONLY_SHOW_IN, option_name) == 0)
     {
       PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "OnlyShowIn");
+    }
+
+  else if (strcmp (OPTION_ADD_NOT_SHOW_IN, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (DFU_ADD_TO_LIST, "NotShowIn");
+    }
+
+  else if (strcmp (OPTION_REMOVE_NOT_SHOW_IN, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "NotShowIn");
     }
 
   else

@@ -74,10 +74,6 @@ dfu_key_file_drop_locale_strings (GKeyFile   *keyfile,
   gsize   i;
 
   keys = g_key_file_get_keys (keyfile, group, &len, NULL);
-
-  if (keys == NULL)
-    return;
-
   prefix = g_strdup_printf ("%s[", key);
 
   for (i = 0; i < len; i++)

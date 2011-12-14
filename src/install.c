@@ -49,6 +49,7 @@ static mode_t permissions = 0644;
 
 typedef enum
 {
+  DFU_SET_KEY,
   DFU_REMOVE_KEY,
   DFU_ADD_TO_LIST,
   DFU_REMOVE_FROM_LIST,
@@ -184,6 +185,10 @@ process_one_file (const char *filename,
 
       switch (action->type)
         {
+          case DFU_SET_KEY:
+            g_key_file_set_string (kf, GROUP_DESKTOP_ENTRY,
+                                   action->key, action->action_value);
+            break;
           case DFU_REMOVE_KEY:
             g_key_file_remove_key (kf, GROUP_DESKTOP_ENTRY,
                                    action->key, NULL);
@@ -372,6 +377,46 @@ static const GOptionEntry edit_options[] = {
     parse_edit_options_callback,
     N_("Copy the value of the \"GenericName\" key to the \"Name\" key"),
     NULL
+  },
+  {
+#define OPTION_SET_NAME "set-name"
+    OPTION_SET_NAME,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Set the \"Name\" key to NAME"),
+    N_("NAME")
+  },
+  {
+#define OPTION_SET_GENERIC_NAME "set-generic-name"
+    OPTION_SET_GENERIC_NAME,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Set the \"GenericName\" key to GENERIC-NAME"),
+    N_("GENERIC-NAME")
+  },
+  {
+#define OPTION_SET_COMMENT "set-comment"
+    OPTION_SET_COMMENT,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Set the \"Comment\" key to COMMENT"),
+    N_("COMMENT")
+  },
+  {
+#define OPTION_SET_ICON "set-icon"
+    OPTION_SET_ICON,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Set the \"Icon\" key to ICON"),
+    N_("ICON")
   },
   {
 #define OPTION_REMOVE_KEY "remove-key"
@@ -572,6 +617,30 @@ parse_edit_options_callback (const gchar  *option_name,
   else if (strcmp (OPTION_COPY_GENERIC_NAME, option_name) == 0)
     {
       action = dfu_edit_action_new (DFU_COPY_KEY, "GenericName", "Name");
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_SET_NAME, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_SET_KEY, "Name", value);
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_SET_GENERIC_NAME, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_SET_KEY, "GenericName", value);
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_SET_COMMENT, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_SET_KEY, "Comment", value);
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_SET_ICON, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_SET_KEY, "Icon", value);
       edit_actions = g_slist_prepend (edit_actions, action);
     }
 

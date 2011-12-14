@@ -242,8 +242,8 @@ dfu_key_file_remove_list (GKeyFile   *keyfile,
 
 //FIXME: kill this when bug #309224 is fixed
 gboolean
-dfu_key_file_to_file (GKeyFile     *keyfile,
-                      const char   *file,
+dfu_key_file_to_path (GKeyFile     *keyfile,
+                      const char   *path,
                       GError      **error)
 {
   char    *filename;
@@ -253,7 +253,7 @@ dfu_key_file_to_file (GKeyFile     *keyfile,
   gboolean res;
 
   g_return_val_if_fail (keyfile != NULL, FALSE);
-  g_return_val_if_fail (file != NULL, FALSE);
+  g_return_val_if_fail (path != NULL, FALSE);
 
   write_error = NULL;
   data = g_key_file_to_data (keyfile, &length, &write_error);
@@ -262,10 +262,7 @@ dfu_key_file_to_file (GKeyFile     *keyfile,
     return FALSE;
   }
 
-  if (!g_path_is_absolute (file))
-    filename = g_filename_from_uri (file, NULL, &write_error);
-  else
-    filename = g_filename_from_utf8 (file, -1, NULL, NULL, &write_error);
+  filename = g_filename_from_utf8 (path, -1, NULL, NULL, &write_error);
 
   if (write_error) {
     g_propagate_error (error, write_error);

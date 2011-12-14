@@ -239,7 +239,7 @@ process_one_file (const char *filename,
       g_free (basename);
     }
 
-  if (!dfu_key_file_to_file (kf, new_filename, err)) {
+  if (!dfu_key_file_to_path (kf, new_filename, err)) {
     g_key_file_free (kf);
     g_free (new_filename);
     return;

@@ -48,6 +48,6 @@ void     dfu_key_file_remove_list  (GKeyFile   *keyfile,
                                     const char *key,
                                     const char *to_remove);
 
-gboolean dfu_key_file_to_file      (GKeyFile     *keyfile,
-                                    const char   *file,
+gboolean dfu_key_file_to_path      (GKeyFile     *keyfile,
+                                    const char   *path,
                                     GError      **error);

@@ -36,4 +36,13 @@ desktop_file_validate_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
 desktop_file_install_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
 update_desktop_database_LDADD = $(DESKTOP_FILE_UTILS_LIBS)
 
+install-exec-hook: desktop-file-install
+	cd $(DESTDIR)$(bindir) && \
+	rm -f desktop-file-edit && \
+	$(LN_S) -f desktop-file-install desktop-file-edit
+
+uninstall-hook:
+	cd $(DESTDIR)$(bindir) && \
+	rm -f desktop-file-edit
+
 -include $(top_srcdir)/git.mk

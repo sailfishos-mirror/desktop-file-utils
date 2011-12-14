@@ -7,6 +7,7 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_MACRO_DIR([m4])
 AM_CONFIG_HEADER(config.h)
 
+AC_PROG_LN_S
 AC_PROG_CC
 
 if test "x$GCC" = "xyes"; then

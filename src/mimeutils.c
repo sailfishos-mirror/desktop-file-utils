@@ -84,7 +84,7 @@ static struct {
   { "zz-application/zz-winassoc-123", "application/vnd.lotus-1-2-3" }, /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
   { "zz-application/zz-winassoc-cab", "application/vnd.ms-cab-compressed" }, /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
   { "zz-application/zz-winassoc-cdr", "application/vnd.corel-draw" },
-  { "zz-application/zz-winassoc-doc", "application/vnd.ms-word" } /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
+  { "zz-application/zz-winassoc-doc", "application/vnd.ms-word" }, /* alias to be added in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41989 */
   { "zz-application/zz-winassoc-hlp", "application/winhlp" }, /* not yet in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=41708 */
   { "zz-application/zz-winassoc-ini", "text/plain" },
   { "zz-application/zz-winassoc-lwp", "application/vnd.lotus-wordpro" }, /* not yet in shared-mime-info: https://bugs.freedesktop.org/show_bug.cgi?id=36036 */

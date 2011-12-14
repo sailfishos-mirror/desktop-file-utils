@@ -318,6 +318,15 @@ static const GOptionEntry main_options[] = {
     N_("Rebuild the MIME types application database after processing desktop files"),
     NULL
   },
+  {
+    "edit-mode",
+    '\0',
+    G_OPTION_FLAG_HIDDEN, /* just for development purpose */
+    G_OPTION_ARG_NONE,
+    &edit_mode,
+    N_("Force edit mode"),
+    NULL
+  },
   { G_OPTION_REMAINING,
     0,
     0,

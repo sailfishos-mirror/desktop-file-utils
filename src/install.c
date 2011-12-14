@@ -359,14 +359,14 @@ static const GOptionEntry options[] = {
 
 static const GOptionEntry edit_options[] = {
   {
-#define OPTION_COPY_NAME "copy-name-to-generic-name"
-    OPTION_COPY_NAME,
+#define OPTION_SET_NAME "set-name"
+    OPTION_SET_NAME,
     '\0',
-    G_OPTION_FLAG_NO_ARG,
+    '\0',
     G_OPTION_ARG_CALLBACK,
     parse_edit_options_callback,
-    N_("Copy the value of the \"Name\" key to the \"GenericName\" key"),
-    NULL
+    N_("Set the \"Name\" key to NAME"),
+    N_("NAME")
   },
   {
 #define OPTION_COPY_GENERIC_NAME "copy-generic-name-to-name"
@@ -379,16 +379,6 @@ static const GOptionEntry edit_options[] = {
     NULL
   },
   {
-#define OPTION_SET_NAME "set-name"
-    OPTION_SET_NAME,
-    '\0',
-    '\0',
-    G_OPTION_ARG_CALLBACK,
-    parse_edit_options_callback,
-    N_("Set the \"Name\" key to NAME"),
-    N_("NAME")
-  },
-  {
 #define OPTION_SET_GENERIC_NAME "set-generic-name"
     OPTION_SET_GENERIC_NAME,
     '\0',
@@ -397,6 +387,16 @@ static const GOptionEntry edit_options[] = {
     parse_edit_options_callback,
     N_("Set the \"GenericName\" key to GENERIC-NAME"),
     N_("GENERIC-NAME")
+  },
+  {
+#define OPTION_COPY_NAME "copy-name-to-generic-name"
+    OPTION_COPY_NAME,
+    '\0',
+    G_OPTION_FLAG_NO_ARG,
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Copy the value of the \"Name\" key to the \"GenericName\" key"),
+    NULL
   },
   {
 #define OPTION_SET_COMMENT "set-comment"
@@ -417,16 +417,6 @@ static const GOptionEntry edit_options[] = {
     parse_edit_options_callback,
     N_("Set the \"Icon\" key to ICON"),
     N_("ICON")
-  },
-  {
-#define OPTION_REMOVE_KEY "remove-key"
-    OPTION_REMOVE_KEY,
-    '\0',
-    '\0',
-    G_OPTION_ARG_CALLBACK,
-    parse_edit_options_callback,
-    N_("Remove the KEY key from the desktop files, if present"),
-    N_("KEY")
   },
   {
 #define OPTION_ADD_CATEGORY "add-category"
@@ -507,6 +497,16 @@ static const GOptionEntry edit_options[] = {
     parse_edit_options_callback,
     N_("Remove ENVIRONMENT from the list of desktop environment where the desktop files should not be displayed"),
     N_("ENVIRONMENT")
+  },
+  {
+#define OPTION_REMOVE_KEY "remove-key"
+    OPTION_REMOVE_KEY,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Remove the KEY key from the desktop files, if present"),
+    N_("KEY")
   },
   {
     NULL
@@ -608,9 +608,9 @@ parse_edit_options_callback (const gchar  *option_name,
       }                                                                 \
   } while (0)
 
-  if (strcmp (OPTION_COPY_NAME, option_name) == 0)
+  if (strcmp (OPTION_SET_NAME, option_name) == 0)
     {
-      action = dfu_edit_action_new (DFU_COPY_KEY, "Name", "GenericName");
+      action = dfu_edit_action_new (DFU_SET_KEY, "Name", value);
       edit_actions = g_slist_prepend (edit_actions, action);
     }
 
@@ -620,15 +620,15 @@ parse_edit_options_callback (const gchar  *option_name,
       edit_actions = g_slist_prepend (edit_actions, action);
     }
 
-  else if (strcmp (OPTION_SET_NAME, option_name) == 0)
-    {
-      action = dfu_edit_action_new (DFU_SET_KEY, "Name", value);
-      edit_actions = g_slist_prepend (edit_actions, action);
-    }
-
   else if (strcmp (OPTION_SET_GENERIC_NAME, option_name) == 0)
     {
       action = dfu_edit_action_new (DFU_SET_KEY, "GenericName", value);
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_COPY_NAME, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_COPY_KEY, "Name", "GenericName");
       edit_actions = g_slist_prepend (edit_actions, action);
     }
 
@@ -641,12 +641,6 @@ parse_edit_options_callback (const gchar  *option_name,
   else if (strcmp (OPTION_SET_ICON, option_name) == 0)
     {
       action = dfu_edit_action_new (DFU_SET_KEY, "Icon", value);
-      edit_actions = g_slist_prepend (edit_actions, action);
-    }
-
-  else if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
-    {
-      action = dfu_edit_action_new (DFU_REMOVE_KEY, value, NULL);
       edit_actions = g_slist_prepend (edit_actions, action);
     }
 
@@ -688,6 +682,12 @@ parse_edit_options_callback (const gchar  *option_name,
   else if (strcmp (OPTION_REMOVE_NOT_SHOW_IN, option_name) == 0)
     {
       PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "NotShowIn");
+    }
+
+  else if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_REMOVE_KEY, value, NULL);
+      edit_actions = g_slist_prepend (edit_actions, action);
     }
 
   else

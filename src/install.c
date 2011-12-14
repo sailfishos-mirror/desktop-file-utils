@@ -39,6 +39,7 @@
 #include "keyfileutils.h"
 #include "validate.h"
 
+static gboolean edit_mode = FALSE;
 static const char** args = NULL;
 static gboolean delete_original = FALSE;
 static gboolean rebuild_mime_info_cache = FALSE;
@@ -150,8 +151,6 @@ process_one_file (const char *filename,
                   GError    **err)
 {
   char *new_filename;
-  char *dirname;
-  char *basename;
   GKeyFile *kf = NULL;
   GError *rebuild_error;
   GSList *tmp;
@@ -217,23 +216,28 @@ process_one_file (const char *filename,
       tmp = tmp->next;
     }
 
-  dirname = g_path_get_dirname (filename);
-  basename = g_path_get_basename (filename);
-
-  if (vendor_name && !g_str_has_prefix (basename, vendor_name))
+  if (edit_mode)
     {
-      char *new_base;
-      new_base = g_strconcat (vendor_name, "-", basename, NULL);
-      new_filename = g_build_filename (target_dir, new_base, NULL);
-      g_free (new_base);
+      new_filename = g_strdup (filename);
     }
   else
     {
-      new_filename = g_build_filename (target_dir, basename, NULL);
-    }
+      char *basename = g_path_get_basename (filename);
 
-  g_free (dirname);
-  g_free (basename);
+      if (vendor_name && !g_str_has_prefix (basename, vendor_name))
+        {
+          char *new_base;
+          new_base = g_strconcat (vendor_name, "-", basename, NULL);
+          new_filename = g_build_filename (target_dir, new_base, NULL);
+          g_free (new_base);
+        }
+      else
+        {
+          new_filename = g_build_filename (target_dir, basename, NULL);
+        }
+
+      g_free (basename);
+    }
 
   if (!dfu_key_file_to_file (kf, new_filename, err)) {
     g_key_file_free (kf);
@@ -256,26 +260,29 @@ process_one_file (const char *filename,
       return;
     }
 
-  if (g_chmod (new_filename, permissions) < 0)
+  if (!edit_mode)
     {
-      g_set_error (err, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Failed to set permissions %o on \"%s\": %s"),
-                   permissions, new_filename, g_strerror (errno));
+      if (g_chmod (new_filename, permissions) < 0)
+        {
+          g_set_error (err, G_FILE_ERROR,
+                       g_file_error_from_errno (errno),
+                       _("Failed to set permissions %o on \"%s\": %s"),
+                       permissions, new_filename, g_strerror (errno));
 
-      if (!files_are_the_same (filename, new_filename))
-        g_unlink (new_filename);
+          if (!files_are_the_same (filename, new_filename))
+            g_unlink (new_filename);
 
-      g_free (new_filename);
-      return;
-    }
+          g_free (new_filename);
+          return;
+        }
 
-  if (delete_original &&
-      !files_are_the_same (filename, new_filename))
-    {
-      if (g_unlink (filename) < 0)
-        g_printerr (_("Error removing original file \"%s\": %s\n"),
-                    filename, g_strerror (errno));
+      if (delete_original &&
+          !files_are_the_same (filename, new_filename))
+        {
+          if (g_unlink (filename) < 0)
+            g_printerr (_("Error removing original file \"%s\": %s\n"),
+                        filename, g_strerror (errno));
+        }
     }
 
   if (rebuild_mime_info_cache)
@@ -817,17 +824,27 @@ main (int argc, char **argv)
   GOptionGroup *group;
   GError* err = NULL;
   int i;
+  int args_len;
   mode_t dir_permissions;
+  char *basename;
 
   setlocale (LC_ALL, "");
 
+  basename = g_path_get_basename (argv[0]);
+  if (g_strcmp0 (basename, "desktop-file-edit") == 0)
+    edit_mode = TRUE;
+  g_free (basename);
+
   context = g_option_context_new ("");
-  g_option_context_set_summary (context, _("Install desktop files."));
+  g_option_context_set_summary (context, edit_mode ? _("Edit a desktop file.") : _("Install desktop files."));
   g_option_context_add_main_entries (context, main_options, NULL);
 
-  group = g_option_group_new ("install", _("Installation options for desktop file"), _("Show desktop file installation options"), NULL, NULL);
-  g_option_group_add_entries (group, install_options);
-  g_option_context_add_group (context, group);
+  if (!edit_mode)
+    {
+      group = g_option_group_new ("install", _("Installation options for desktop file"), _("Show desktop file installation options"), NULL, NULL);
+      g_option_group_add_entries (group, install_options);
+      g_option_context_add_group (context, group);
+    }
 
   group = g_option_group_new ("edit", _("Edition options for desktop file"), _("Show desktop file edition options"), NULL, NULL);
   g_option_group_add_entries (group, edit_options);
@@ -844,30 +861,58 @@ main (int argc, char **argv)
     return 1;
   }
 
-  if (vendor_name == NULL && g_getenv ("DESKTOP_FILE_VENDOR"))
-    vendor_name = g_strdup (g_getenv ("DESKTOP_FILE_VENDOR"));
+  if (!edit_mode)
+    {
+      if (vendor_name == NULL && g_getenv ("DESKTOP_FILE_VENDOR"))
+        vendor_name = g_strdup (g_getenv ("DESKTOP_FILE_VENDOR"));
 
-  if (target_dir == NULL && g_getenv ("DESKTOP_FILE_INSTALL_DIR"))
-    target_dir = g_strdup (g_getenv ("DESKTOP_FILE_INSTALL_DIR"));
+      if (target_dir == NULL && g_getenv ("DESKTOP_FILE_INSTALL_DIR"))
+        target_dir = g_strdup (g_getenv ("DESKTOP_FILE_INSTALL_DIR"));
 
-  if (target_dir == NULL)
-    target_dir = g_build_filename (DATADIR, "applications", NULL);
+      if (target_dir == NULL)
+        target_dir = g_build_filename (DATADIR, "applications", NULL);
 
-  /* Create the target directory */
-  dir_permissions = permissions;
+      /* Create the target directory */
+      dir_permissions = permissions;
 
-  /* Add search bit when the target file is readable */
-  if (permissions & 0400)
-    dir_permissions |= 0100;
-  if (permissions & 0040)
-    dir_permissions |= 0010;
-  if (permissions & 0004)
-    dir_permissions |= 0001;
+      /* Add search bit when the target file is readable */
+      if (permissions & 0400)
+        dir_permissions |= 0100;
+      if (permissions & 0040)
+        dir_permissions |= 0010;
+      if (permissions & 0004)
+        dir_permissions |= 0001;
 
-  g_mkdir_with_parents (target_dir, dir_permissions);
+      g_mkdir_with_parents (target_dir, dir_permissions);
+    }
 
-  i = 0;
-  while (args && args[i])
+  args_len = 0;
+  for (i = 0; args && args[i]; i++)
+    args_len++;
+
+  if (edit_mode)
+    {
+      if (args_len == 0)
+        {
+          g_printerr (_("Must specify a desktop file to process.\n"));
+          return 1;
+        }
+      if (args_len > 1)
+        {
+          g_printerr (_("Only one desktop file can be processed at once.\n"));
+          return 1;
+        }
+    }
+  else
+    {
+      if (args_len == 0)
+        {
+          g_printerr (_("Must specify one or more desktop files to process.\n"));
+          return 1;
+        }
+    }
+
+  for (i = 0; args && args[i]; i++)
     {
       err = NULL;
       process_one_file (args[i], &err);
@@ -875,23 +920,13 @@ main (int argc, char **argv)
         {
           g_printerr (_("Error on file \"%s\": %s\n"),
                       args[i], err->message);
-
           g_error_free (err);
 
           return 1;
         }
-
-      ++i;
     }
 
   g_slist_free_full (edit_actions, (GDestroyNotify) dfu_edit_action_free);
-
-  if (i == 0)
-    {
-      g_printerr (_("Must specify one or more desktop files to process\n"));
-
-      return 1;
-    }
 
   g_option_context_free (context);
 

@@ -301,16 +301,29 @@ static gboolean parse_edit_options_callback (const gchar  *option_name,
                                              GError      **error);
 
 
-static const GOptionEntry options[] = {
+static const GOptionEntry main_options[] = {
   {
-    "delete-original",
+    "rebuild-mime-info-cache",
     '\0',
     '\0',
     G_OPTION_ARG_NONE,
-    &delete_original,
-    N_("Delete the source desktop files, leaving only the target files (effectively \"renames\" the desktop files)"),
+    &rebuild_mime_info_cache,
+    N_("Rebuild the MIME types application database after installing desktop files"),
     NULL
   },
+  { G_OPTION_REMAINING,
+    0,
+    0,
+    G_OPTION_ARG_FILENAME_ARRAY,
+    &args,
+    NULL,
+    N_("[FILE...]") },
+  {
+    NULL
+  }
+};
+
+static const GOptionEntry install_options[] = {
   {
 #define OPTION_DIR "dir"
     OPTION_DIR,
@@ -342,21 +355,14 @@ static const GOptionEntry options[] = {
     N_("VENDOR")
   },
   {
-    "rebuild-mime-info-cache",
+    "delete-original",
     '\0',
     '\0',
     G_OPTION_ARG_NONE,
-    &rebuild_mime_info_cache,
-    N_("Rebuild the MIME types application database after installing desktop files"),
+    &delete_original,
+    N_("Delete the source desktop files, leaving only the target files (effectively \"renames\" the desktop files)"),
     NULL
   },
-  { G_OPTION_REMAINING,
-    0,
-    0,
-    G_OPTION_ARG_FILENAME_ARRAY,
-    &args,
-    NULL,
-    N_("[FILE...]") },
   {
     NULL
   }
@@ -817,7 +823,11 @@ main (int argc, char **argv)
 
   context = g_option_context_new ("");
   g_option_context_set_summary (context, _("Install desktop files."));
-  g_option_context_add_main_entries (context, options, NULL);
+  g_option_context_add_main_entries (context, main_options, NULL);
+
+  group = g_option_group_new ("install", _("Installation options for desktop file"), _("Show desktop file installation options"), NULL, NULL);
+  g_option_group_add_entries (group, install_options);
+  g_option_context_add_group (context, group);
 
   group = g_option_group_new ("edit", _("Edition options for desktop file"), _("Show desktop file edition options"), NULL, NULL);
   g_option_group_add_entries (group, edit_options);

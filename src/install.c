@@ -46,14 +46,48 @@ static gboolean copy_name_to_generic_name = FALSE;
 static gboolean rebuild_mime_info_cache = FALSE;
 static char *vendor_name = NULL;
 static char *target_dir = NULL;
-static GSList *added_categories = NULL;
-static GSList *removed_categories = NULL;
-static GSList *added_only_show_in = NULL;
-static GSList *removed_only_show_in = NULL;
-static GSList *removed_keys = NULL;
-static GSList *added_mime_types = NULL;
-static GSList *removed_mime_types = NULL;
+static GSList *edit_actions = NULL;
 static mode_t permissions = 0644;
+
+typedef enum
+{
+  DFU_REMOVE_KEY,
+  DFU_ADD_TO_LIST,
+  DFU_REMOVE_FROM_LIST,
+} DfuEditActionType;
+
+typedef struct
+{
+  DfuEditActionType  type;
+  char              *key;
+  char              *action_value;
+} DfuEditAction;
+
+static DfuEditAction *
+dfu_edit_action_new (DfuEditActionType  type,
+                     const char        *key,
+                     const char        *action_value)
+{
+  DfuEditAction *action;
+
+  action = g_slice_new0 (DfuEditAction);
+  action->type = type;
+  action->key = g_strdup (key);
+  action->action_value = g_strdup (action_value);
+
+  return action;
+}
+
+static void
+dfu_edit_action_free (DfuEditAction *action)
+{
+  g_assert (action != NULL);
+
+  g_free (action->key);
+  g_free (action->action_value);
+
+  g_slice_free (DfuEditAction, action);
+}
 
 static gboolean
 files_are_the_same (const char *first,
@@ -152,43 +186,31 @@ process_one_file (const char *filename,
   g_key_file_set_string (kf, GROUP_DESKTOP_ENTRY,
                          "X-Desktop-File-Install-Version", VERSION);
 
-#define PROCESS_LIST(key, added, removed)                       \
-  /* Add to the list */                                         \
-  tmp = added;                                                  \
-  while (tmp != NULL)                                           \
-    {                                                           \
-      dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,         \
-                               key, tmp->data);                 \
-      tmp = tmp->next;                                          \
-    }                                                           \
-                                                                \
-  /* Remove from the list */                                    \
-  tmp = removed;                                                \
-  while (tmp != NULL)                                           \
-    {                                                           \
-      dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,        \
-                                key, tmp->data);                \
-      tmp = tmp->next;                                          \
-    }
-
-  /* Add/remove categories */
-  PROCESS_LIST ("Categories", added_categories, removed_categories);
-
-  /* Add/remove onlyshowin */
-  PROCESS_LIST ("OnlyShowIn", added_only_show_in, removed_only_show_in);
-
-  /* Remove keys */
-  tmp = removed_keys;
+  tmp = edit_actions;
   while (tmp != NULL)
     {
-      g_key_file_remove_key (kf, GROUP_DESKTOP_ENTRY, tmp->data, NULL);
+      DfuEditAction *action = tmp->data;
+
+      switch (action->type)
+        {
+          case DFU_REMOVE_KEY:
+            g_key_file_remove_key (kf, GROUP_DESKTOP_ENTRY,
+                                   action->key, NULL);
+            break;
+          case DFU_ADD_TO_LIST:
+            dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,
+                                     action->key, action->action_value);
+            break;
+          case DFU_REMOVE_FROM_LIST:
+            dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
+                                      action->key, action->action_value);
+            break;
+          default:
+            g_assert_not_reached ();
+        }
 
       tmp = tmp->next;
     }
-
-  /* Add/remove mime-types */
-  PROCESS_LIST ("MimeType", added_mime_types, removed_mime_types);
-
 
   dirname = g_path_get_dirname (filename);
   basename = g_path_get_basename (filename);
@@ -500,15 +522,18 @@ parse_edit_options_callback (const gchar  *option_name,
                              gpointer      data,
                              GError      **error)
 {
-  char **list;
-  int    i;
+  /* Note: we prepend actions to the list, so we'll need to reverse it later */
+
+  DfuEditAction  *action;
+  char          **list;
+  int             i;
 
   /* skip "-" or "--" */
   option_name++;
   if (*option_name == '-')
     option_name++;
 
-#define PARSE_OPTION_LIST(glist)                                        \
+#define PARSE_OPTION_LIST(type, key)                                    \
   do {                                                                  \
     list = g_strsplit (value, ";", 0);                                  \
     for (i = 0; list[i]; i++)                                           \
@@ -516,44 +541,45 @@ parse_edit_options_callback (const gchar  *option_name,
         if (*list[i] == '\0')                                           \
           continue;                                                     \
                                                                         \
-        glist = g_slist_prepend (glist, g_strdup (list[i]));            \
+        action = dfu_edit_action_new (type, key, list[i]);              \
+        edit_actions = g_slist_prepend (edit_actions, action);          \
       }                                                                 \
   } while (0)
 
   if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
     {
-      removed_keys = g_slist_prepend (removed_keys,
-                                      g_strdup (value));
+      action = dfu_edit_action_new (DFU_REMOVE_KEY, value, NULL);
+      edit_actions = g_slist_prepend (edit_actions, action);
     }
 
   else if (strcmp (OPTION_ADD_CATEGORY, option_name) == 0)
     {
-      PARSE_OPTION_LIST (added_categories);
+      PARSE_OPTION_LIST (DFU_ADD_TO_LIST, "Categories");
     }
 
   else if (strcmp (OPTION_REMOVE_CATEGORY, option_name) == 0)
     {
-      PARSE_OPTION_LIST (removed_categories);
+      PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "Categories");
     }
 
   else if (strcmp (OPTION_ADD_MIME_TYPE, option_name) == 0)
     {
-      PARSE_OPTION_LIST (added_mime_types);
+      PARSE_OPTION_LIST (DFU_ADD_TO_LIST, "MimeType");
     }
 
   else if (strcmp (OPTION_REMOVE_MIME_TYPE, option_name) == 0)
     {
-      PARSE_OPTION_LIST (removed_mime_types);
+      PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "MimeType");
     }
 
   else if (strcmp (OPTION_ADD_ONLY_SHOW_IN, option_name) == 0)
     {
-      PARSE_OPTION_LIST (added_only_show_in);
+      PARSE_OPTION_LIST (DFU_ADD_TO_LIST, "OnlyShowIn");
     }
 
   else if (strcmp (OPTION_REMOVE_ONLY_SHOW_IN, option_name) == 0)
     {
-      PARSE_OPTION_LIST (removed_only_show_in);
+      PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "OnlyShowIn");
     }
 
   else
@@ -624,6 +650,8 @@ main (int argc, char **argv)
 
   g_mkdir_with_parents (target_dir, dir_permissions);
 
+  edit_actions = g_slist_reverse (edit_actions);
+
   i = 0;
   while (args && args[i])
     {
@@ -641,6 +669,8 @@ main (int argc, char **argv)
 
       ++i;
     }
+
+  g_slist_free_full (edit_actions, (GDestroyNotify) dfu_edit_action_free);
 
   if (i == 0)
     {

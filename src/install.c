@@ -41,8 +41,6 @@
 
 static const char** args = NULL;
 static gboolean delete_original = FALSE;
-static gboolean copy_generic_name_to_name = FALSE;
-static gboolean copy_name_to_generic_name = FALSE;
 static gboolean rebuild_mime_info_cache = FALSE;
 static char *vendor_name = NULL;
 static char *target_dir = NULL;
@@ -54,6 +52,7 @@ typedef enum
   DFU_REMOVE_KEY,
   DFU_ADD_TO_LIST,
   DFU_REMOVE_FROM_LIST,
+  DFU_COPY_KEY
 } DfuEditActionType;
 
 typedef struct
@@ -171,14 +170,6 @@ process_one_file (const char *filename,
     return;
   }
 
-  if (copy_name_to_generic_name)
-    dfu_key_file_copy_key (kf, GROUP_DESKTOP_ENTRY, "Name",
-                               GROUP_DESKTOP_ENTRY, "GenericName");
-
-  if (copy_generic_name_to_name)
-    dfu_key_file_copy_key (kf, GROUP_DESKTOP_ENTRY, "GenericName",
-                               GROUP_DESKTOP_ENTRY, "Name");
-
   /* Mark file as having been processed by us, so automated
    * tools can check that desktop files went through our
    * munging
@@ -204,6 +195,10 @@ process_one_file (const char *filename,
           case DFU_REMOVE_FROM_LIST:
             dfu_key_file_remove_list (kf, GROUP_DESKTOP_ENTRY,
                                       action->key, action->action_value);
+            break;
+          case DFU_COPY_KEY:
+            dfu_key_file_copy_key (kf, GROUP_DESKTOP_ENTRY, action->key,
+                                   GROUP_DESKTOP_ENTRY, action->action_value);
             break;
           default:
             g_assert_not_reached ();
@@ -359,20 +354,22 @@ static const GOptionEntry options[] = {
 
 static const GOptionEntry edit_options[] = {
   {
-    "copy-name-to-generic-name",
+#define OPTION_COPY_NAME "copy-name-to-generic-name"
+    OPTION_COPY_NAME,
     '\0',
-    '\0',
-    G_OPTION_ARG_NONE,
-    &copy_name_to_generic_name,
+    G_OPTION_FLAG_NO_ARG,
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
     N_("Copy the value of the \"Name\" key to the \"GenericName\" key"),
     NULL
   },
   {
-    "copy-generic-name-to-name",
+#define OPTION_COPY_GENERIC_NAME "copy-generic-name-to-name"
+    OPTION_COPY_GENERIC_NAME,
     '\0',
-    '\0',
-    G_OPTION_ARG_NONE,
-    &copy_generic_name_to_name,
+    G_OPTION_FLAG_NO_ARG,
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
     N_("Copy the value of the \"GenericName\" key to the \"Name\" key"),
     NULL
   },
@@ -546,7 +543,19 @@ parse_edit_options_callback (const gchar  *option_name,
       }                                                                 \
   } while (0)
 
-  if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
+  if (strcmp (OPTION_COPY_NAME, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_COPY_KEY, "Name", "GenericName");
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_COPY_GENERIC_NAME, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_COPY_KEY, "GenericName", "Name");
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
     {
       action = dfu_edit_action_new (DFU_REMOVE_KEY, value, NULL);
       edit_actions = g_slist_prepend (edit_actions, action);
@@ -624,12 +633,6 @@ main (int argc, char **argv)
 
   if (vendor_name == NULL && g_getenv ("DESKTOP_FILE_VENDOR"))
     vendor_name = g_strdup (g_getenv ("DESKTOP_FILE_VENDOR"));
-
-  if (copy_generic_name_to_name && copy_name_to_generic_name)
-    {
-      g_printerr (_("Specifying both --copy-name-to-generic-name and --copy-generic-name-to-name at once doesn't make much sense.\n"));
-      return 1;
-    }
 
   if (target_dir == NULL && g_getenv ("DESKTOP_FILE_INSTALL_DIR"))
     target_dir = g_strdup (g_getenv ("DESKTOP_FILE_INSTALL_DIR"));

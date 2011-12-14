@@ -879,7 +879,12 @@ main (int argc, char **argv)
         target_dir = g_strdup (g_getenv ("DESKTOP_FILE_INSTALL_DIR"));
 
       if (target_dir == NULL)
-        target_dir = g_build_filename (DATADIR, "applications", NULL);
+        {
+          if (g_getenv ("RPM_BUILD_ROOT"))
+            target_dir = g_build_filename (g_getenv ("RPM_BUILD_ROOT"), DATADIR, "applications", NULL);
+          else
+            target_dir = g_build_filename (DATADIR, "applications", NULL);
+        }
 
       /* Create the target directory */
       dir_permissions = permissions;

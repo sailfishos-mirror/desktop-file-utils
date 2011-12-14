@@ -28,6 +28,10 @@ gboolean dfu_key_file_rename_group (GKeyFile   *keyfile,
                                     const char *oldgroup,
                                     const char *newgroup);
 
+void     dfu_key_file_drop_locale_strings (GKeyFile   *keyfile,
+                                           const char *group,
+                                           const char *key);
+
 gboolean dfu_key_file_copy_key     (GKeyFile   *keyfile,
                                     const char *fromgroup,
                                     const char *fromkey,

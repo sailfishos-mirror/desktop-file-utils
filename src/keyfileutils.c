@@ -63,6 +63,33 @@ dfu_key_file_rename_group (GKeyFile   *keyfile,
   return TRUE;
 }
 
+void
+dfu_key_file_drop_locale_strings (GKeyFile   *keyfile,
+                                  const char *group,
+                                  const char *key)
+{
+  char  **keys;
+  gsize   len;
+  char   *prefix;
+  gsize   i;
+
+  keys = g_key_file_get_keys (keyfile, group, &len, NULL);
+
+  if (keys == NULL)
+    return;
+
+  prefix = g_strdup_printf ("%s[", key);
+
+  for (i = 0; i < len; i++)
+    {
+      if (g_str_has_prefix (keys[i], prefix))
+        g_key_file_remove_key (keyfile, group, keys[i], NULL);
+    }
+
+  g_free (prefix);
+  g_strfreev (keys);
+}
+
 gboolean
 dfu_key_file_copy_key (GKeyFile   *keyfile,
                        const char *fromgroup,

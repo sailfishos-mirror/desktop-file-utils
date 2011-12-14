@@ -189,10 +189,14 @@ process_one_file (const char *filename,
           case DFU_SET_KEY:
             g_key_file_set_string (kf, GROUP_DESKTOP_ENTRY,
                                    action->key, action->action_value);
+            dfu_key_file_drop_locale_strings (kf, GROUP_DESKTOP_ENTRY,
+                                              action->key);
             break;
           case DFU_REMOVE_KEY:
             g_key_file_remove_key (kf, GROUP_DESKTOP_ENTRY,
                                    action->key, NULL);
+            dfu_key_file_drop_locale_strings (kf, GROUP_DESKTOP_ENTRY,
+                                              action->key);
             break;
           case DFU_ADD_TO_LIST:
             dfu_key_file_merge_list (kf, GROUP_DESKTOP_ENTRY,

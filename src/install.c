@@ -263,10 +263,15 @@ process_one_file (const char *filename,
   g_free (new_filename);
 }
 
-static gboolean parse_options_callback (const gchar  *option_name,
-                                        const gchar  *value,
-                                        gpointer      data,
-                                        GError      **error);
+static gboolean parse_install_options_callback (const gchar  *option_name,
+                                                const gchar  *value,
+                                                gpointer      data,
+                                                GError      **error);
+
+static gboolean parse_edit_options_callback (const gchar  *option_name,
+                                             const gchar  *value,
+                                             gpointer      data,
+                                             GError      **error);
 
 
 static const GOptionEntry options[] = {
@@ -285,7 +290,7 @@ static const GOptionEntry options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_install_options_callback,
     N_("Install desktop files to the DIR directory"),
     N_("DIR")
   },
@@ -295,7 +300,7 @@ static const GOptionEntry options[] = {
     'm',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_install_options_callback,
     N_("Set the permissions of the destination files to MODE"),
     N_("MODE")
   },
@@ -305,7 +310,7 @@ static const GOptionEntry options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_install_options_callback,
     N_("Add a vendor prefix to the desktop files, if not already present"),
     N_("VENDOR")
   },
@@ -355,7 +360,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_edit_options_callback,
     N_("Remove the KEY key from the desktop files, if present"),
     N_("KEY")
   },
@@ -365,7 +370,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_edit_options_callback,
     N_("Add CATEGORY to the list of categories"),
     N_("CATEGORY")
   },
@@ -375,7 +380,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_edit_options_callback,
     N_("Remove CATEGORY from the list of categories"),
     N_("CATEGORY")
   },
@@ -385,7 +390,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_edit_options_callback,
     N_("Add MIME-TYPE to the list of MIME types"),
     N_("MIME-TYPE")
   },
@@ -395,7 +400,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_edit_options_callback,
     N_("Remove MIME-TYPE from the list of MIME types"),
     N_("MIME-TYPE")
   },
@@ -405,7 +410,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_edit_options_callback,
     N_("Add ENVIRONMENT to the list of desktop environment where the desktop files should be displayed"),
     N_("ENVIRONMENT")
   },
@@ -415,7 +420,7 @@ static const GOptionEntry edit_options[] = {
     '\0',
     '\0',
     G_OPTION_ARG_CALLBACK,
-    parse_options_callback,
+    parse_edit_options_callback,
     N_("Remove ENVIRONMENT from the list of desktop environment where the desktop files should be displayed"),
     N_("ENVIRONMENT")
   },
@@ -425,32 +430,17 @@ static const GOptionEntry edit_options[] = {
 };
 
 static gboolean
-parse_options_callback (const gchar  *option_name,
-                        const gchar  *value,
-                        gpointer      data,
-                        GError      **error)
+parse_install_options_callback (const gchar  *option_name,
+                                const gchar  *value,
+                                gpointer      data,
+                                GError      **error)
 {
-  char **list;
-  int    i;
-
   /* skip "-" or "--" */
   option_name++;
   if (*option_name == '-')
     option_name++;
 
-  if (strcmp (OPTION_VENDOR, option_name) == 0)
-    {
-      if (vendor_name)
-        {
-          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
-                       _("Can only specify --vendor once"));
-          return FALSE;
-        }
-
-      vendor_name = g_strdup (value);
-    }
-
-  else if (strcmp (OPTION_DIR, option_name) == 0)
+  if (strcmp (OPTION_DIR, option_name) == 0)
     {
       if (target_dir)
         {
@@ -460,38 +450,6 @@ parse_options_callback (const gchar  *option_name,
         }
 
       target_dir = g_strdup (value);
-    }
-
-#define PARSE_OPTION_LIST(glist)                                        \
-  do {                                                                  \
-    list = g_strsplit (value, ";", 0);                                  \
-    for (i = 0; list[i]; i++)                                           \
-      {                                                                 \
-        if (*list[i] == '\0')                                           \
-          continue;                                                     \
-                                                                        \
-        glist = g_slist_prepend (glist, g_strdup (list[i]));            \
-      }                                                                 \
-  } while (0)
-
-  else if (strcmp (OPTION_ADD_CATEGORY, option_name) == 0)
-    {
-      PARSE_OPTION_LIST (added_categories);
-    }
-
-  else if (strcmp (OPTION_REMOVE_CATEGORY, option_name) == 0)
-    {
-      PARSE_OPTION_LIST (removed_categories);
-    }
-
-  else if (strcmp (OPTION_ADD_ONLY_SHOW_IN, option_name) == 0)
-    {
-      PARSE_OPTION_LIST (added_only_show_in);
-    }
-
-  else if (strcmp (OPTION_REMOVE_ONLY_SHOW_IN, option_name) == 0)
-    {
-      PARSE_OPTION_LIST (removed_only_show_in);
     }
 
   else if (strcmp (OPTION_MODE, option_name) == 0 ||
@@ -513,10 +471,69 @@ parse_options_callback (const gchar  *option_name,
         }
     }
 
-  else if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
+  else if (strcmp (OPTION_VENDOR, option_name) == 0)
+    {
+      if (vendor_name)
+        {
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+              _("Can only specify --vendor once"));
+          return FALSE;
+        }
+
+      vendor_name = g_strdup (value);
+    }
+
+  else
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   _("Unknown option \"%s\""), option_name);
+
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+parse_edit_options_callback (const gchar  *option_name,
+                             const gchar  *value,
+                             gpointer      data,
+                             GError      **error)
+{
+  char **list;
+  int    i;
+
+  /* skip "-" or "--" */
+  option_name++;
+  if (*option_name == '-')
+    option_name++;
+
+#define PARSE_OPTION_LIST(glist)                                        \
+  do {                                                                  \
+    list = g_strsplit (value, ";", 0);                                  \
+    for (i = 0; list[i]; i++)                                           \
+      {                                                                 \
+        if (*list[i] == '\0')                                           \
+          continue;                                                     \
+                                                                        \
+        glist = g_slist_prepend (glist, g_strdup (list[i]));            \
+      }                                                                 \
+  } while (0)
+
+  if (strcmp (OPTION_REMOVE_KEY, option_name) == 0)
     {
       removed_keys = g_slist_prepend (removed_keys,
                                       g_strdup (value));
+    }
+
+  else if (strcmp (OPTION_ADD_CATEGORY, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (added_categories);
+    }
+
+  else if (strcmp (OPTION_REMOVE_CATEGORY, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (removed_categories);
     }
 
   else if (strcmp (OPTION_ADD_MIME_TYPE, option_name) == 0)
@@ -529,12 +546,22 @@ parse_options_callback (const gchar  *option_name,
       PARSE_OPTION_LIST (removed_mime_types);
     }
 
+  else if (strcmp (OPTION_ADD_ONLY_SHOW_IN, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (added_only_show_in);
+    }
+
+  else if (strcmp (OPTION_REMOVE_ONLY_SHOW_IN, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (removed_only_show_in);
+    }
+
   else
     {
-        g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
-                     _("Unknown option \"%s\""), option_name);
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                   _("Unknown option \"%s\""), option_name);
 
-        return FALSE;
+      return FALSE;
     }
 
   return TRUE;

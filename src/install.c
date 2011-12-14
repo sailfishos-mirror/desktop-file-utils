@@ -308,7 +308,7 @@ static const GOptionEntry main_options[] = {
     '\0',
     G_OPTION_ARG_NONE,
     &rebuild_mime_info_cache,
-    N_("Rebuild the MIME types application database after installing desktop files"),
+    N_("Rebuild the MIME types application database after processing desktop files"),
     NULL
   },
   { G_OPTION_REMAINING,
@@ -888,7 +888,7 @@ main (int argc, char **argv)
 
   if (i == 0)
     {
-      g_printerr (_("Must specify one or more desktop files to install\n"));
+      g_printerr (_("Must specify one or more desktop files to process\n"));
 
       return 1;
     }

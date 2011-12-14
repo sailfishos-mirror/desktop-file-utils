@@ -49,6 +49,7 @@ static mode_t permissions = 0644;
 
 typedef enum
 {
+  DFU_SET_KEY_BUILDING, /* temporary type to create an action in multiple steps */
   DFU_SET_KEY,
   DFU_REMOVE_KEY,
   DFU_ADD_TO_LIST,
@@ -359,6 +360,26 @@ static const GOptionEntry options[] = {
 
 static const GOptionEntry edit_options[] = {
   {
+#define OPTION_SET_KEY "set-key"
+    OPTION_SET_KEY,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Set the KEY key to VALUE passed to next --set-value option"),
+    N_("KEY")
+  },
+  {
+#define OPTION_SET_VALUE "set-value"
+    OPTION_SET_VALUE,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Set the KEY key from previous --set-key option to VALUE"),
+    N_("VALUE")
+  },
+  {
 #define OPTION_SET_NAME "set-name"
     OPTION_SET_NAME,
     '\0',
@@ -608,7 +629,39 @@ parse_edit_options_callback (const gchar  *option_name,
       }                                                                 \
   } while (0)
 
-  if (strcmp (OPTION_SET_NAME, option_name) == 0)
+  if (strcmp (OPTION_SET_KEY, option_name) == 0)
+    {
+      action = dfu_edit_action_new (DFU_SET_KEY_BUILDING, value, NULL);
+      edit_actions = g_slist_prepend (edit_actions, action);
+    }
+
+  else if (strcmp (OPTION_SET_VALUE, option_name) == 0)
+    {
+      gboolean handled = FALSE;
+
+      if (edit_actions != NULL)
+        {
+          action = edit_actions->data;
+          if (action->type == DFU_SET_KEY_BUILDING)
+            {
+              action->type = DFU_SET_KEY;
+              action->action_value = g_strdup (value);
+
+              handled = TRUE;
+            }
+        }
+
+      if (!handled)
+        {
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                       _("Option \"--%s\" used without a prior \"--%s\" option"),
+                       OPTION_SET_VALUE, OPTION_SET_KEY);
+
+          return FALSE;
+        }
+    }
+
+  else if (strcmp (OPTION_SET_NAME, option_name) == 0)
     {
       action = dfu_edit_action_new (DFU_SET_KEY, "Name", value);
       edit_actions = g_slist_prepend (edit_actions, action);
@@ -701,6 +754,52 @@ parse_edit_options_callback (const gchar  *option_name,
   return TRUE;
 }
 
+static gboolean
+check_no_building_in_edit_actions (GError **error)
+{
+  GSList *tmp = edit_actions;
+
+  while (tmp != NULL)
+    {
+      /* If we have an action that is BUILDING, then it means that we had a
+       * --set-key not followed by a --set-value. This can happen when:
+       *   + the very last argument was --set-key
+       *   + --set-key was followed by another editing option
+       * In both cases, that's bad as what we want is a --set-value following
+       * each --set-key.
+       */
+      DfuEditAction *action = tmp->data;
+
+      if (action->type == DFU_SET_KEY_BUILDING)
+        {
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
+                       _("Option \"--%s\" used without a following \"--%s\" option"),
+                       OPTION_SET_KEY, OPTION_SET_VALUE);
+
+          return FALSE;
+        }
+
+      tmp = tmp->next;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+post_parse_edit_options_callback (GOptionContext  *context,
+                                  GOptionGroup    *group,
+                                  gpointer         data,
+                                  GError         **error)
+{
+  if (!check_no_building_in_edit_actions (error))
+    return FALSE;
+
+  /* Reverse list we created by prepending elements */
+  edit_actions = g_slist_reverse (edit_actions);
+
+  return TRUE;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -718,6 +817,7 @@ main (int argc, char **argv)
 
   group = g_option_group_new ("edit", _("Edition options for desktop file"), _("Show desktop file edition options"), NULL, NULL);
   g_option_group_add_entries (group, edit_options);
+  g_option_group_set_parse_hooks (group, NULL, post_parse_edit_options_callback);
   g_option_context_add_group (context, group);
 
   err = NULL;
@@ -751,8 +851,6 @@ main (int argc, char **argv)
     dir_permissions |= 0001;
 
   g_mkdir_with_parents (target_dir, dir_permissions);
-
-  edit_actions = g_slist_reverse (edit_actions);
 
   i = 0;
   while (args && args[i])

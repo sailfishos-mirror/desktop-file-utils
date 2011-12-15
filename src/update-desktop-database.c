@@ -110,6 +110,13 @@ process_desktop_file (const char  *desktop_file,
       return;
     }
 
+  /* Hidden=true means that the .desktop file should be completely ignored */
+  if (g_key_file_get_boolean (keyfile, GROUP_DESKTOP_ENTRY, "Hidden", NULL))
+    {
+      g_key_file_free (keyfile);
+      return;
+    }
+
   mime_types = g_key_file_get_string_list (keyfile,
                                            GROUP_DESKTOP_ENTRY,
                                            "MimeType", NULL, &load_error);

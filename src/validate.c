@@ -84,6 +84,7 @@ typedef enum {
   DESKTOP_BOOLEAN_TYPE,
   DESKTOP_NUMERIC_TYPE,
   DESKTOP_STRING_LIST_TYPE,
+  DESKTOP_LOCALESTRING_LIST_TYPE,
   /* Deprecated types */
   /* since 0.9.6 */
   DESKTOP_REGEXP_LIST_TYPE
@@ -158,6 +159,11 @@ validate_regexp_list_key (kf_validator *kf,
                           const char   *key,
                           const char   *locale,
                           const char   *value);
+static gboolean
+validate_localestring_list_key (kf_validator *kf,
+                                const char   *key,
+                                const char   *locale,
+                                const char   *value);
 
 static gboolean
 handle_type_key (kf_validator *kf,
@@ -254,12 +260,13 @@ static struct {
                                const char   *locale,
                                const char   *value);
 } validate_for_type[] = {
-  { DESKTOP_STRING_TYPE,       validate_string_key       },
-  { DESKTOP_LOCALESTRING_TYPE, validate_localestring_key },
-  { DESKTOP_BOOLEAN_TYPE,      validate_boolean_key      },
-  { DESKTOP_NUMERIC_TYPE,      validate_numeric_key      },
-  { DESKTOP_STRING_LIST_TYPE,  validate_string_list_key  },
-  { DESKTOP_REGEXP_LIST_TYPE,  validate_regexp_list_key  }
+  { DESKTOP_STRING_TYPE,            validate_string_key            },
+  { DESKTOP_LOCALESTRING_TYPE,      validate_localestring_key      },
+  { DESKTOP_BOOLEAN_TYPE,           validate_boolean_key           },
+  { DESKTOP_NUMERIC_TYPE,           validate_numeric_key           },
+  { DESKTOP_STRING_LIST_TYPE,       validate_string_list_key       },
+  { DESKTOP_REGEXP_LIST_TYPE,       validate_regexp_list_key       },
+  { DESKTOP_LOCALESTRING_LIST_TYPE, validate_localestring_list_key }
 };
 
 static struct {
@@ -272,69 +279,70 @@ static struct {
                                            const char   *locale_key,
                                            const char   *value);
 } registered_desktop_keys[] = {
-  { DESKTOP_STRING_TYPE,       "Type",              TRUE,  FALSE, FALSE, handle_type_key },
+  { DESKTOP_STRING_TYPE,            "Type",              TRUE,  FALSE, FALSE, handle_type_key },
   /* it is numeric according to the spec, but it's not true in previous
    * versions of the spec. handle_version_key() will manage this */
-  { DESKTOP_STRING_TYPE,       "Version",           FALSE, FALSE, FALSE, handle_version_key },
-  { DESKTOP_LOCALESTRING_TYPE, "Name",              TRUE,  FALSE, FALSE, NULL },
-  { DESKTOP_LOCALESTRING_TYPE, "GenericName",       FALSE, FALSE, FALSE, NULL },
-  { DESKTOP_BOOLEAN_TYPE,      "NoDisplay",         FALSE, FALSE, FALSE, NULL },
-  { DESKTOP_LOCALESTRING_TYPE, "Comment",           FALSE, FALSE, FALSE, handle_comment_key },
-  { DESKTOP_LOCALESTRING_TYPE, "Icon",              FALSE, FALSE, FALSE, handle_icon_key },
-  { DESKTOP_BOOLEAN_TYPE,      "Hidden",            FALSE, FALSE, FALSE, NULL },
-  { DESKTOP_STRING_LIST_TYPE,  "OnlyShowIn",        FALSE, FALSE, FALSE, handle_show_in_key },
-  { DESKTOP_STRING_LIST_TYPE,  "NotShowIn",         FALSE, FALSE, FALSE, handle_show_in_key },
-  { DESKTOP_STRING_TYPE,       "TryExec",           FALSE, FALSE, FALSE, handle_key_for_application },
-  { DESKTOP_STRING_TYPE,       "Exec",              FALSE, FALSE, FALSE, handle_exec_key },
-  { DESKTOP_STRING_TYPE,       "Path",              FALSE, FALSE, FALSE, handle_path_key },
-  { DESKTOP_BOOLEAN_TYPE,      "Terminal",          FALSE, FALSE, FALSE, handle_key_for_application },
-  { DESKTOP_STRING_LIST_TYPE,  "MimeType",          FALSE, FALSE, FALSE, handle_mime_key },
-  { DESKTOP_STRING_LIST_TYPE,  "Categories",        FALSE, FALSE, FALSE, handle_categories_key },
-  { DESKTOP_BOOLEAN_TYPE,      "StartupNotify",     FALSE, FALSE, FALSE, handle_key_for_application },
-  { DESKTOP_STRING_TYPE,       "StartupWMClass",    FALSE, FALSE, FALSE, handle_key_for_application },
-  { DESKTOP_STRING_TYPE,       "URL",               FALSE, FALSE, FALSE, handle_key_for_link },
+  { DESKTOP_STRING_TYPE,            "Version",           FALSE, FALSE, FALSE, handle_version_key },
+  { DESKTOP_LOCALESTRING_TYPE,      "Name",              TRUE,  FALSE, FALSE, NULL },
+  { DESKTOP_LOCALESTRING_TYPE,      "GenericName",       FALSE, FALSE, FALSE, NULL },
+  { DESKTOP_BOOLEAN_TYPE,           "NoDisplay",         FALSE, FALSE, FALSE, NULL },
+  { DESKTOP_LOCALESTRING_TYPE,      "Comment",           FALSE, FALSE, FALSE, handle_comment_key },
+  { DESKTOP_LOCALESTRING_TYPE,      "Icon",              FALSE, FALSE, FALSE, handle_icon_key },
+  { DESKTOP_BOOLEAN_TYPE,           "Hidden",            FALSE, FALSE, FALSE, NULL },
+  { DESKTOP_STRING_LIST_TYPE,       "OnlyShowIn",        FALSE, FALSE, FALSE, handle_show_in_key },
+  { DESKTOP_STRING_LIST_TYPE,       "NotShowIn",         FALSE, FALSE, FALSE, handle_show_in_key },
+  { DESKTOP_STRING_TYPE,            "TryExec",           FALSE, FALSE, FALSE, handle_key_for_application },
+  { DESKTOP_STRING_TYPE,            "Exec",              FALSE, FALSE, FALSE, handle_exec_key },
+  { DESKTOP_STRING_TYPE,            "Path",              FALSE, FALSE, FALSE, handle_path_key },
+  { DESKTOP_BOOLEAN_TYPE,           "Terminal",          FALSE, FALSE, FALSE, handle_key_for_application },
+  { DESKTOP_STRING_LIST_TYPE,       "MimeType",          FALSE, FALSE, FALSE, handle_mime_key },
+  { DESKTOP_STRING_LIST_TYPE,       "Categories",        FALSE, FALSE, FALSE, handle_categories_key },
+  { DESKTOP_BOOLEAN_TYPE,           "StartupNotify",     FALSE, FALSE, FALSE, handle_key_for_application },
+  { DESKTOP_STRING_TYPE,            "StartupWMClass",    FALSE, FALSE, FALSE, handle_key_for_application },
+  { DESKTOP_STRING_TYPE,            "URL",               FALSE, FALSE, FALSE, handle_key_for_link },
+  /* since 1.1 (used to be a key reserved for KDE since 0.9.4) */
+  { DESKTOP_LOCALESTRING_LIST_TYPE, "Keywords",          FALSE, FALSE, FALSE, NULL },
 
   //FIXME: it's not deprecated, but got removed from the spec temporarly
-  { DESKTOP_STRING_LIST_TYPE,  "Actions",           FALSE, FALSE, FALSE, handle_actions_key },
+  { DESKTOP_STRING_LIST_TYPE,       "Actions",           FALSE, FALSE, FALSE, handle_actions_key },
 
   /* Keys reserved for KDE */
 
   /* since 0.9.4 */
-  { DESKTOP_STRING_TYPE,       "ServiceTypes",      FALSE, FALSE, TRUE,  NULL },
-  { DESKTOP_STRING_TYPE,       "DocPath",           FALSE, FALSE, TRUE,  NULL },
-  { DESKTOP_LOCALESTRING_TYPE, "Keywords",          FALSE, FALSE, TRUE,  NULL },
-  { DESKTOP_STRING_TYPE,       "InitialPreference", FALSE, FALSE, TRUE,  NULL },
+  { DESKTOP_STRING_TYPE,            "ServiceTypes",      FALSE, FALSE, TRUE,  NULL },
+  { DESKTOP_STRING_TYPE,            "DocPath",           FALSE, FALSE, TRUE,  NULL },
+  { DESKTOP_STRING_TYPE,            "InitialPreference", FALSE, FALSE, TRUE,  NULL },
   /* since 0.9.6 */
-  { DESKTOP_STRING_TYPE,       "Dev",               FALSE, FALSE, TRUE,  handle_dev_key },
-  { DESKTOP_STRING_TYPE,       "FSType",            FALSE, FALSE, TRUE,  handle_key_for_fsdevice },
-  { DESKTOP_STRING_TYPE,       "MountPoint",        FALSE, FALSE, TRUE,  handle_mountpoint_key },
-  { DESKTOP_BOOLEAN_TYPE,      "ReadOnly",          FALSE, FALSE, TRUE,  handle_key_for_fsdevice },
-  { DESKTOP_STRING_TYPE,       "UnmountIcon",       FALSE, FALSE, TRUE,  handle_key_for_fsdevice },
+  { DESKTOP_STRING_TYPE,            "Dev",               FALSE, FALSE, TRUE,  handle_dev_key },
+  { DESKTOP_STRING_TYPE,            "FSType",            FALSE, FALSE, TRUE,  handle_key_for_fsdevice },
+  { DESKTOP_STRING_TYPE,            "MountPoint",        FALSE, FALSE, TRUE,  handle_mountpoint_key },
+  { DESKTOP_BOOLEAN_TYPE,           "ReadOnly",          FALSE, FALSE, TRUE,  handle_key_for_fsdevice },
+  { DESKTOP_STRING_TYPE,            "UnmountIcon",       FALSE, FALSE, TRUE,  handle_key_for_fsdevice },
 
   /* Deprecated keys */
 
   /* since 0.9.3 */
-  { DESKTOP_STRING_TYPE,       "Protocols",         FALSE, TRUE,  FALSE, NULL },
-  { DESKTOP_STRING_TYPE,       "Extensions",        FALSE, TRUE,  FALSE, NULL },
-  { DESKTOP_STRING_TYPE,       "BinaryPattern",     FALSE, TRUE,  FALSE, NULL },
-  { DESKTOP_STRING_TYPE,       "MapNotify",         FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_TYPE,            "Protocols",         FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_TYPE,            "Extensions",        FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_TYPE,            "BinaryPattern",     FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_TYPE,            "MapNotify",         FALSE, TRUE,  FALSE, NULL },
   /* since 0.9.4 */
-  { DESKTOP_REGEXP_LIST_TYPE,  "Patterns",          FALSE, TRUE,  FALSE, handle_key_for_mimetype },
-  { DESKTOP_STRING_TYPE,       "DefaultApp",        FALSE, TRUE,  FALSE, handle_key_for_mimetype },
-  { DESKTOP_STRING_TYPE,       "MiniIcon",          FALSE, TRUE,  FALSE, NULL },
-  { DESKTOP_STRING_TYPE,       "TerminalOptions",   FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_REGEXP_LIST_TYPE,       "Patterns",          FALSE, TRUE,  FALSE, handle_key_for_mimetype },
+  { DESKTOP_STRING_TYPE,            "DefaultApp",        FALSE, TRUE,  FALSE, handle_key_for_mimetype },
+  { DESKTOP_STRING_TYPE,            "MiniIcon",          FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_TYPE,            "TerminalOptions",   FALSE, TRUE,  FALSE, NULL },
   /* since 0.9.5 */
-  { DESKTOP_STRING_TYPE,       "Encoding",          FALSE, TRUE,  FALSE, handle_encoding_key },
-  { DESKTOP_LOCALESTRING_TYPE, "SwallowTitle",      FALSE, TRUE,  FALSE, NULL },
-  { DESKTOP_STRING_TYPE,       "SwallowExec",       FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_TYPE,            "Encoding",          FALSE, TRUE,  FALSE, handle_encoding_key },
+  { DESKTOP_LOCALESTRING_TYPE,      "SwallowTitle",      FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_TYPE,            "SwallowExec",       FALSE, TRUE,  FALSE, NULL },
   /* since 0.9.6 */
-  { DESKTOP_STRING_LIST_TYPE,  "SortOrder",         FALSE, TRUE,  FALSE, NULL },
-  { DESKTOP_REGEXP_LIST_TYPE,  "FilePattern",       FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_STRING_LIST_TYPE,       "SortOrder",         FALSE, TRUE,  FALSE, NULL },
+  { DESKTOP_REGEXP_LIST_TYPE,       "FilePattern",       FALSE, TRUE,  FALSE, NULL },
 
   /* Keys from other specifications */
 
   /* Autostart spec, currently proposed; adopted by GNOME */
-  { DESKTOP_STRING_TYPE,       "AutostartCondition", FALSE, FALSE, FALSE, handle_autostart_condition_key }
+  { DESKTOP_STRING_TYPE,            "AutostartCondition", FALSE, FALSE, FALSE, handle_autostart_condition_key }
 };
 
 static const char *show_in_registered[] = {
@@ -754,6 +762,79 @@ validate_regexp_list_key (kf_validator *kf,
                           const char   *value)
 {
   return validate_string_regexp_list_key (kf, key, locale, value, "regexp");
+}
+
+/* + Values of type localestring are user displayable, and are encoded in
+ *   UTF-8.
+ *   FIXME: partly checked; we checked the whole value is encored in UTF-8, but
+ *   not that each value of the list is. Although this might be equivalent?
+ * + If a postfixed key occurs, the same key must be also present without the
+ *   postfix.
+ *   Checked.
+ * + The multiple values should be separated by a semicolon. Those keys which
+ *   have several values should have a semicolon as the trailing character.
+ *   FIXME: partly checked. We use checks that work for sure for ascii
+ *   characters, but that could possibly fail in some weird UTF-8 strings.
+ * + FIXME: how should an empty list be handled?
+ */
+static gboolean
+validate_localestring_list_key (kf_validator *kf,
+                                const char   *key,
+                                const char   *locale,
+                                const char   *value)
+{
+  char     *locale_key;
+  int       len;
+
+  if (locale)
+    locale_key = g_strdup_printf ("%s[%s]", key, locale);
+  else
+    locale_key = g_strdup_printf ("%s", key);
+
+
+  if (!g_utf8_validate (value, -1, NULL)) {
+    print_fatal (kf, "value \"%s\" for locale string list key \"%s\" in group "
+                     "\"%s\" contains invalid UTF-8 characters, locale string "
+                     "list values should be encoded in UTF-8\n",
+                     value, locale_key, kf->current_group);
+    g_free (locale_key);
+
+    return FALSE;
+  }
+
+  len = strlen (value);
+
+  if (len > 0 && value[len - 1] != ';') {
+    print_fatal (kf, "value \"%s\" for locale string list key \"%s\" in group "
+                     "\"%s\" does not have a semicolon (';') as trailing "
+                     "character\n",
+                     value, locale_key, kf->current_group);
+
+    return FALSE;
+  }
+
+  if (len > 1 && value[len - 1] == ';' && value[len - 2] == '\\' &&
+      (len < 3 || value[len - 3] != '\\')) {
+    print_fatal (kf, "value \"%s\" for locale string list key \"%s\" in group "
+                     "\"%s\" has an escaped semicolon (';') as trailing "
+                     "character\n",
+                     value, locale_key, kf->current_group);
+
+    return FALSE;
+  }
+
+  if (!g_hash_table_lookup (kf->current_keys, key)) {
+    print_fatal (kf, "key \"%s\" in group \"%s\" is a localized key, but "
+                     "there is no non-localized key \"%s\"\n",
+                     locale_key, kf->current_group, key);
+    g_free (locale_key);
+
+    return FALSE;
+  }
+
+  g_free (locale_key);
+
+  return TRUE;
 }
 
 /* + This specification defines 3 types of desktop entries: Application
@@ -1814,6 +1895,7 @@ validate_desktop_key (kf_validator *kf,
       continue;
 
     if (registered_desktop_keys[i].type != DESKTOP_LOCALESTRING_TYPE &&
+        registered_desktop_keys[i].type != DESKTOP_LOCALESTRING_LIST_TYPE &&
         locale != NULL) {
       print_fatal (kf, "file contains key \"%s\" in group \"%s\", "
                        "but \"%s\" is not defined as a locale string\n",

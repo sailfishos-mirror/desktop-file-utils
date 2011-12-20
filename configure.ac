@@ -2,7 +2,7 @@ AC_INIT([desktop-file-utils], [0.19],
         [https://bugs.freedesktop.org/enter_bug.cgi?product=desktop-file-utils])
 AC_CONFIG_SRCDIR(src/validate.h)
 
-AM_INIT_AUTOMAKE([1.9 foreign no-dist-gzip dist-bzip2 tar-ustar])
+AM_INIT_AUTOMAKE([1.11 foreign no-dist-gzip dist-xz tar-ustar])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_MACRO_DIR([m4])
 AM_CONFIG_HEADER(config.h)

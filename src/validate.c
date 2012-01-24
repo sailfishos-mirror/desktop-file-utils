@@ -346,7 +346,7 @@ static struct {
 };
 
 static const char *show_in_registered[] = {
-  "GNOME", "KDE", "LXDE", "ROX", "Unity", "XFCE", "Old"
+  "GNOME", "KDE", "LXDE", "MATE", "Razor", "ROX", "Unity", "XFCE", "Old"
 };
 
 static struct {

@@ -269,7 +269,7 @@ static struct {
   { DESKTOP_LOCALESTRING_LIST_TYPE, validate_localestring_list_key }
 };
 
-static struct {
+typedef struct {
   DesktopKeyType  type;
   char           *name;
   gboolean        required;
@@ -278,7 +278,9 @@ static struct {
   gboolean        (* handle_and_validate) (kf_validator *kf,
                                            const char   *locale_key,
                                            const char   *value);
-} registered_desktop_keys[] = {
+} desktop_key;
+
+static desktop_key registered_desktop_keys[] = {
   { DESKTOP_STRING_TYPE,            "Type",              TRUE,  FALSE, FALSE, handle_type_key },
   /* it is numeric according to the spec, but it's not true in previous
    * versions of the spec. handle_version_key() will manage this */
@@ -343,6 +345,14 @@ static struct {
 
   /* Autostart spec, currently proposed; adopted by GNOME */
   { DESKTOP_STRING_TYPE,            "AutostartCondition", FALSE, FALSE, FALSE, handle_autostart_condition_key }
+};
+
+static desktop_key registered_action_keys[] = {
+  { DESKTOP_LOCALESTRING_TYPE,      "Name",               TRUE,  FALSE, FALSE, NULL },
+  { DESKTOP_LOCALESTRING_TYPE,      "Icon",               FALSE, FALSE, FALSE, handle_icon_key },
+  { DESKTOP_STRING_LIST_TYPE,       "OnlyShowIn",         FALSE, FALSE, FALSE, handle_show_in_key },
+  { DESKTOP_STRING_LIST_TYPE,       "NotShowIn",          FALSE, FALSE, FALSE, handle_show_in_key },
+  { DESKTOP_STRING_TYPE,            "Exec",               TRUE,  FALSE, FALSE, handle_exec_key }
 };
 
 static const char *show_in_registered[] = {
@@ -1024,7 +1034,7 @@ handle_show_in_key (kf_validator *kf,
   retval = TRUE;
 
   if (kf->show_in) {
-    print_fatal (kf, "only one of \"OnlyShowIn\" and \"NotShowInkey\" keys "
+    print_fatal (kf, "only one of \"OnlyShowIn\" and \"NotShowIn\" keys "
                      "may appear in group \"%s\"\n",
                      kf->current_group);
     retval = FALSE;
@@ -1575,11 +1585,26 @@ handle_categories_key (kf_validator *kf,
   return retval;
 }
 
-/* FIXME: we don't know the format for this, so we'll just assume that it's
- * always valid...
- * This could be wrong because we could use the characters that are
- * valid for a group name. And also, since it's strings, it should be only
- * characters accepted for string values.
+static gboolean
+key_is_valid (const char *key,
+	      int         len)
+{
+  char c;
+  int i;
+
+  for (i = 0; i < len; i++) {
+    c = key[i];
+    if (!g_ascii_isalnum (c) && c != '-')
+      return FALSE;
+  }
+
+  return TRUE;
+}
+
+/* + Only valid for type Application.
+     Checked.
+   + Must be a list of action identifiers. Each should be a valid key name.
+     Checked.
  */
 static gboolean
 handle_actions_key (kf_validator *kf,
@@ -1589,17 +1614,24 @@ handle_actions_key (kf_validator *kf,
   char **actions;
   char  *action;
   int    i;
+  gboolean retval;
 
+  handle_key_for_application (kf, locale_key, value);
+
+  retval = TRUE;
   actions = g_strsplit (value, ";", 0);
 
   for (i = 0; actions[i]; i++) {
     /* since the value ends with a semicolon, we'll have an empty string
      * at the end */
     if (*actions[i] == '\0') {
-      if (actions[i + 1] != NULL)
-        print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+      if (actions[i + 1] != NULL) {
+        print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                            "contains an empty action\n",
                            value, locale_key, kf->current_group);
+	retval = FALSE;
+	break;
+      }
       continue;
     }
 
@@ -1610,13 +1642,22 @@ handle_actions_key (kf_validator *kf,
       continue;
     }
 
+    if (!key_is_valid (actions[i], strlen(actions[i])
+)) {
+	print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+		     "contains invalid action identifier \"%s\"\n",
+		     value, locale_key, kf->current_group, actions[i]);
+	retval = FALSE;
+	break;
+    }
+
     action = g_strdup (actions[i]);
     g_hash_table_insert (kf->action_values, action, action);
   }
 
   g_strfreev (actions);
 
-  return TRUE;
+  return retval;
 }
 
 /* + The device to mount. (probably implies an absolute path)
@@ -1840,11 +1881,8 @@ key_extract_locale (const char  *key,
   else
     len = strlen (key);
 
-  for (i = 0; i < len; i++) {
-    c = key[i];
-    if (!g_ascii_isalnum (c) && c != '-')
-      return FALSE;
-  }
+  if (!key_is_valid(key, len))
+    return FALSE;
 
   if (!start_locale) {
     if (real_key)
@@ -1878,11 +1916,13 @@ key_extract_locale (const char  *key,
  *   Checked.
  */
 static gboolean
-validate_desktop_key (kf_validator *kf,
-                      const char   *locale_key,
-                      const char   *key,
-                      const char   *locale,
-                      const char   *value)
+validate_known_key (kf_validator  *kf,
+		    const char    *locale_key,
+		    const char    *key,
+		    const char    *locale,
+		    const char    *value,
+		    desktop_key   *keys,
+		    unsigned int   n_keys)
 {
   unsigned int i;
   unsigned int j;
@@ -1890,12 +1930,12 @@ validate_desktop_key (kf_validator *kf,
   if (!strncmp (key, "X-", 2))
     return TRUE;
 
-  for (i = 0; i < G_N_ELEMENTS (registered_desktop_keys); i++) {
-    if (strcmp (key, registered_desktop_keys[i].name))
+  for (i = 0; i < n_keys; i++) {
+    if (strcmp (key, keys[i].name))
       continue;
 
-    if (registered_desktop_keys[i].type != DESKTOP_LOCALESTRING_TYPE &&
-        registered_desktop_keys[i].type != DESKTOP_LOCALESTRING_LIST_TYPE &&
+    if (keys[i].type != DESKTOP_LOCALESTRING_TYPE &&
+        keys[i].type != DESKTOP_LOCALESTRING_LIST_TYPE &&
         locale != NULL) {
       print_fatal (kf, "file contains key \"%s\" in group \"%s\", "
                        "but \"%s\" is not defined as a locale string\n",
@@ -1904,17 +1944,17 @@ validate_desktop_key (kf_validator *kf,
     }
 
     for (j = 0; j < G_N_ELEMENTS (validate_for_type); j++) {
-      if (validate_for_type[j].type == registered_desktop_keys[i].type)
+      if (validate_for_type[j].type == keys[i].type)
         break;
     }
 
     g_assert (j != G_N_ELEMENTS (validate_for_type));
 
-    if (!kf->no_deprecated_warnings && registered_desktop_keys[i].deprecated)
+    if (!kf->no_deprecated_warnings && keys[i].deprecated)
       print_warning (kf, "key \"%s\" in group \"%s\" is deprecated\n",
                          locale_key, kf->current_group);
 
-    if (registered_desktop_keys[i].kde_reserved && kf->kde_reserved_warnings)
+    if (keys[i].kde_reserved && kf->kde_reserved_warnings)
       print_warning (kf, "key \"%s\" in group \"%s\" is a reserved key for "
                          "KDE\n",
                          locale_key, kf->current_group);
@@ -1922,16 +1962,16 @@ validate_desktop_key (kf_validator *kf,
     if (!validate_for_type[j].validate (kf, key, locale, value))
       return FALSE;
 
-    if (registered_desktop_keys[i].handle_and_validate != NULL) {
-      if (!registered_desktop_keys[i].handle_and_validate (kf, locale_key,
-                                                           value))
+    if (keys[i].handle_and_validate != NULL) {
+      if (!keys[i].handle_and_validate (kf, locale_key,
+					value))
         return FALSE;
     }
 
     break;
   }
 
-  if (i == G_N_ELEMENTS (registered_desktop_keys)) {
+  if (i == n_keys) {
     print_fatal (kf, "file contains key \"%s\" in group \"%s\", but "
                      "keys extending the format should start with "
                      "\"X-\"\n", key, kf->current_group);
@@ -1941,6 +1981,28 @@ validate_desktop_key (kf_validator *kf,
   return TRUE;
 }
 
+static gboolean
+validate_desktop_key (kf_validator *kf,
+                      const char   *locale_key,
+                      const char   *key,
+                      const char   *locale,
+                      const char   *value)
+{
+  return validate_known_key (kf, locale_key, key, locale, value,
+			     registered_desktop_keys, G_N_ELEMENTS (registered_desktop_keys));
+}
+
+static gboolean
+validate_action_key (kf_validator *kf,
+		     const char   *locale_key,
+		     const char   *key,
+		     const char   *locale,
+		     const char   *value)
+{
+  return validate_known_key (kf, locale_key, key, locale, value,
+			     registered_action_keys, G_N_ELEMENTS (registered_action_keys));
+}
+
 /* + Multiple keys in the same group may not have the same name.
  *   Checked.
  */
@@ -1948,6 +2010,7 @@ static gboolean
 validate_keys_for_current_group (kf_validator *kf)
 {
   gboolean     desktop_group;
+  gboolean     action_group;
   gboolean     retval;
   GHashTable  *duplicated_keys_hash;
   char        *key;
@@ -1960,12 +2023,16 @@ validate_keys_for_current_group (kf_validator *kf)
 
   desktop_group = (!strcmp (kf->current_group, GROUP_DESKTOP_ENTRY) ||
                    !strcmp (kf->current_group, GROUP_KDE_DESKTOP_ENTRY));
+  action_group = (!strncmp (kf->current_group, GROUP_DESKTOP_ACTION, strlen(GROUP_DESKTOP_ACTION)));
 
   keys = g_slist_copy (g_hash_table_lookup (kf->groups, kf->current_group));
   /* keys were prepended, so reverse the list (that's why we use a
    * g_slist_copy() */
   keys = g_slist_reverse (keys);
 
+  /* clear ShowIn flag, so that different groups can have multiple OnlyShowIn /
+     NotShowIn */
+  kf->show_in = FALSE;
   kf->current_keys = g_hash_table_new_full (g_str_hash, g_str_equal,
                                             NULL, NULL);
   duplicated_keys_hash = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -2024,6 +2091,10 @@ validate_keys_for_current_group (kf_validator *kf)
       if (!validate_desktop_key (kf, keyvalue->key,
                                  key, locale, keyvalue->value))
         retval = FALSE;
+    } else if (action_group && !skip_desktop_check) {
+      if (!validate_action_key (kf, keyvalue->key,
+				key, locale, keyvalue->value))
+	retval = FALSE;
     }
 
     g_free (key);
@@ -2048,9 +2119,8 @@ validate_keys_for_current_group (kf_validator *kf)
  *   Checked.
  * + All groups extending the format should start with "X-".
  *   Checked.
- * + Accept "Desktop Action foobar" group if the value for the Action key
- *   contains "foobar". (This is not in spec 1.0, but it was there before and
- *   it wasn't deprecated)
+ * + Accept "Desktop Action foobar" group, where foobar is a valid key
+ *   name.
  *   Checked.
  */
 static gboolean
@@ -2108,6 +2178,13 @@ validate_group_name (kf_validator *kf,
       char *action;
 
       action = g_strdup (group + strlen (GROUP_DESKTOP_ACTION));
+
+      if (!key_is_valid(action, strlen(action))) {
+	print_fatal (kf, "file contains \"%s\", which has an invalid action "
+		     "identifier (only alphanumeric characters and - are allowed)\n", group);
+	g_free (action);
+	return FALSE;
+      }
       g_hash_table_insert (kf->action_groups, action, action);
 
       return TRUE;
@@ -2120,7 +2197,10 @@ validate_group_name (kf_validator *kf,
 }
 
 static gboolean
-validate_required_keys (kf_validator *kf)
+validate_required_keys (kf_validator *kf,
+			const char   *group_name,
+			desktop_key  *key_definitions,
+			unsigned int  n_keys)
 {
   gboolean      retval;
   unsigned int  i;
@@ -2131,7 +2211,7 @@ validate_required_keys (kf_validator *kf)
   retval = TRUE;
 
   hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
-  keys = g_hash_table_lookup (kf->groups, kf->main_group);
+  keys = g_hash_table_lookup (kf->groups, group_name);
 
   for (sl = keys; sl != NULL; sl = sl->next) {
     kf_keyvalue *keyvalue;
@@ -2140,13 +2220,12 @@ validate_required_keys (kf_validator *kf)
     g_hash_table_insert (hashtable, keyvalue->key, keyvalue->key);
   }
 
-  for (i = 0; i < G_N_ELEMENTS (registered_desktop_keys); i++) {
-    if (registered_desktop_keys[i].required) {
+  for (i = 0; i < n_keys; i++) {
+    if (key_definitions[i].required) {
       if (!g_hash_table_lookup (hashtable,
-                                registered_desktop_keys[i].name)) {
+                                key_definitions[i].name)) {
         print_fatal (kf, "required key \"%s\" in group \"%s\" is not "
-                         "present\n",
-                         registered_desktop_keys[i].name, kf->main_group);
+                     "present\n", key_definitions[i].name, group_name);
         retval = FALSE;
       }
     }
@@ -2155,6 +2234,13 @@ validate_required_keys (kf_validator *kf)
   g_hash_table_destroy (hashtable);
 
   return retval;
+}
+
+static gboolean
+validate_required_desktop_keys (kf_validator *kf)
+{
+  return validate_required_keys (kf, kf->main_group,
+				 registered_desktop_keys, G_N_ELEMENTS (registered_desktop_keys));
 }
 
 #define PRINT_ERROR_FOREACH_KEY(lower, real)                                 \
@@ -2255,6 +2341,13 @@ lookup_group_foreach_action (char         *key,
                              kf_validator *kf)
 {
   if (g_hash_table_lookup (kf->action_groups, key)) {
+    gchar *group_name;
+
+    group_name = g_strconcat (GROUP_DESKTOP_ACTION, key, NULL);
+    validate_required_keys (kf, group_name,
+			    registered_action_keys, G_N_ELEMENTS (registered_action_keys));
+    g_free (group_name);
+
     g_hash_table_remove (kf->action_groups, key);
     return TRUE;
   }
@@ -2692,7 +2785,7 @@ desktop_file_validate (const char *filename,
   //FIXME: this does not work well if there are both a Desktop Entry and a KDE
   //Desktop Entry groups since only the last one will be validated for this.
   if (kf.main_group) {
-    validate_required_keys (&kf);
+    validate_required_desktop_keys (&kf);
     validate_type_keys (&kf);
   }
   validate_actions (&kf);

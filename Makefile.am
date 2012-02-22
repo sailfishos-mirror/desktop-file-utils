@@ -31,4 +31,5 @@ dist-hook:
 	  echo A git checkout is required to generate ChangeLog >&2; \
 	fi
 
+GITIGNOREFILES = $(PACKAGE)-\*.tar.{gz,bz2,xz}
 -include $(top_srcdir)/git.mk

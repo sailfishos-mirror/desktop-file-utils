@@ -1,4 +1,15 @@
 ============
+Version 0.20
+============
+
+ desktop-file-install
+  - fix list of locale strings without trailing slash (Matthias Clasen)
+
+ desktop-file-validate
+  - add MATE and Razor to list of registered environments (Vincent)
+  - validate Desktop Actions (Giovanni Campagna, Vincent)
+
+============
 Version 0.19
 ============
 

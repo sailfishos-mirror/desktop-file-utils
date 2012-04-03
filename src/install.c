@@ -940,7 +940,12 @@ main (int argc, char **argv)
         }
     }
 
+#if GLIB_CHECK_VERSION(2,28,0)
   g_slist_free_full (edit_actions, (GDestroyNotify) dfu_edit_action_free);
+#else
+  g_slist_foreach (edit_actions, (GFunc) dfu_edit_action_free, NULL);
+  g_slist_free (edit_actions);
+#endif
 
   g_option_context_free (context);
 

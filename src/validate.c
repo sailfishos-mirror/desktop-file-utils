@@ -499,6 +499,7 @@ static struct {
   { "Core",                   FALSE, FALSE, FALSE, { NULL } },
   { "KDE",                    FALSE, FALSE, FALSE, { "Qt", NULL } },
   { "GNOME",                  FALSE, FALSE, FALSE, { "GTK", NULL } },
+  { "XFCE",                   FALSE, FALSE, FALSE, { "GTK", NULL } },
   { "GTK",                    FALSE, FALSE, FALSE, { NULL } },
   { "Qt",                     FALSE, FALSE, FALSE, { NULL } },
   { "Motif",                  FALSE, FALSE, FALSE, { NULL } },

@@ -248,7 +248,7 @@ process_one_file (const char *filename,
   g_key_file_free (kf);
 
   /* Load and validate the file we just wrote */
-  if (!desktop_file_validate (new_filename, FALSE, TRUE))
+  if (!desktop_file_validate (new_filename, FALSE, TRUE, TRUE))
     {
       g_set_error (err, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_PARSE,
                    _("Failed to validate the created desktop file"));

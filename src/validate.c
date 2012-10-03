@@ -112,6 +112,7 @@ struct _kf_validator {
 
   gboolean     kde_reserved_warnings;
   gboolean     no_deprecated_warnings;
+  gboolean     no_hints;
 
   char        *main_group;
   DesktopType  type;
@@ -562,6 +563,26 @@ print_warning (kf_validator *kf, const char *format, ...)
   va_end (args);
 
   g_print ("%s: warning: %s", kf->filename, str);
+
+  g_free (str);
+}
+
+static void
+print_hint (kf_validator *kf, const char *format, ...)
+{
+  va_list args;
+  gchar *str;
+
+  g_return_if_fail (kf != NULL && format != NULL);
+
+  if (kf->no_hints)
+    return;
+
+  va_start (args, format);
+  str = g_strdup_vprintf (format, args);
+  va_end (args);
+
+  g_print ("%s: hint: %s", kf->filename, str);
 
   g_free (str);
 }
@@ -2779,7 +2800,8 @@ groups_hashtable_free (gpointer key,
 gboolean
 desktop_file_validate (const char *filename,
                        gboolean    warn_kde,
-                       gboolean    no_warn_deprecated)
+                       gboolean    no_warn_deprecated,
+                       gboolean    no_hints)
 {
   kf_validator kf;
 
@@ -2796,6 +2818,7 @@ desktop_file_validate (const char *filename,
   kf.current_keys           = NULL;
   kf.kde_reserved_warnings  = warn_kde;
   kf.no_deprecated_warnings = no_warn_deprecated;
+  kf.no_hints               = no_hints;
 
   kf.main_group       = NULL;
   kf.type             = INVALID_TYPE;

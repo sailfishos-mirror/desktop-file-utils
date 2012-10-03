@@ -29,10 +29,12 @@
 #include "validate.h"
 
 static gboolean   warn_kde = FALSE;
+static gboolean   no_hints = FALSE;
 static gboolean   no_warn_deprecated = FALSE;
 static char     **filename = NULL;
 
 static GOptionEntry option_entries[] = {
+  { "no-hints", 0, 0, G_OPTION_ARG_NONE, &no_hints, "Do not output hints to improve desktop file", NULL },
   { "no-warn-deprecated", 0, 0, G_OPTION_ARG_NONE, &no_warn_deprecated, "Do not warn about usage of deprecated items", NULL },
   { "warn-kde", 0, 0, G_OPTION_ARG_NONE, &warn_kde, "Warn about usage of KDE extensions to the specification", NULL },
   { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &filename, NULL, "<desktop-file>" },
@@ -75,7 +77,7 @@ main (int argc, char *argv[])
     return 1;
   }
 
-  if (desktop_file_validate (filename[0], warn_kde, no_warn_deprecated))
+  if (desktop_file_validate (filename[0], warn_kde, no_warn_deprecated, no_hints))
     return 0;
   else
     return 1;

@@ -1511,8 +1511,7 @@ handle_categories_key (kf_validator *kf,
   GHashTable    *hashtable;
   int            i;
   unsigned int   j;
-  gboolean       main_category_present;
-  gboolean       more_than_one_main_category;
+  int            main_categories_nb;
 
   handle_key_for_application (kf, locale_key, value);
 
@@ -1546,8 +1545,7 @@ handle_categories_key (kf_validator *kf,
   }
 
   /* second pass */
-  main_category_present = FALSE;
-  more_than_one_main_category = FALSE;
+  main_categories_nb = 0;
 
   for (i = 0; categories[i]; i++) {
     unsigned int k;
@@ -1574,17 +1572,57 @@ handle_categories_key (kf_validator *kf,
       continue;
     }
 
-    if (registered_categories[j].main && main_category_present &&
-        !more_than_one_main_category) {
+    if (registered_categories[j].main) {
+      /* only count it as a main category if none of the required categories
+       * for this one is also a main category (and is present) */
+      gboolean required_main_category_present = FALSE;
+
+      for (k = 0; registered_categories[j].requires[k] != NULL; k++) {
+        char **required_categories;
+        int    l;
+
+        required_categories = g_strsplit (registered_categories[j].requires[k],
+                                          ";", 0);
+
+        for (l = 0; required_categories[l]; l++) {
+          unsigned int m;
+
+          if (!g_hash_table_lookup (hashtable, required_categories[l]))
+            continue;
+
+          for (m = 0; m < G_N_ELEMENTS (registered_categories); m++) {
+            if (strcmp (required_categories[l],
+                        registered_categories[m].name) != 0)
+              continue;
+
+            if (registered_categories[m].main)
+              required_main_category_present = TRUE;
+
+            break;
+          }
+
+          if (required_main_category_present)
+            break;
+        }
+
+        if (required_main_category_present) {
+          g_strfreev (required_categories);
+          break;
+        }
+
+        g_strfreev (required_categories);
+      }
+
+      if (!required_main_category_present)
+        main_categories_nb++;
+    }
+
+    if (registered_categories[j].main && main_categories_nb > 1)
       print_hint (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                   "contains more than one main category; application "
                   "might appear more than once in the application menu\n",
                   value, locale_key, kf->current_group);
-      more_than_one_main_category = TRUE;
-    }
 
-    if (registered_categories[j].main)
-      main_category_present = TRUE;
 
     if (registered_categories[j].deprecated) {
       if (!kf->no_deprecated_warnings)
@@ -1698,7 +1736,9 @@ handle_categories_key (kf_validator *kf,
   g_strfreev (categories);
   g_hash_table_destroy (hashtable);
 
-  if (!main_category_present)
+  g_assert (main_categories_nb >= 0);
+
+  if (main_categories_nb == 0)
     print_hint (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                 "does not contain a registered main category; application "
                 "might only show up in a \"catch-all\" section of the "

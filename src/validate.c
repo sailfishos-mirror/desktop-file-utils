@@ -369,150 +369,151 @@ static struct {
   gboolean    main;
   gboolean    require_only_show_in;
   gboolean    deprecated;
-  const char *requires[4];
+  const char *requires[2];
+  const char *suggests[4];
 } registered_categories[] = {
-  { "AudioVideo",             TRUE,  FALSE, FALSE, { NULL } },
-  { "Audio",                  TRUE,  FALSE, FALSE, { "AudioVideo", NULL } },
-  { "Video",                  TRUE,  FALSE, FALSE, { "AudioVideo", NULL } },
-  { "Development",            TRUE,  FALSE, FALSE, { NULL } },
-  { "Education",              TRUE,  FALSE, FALSE, { NULL } },
-  { "Game",                   TRUE,  FALSE, FALSE, { NULL } },
-  { "Graphics",               TRUE,  FALSE, FALSE, { NULL } },
-  { "Network",                TRUE,  FALSE, FALSE, { NULL } },
-  { "Office",                 TRUE,  FALSE, FALSE, { NULL } },
-  { "Settings",               TRUE,  FALSE, FALSE, { NULL } },
-  { "System",                 TRUE,  FALSE, FALSE, { NULL } },
-  { "Utility",                TRUE,  FALSE, FALSE, { NULL } },
-  { "Audio",                  FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "Video",                  FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "Building",               FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "Debugger",               FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "IDE",                    FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "GUIDesigner",            FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "Profiling",              FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "RevisionControl",        FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "Translation",            FALSE, FALSE, FALSE, { "Development", NULL } },
-  { "Calendar",               FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "ContactManagement",      FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "Database",               FALSE, FALSE, FALSE, { "Office", "Development", "AudioVideo", NULL } },
-  { "Dictionary",             FALSE, FALSE, FALSE, { "Office;TextTools", NULL } },
-  { "Chart",                  FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "Email",                  FALSE, FALSE, FALSE, { "Office;Network", NULL } },
-  { "Finance",                FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "FlowChart",              FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "PDA",                    FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "ProjectManagement",      FALSE, FALSE, FALSE, { "Office;Development", NULL } },
-  { "Presentation",           FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "Spreadsheet",            FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "WordProcessor",          FALSE, FALSE, FALSE, { "Office", NULL } },
-  { "2DGraphics",             FALSE, FALSE, FALSE, { "Graphics", NULL } },
-  { "VectorGraphics",         FALSE, FALSE, FALSE, { "Graphics;2DGraphics", NULL } },
-  { "RasterGraphics",         FALSE, FALSE, FALSE, { "Graphics;2DGraphics", NULL } },
-  { "3DGraphics",             FALSE, FALSE, FALSE, { "Graphics", NULL } },
-  { "Scanning",               FALSE, FALSE, FALSE, { "Graphics", NULL } },
-  { "OCR",                    FALSE, FALSE, FALSE, { "Graphics;Scanning", NULL } },
-  { "Photography",            FALSE, FALSE, FALSE, { "Graphics", "Office", NULL } },
-  { "Publishing",             FALSE, FALSE, FALSE, { "Graphics", "Office", NULL } },
-  { "Viewer",                 FALSE, FALSE, FALSE, { "Graphics", "Office", NULL } },
-  { "TextTools",              FALSE, FALSE, FALSE, { "Utility", NULL } },
-  { "DesktopSettings",        FALSE, FALSE, FALSE, { "Settings", NULL } },
-  { "HardwareSettings",       FALSE, FALSE, FALSE, { "Settings", NULL } },
-  { "Printing",               FALSE, FALSE, FALSE, { "HardwareSettings;Settings", NULL } },
-  { "PackageManager",         FALSE, FALSE, FALSE, { "Settings", NULL } },
-  { "Dialup",                 FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "InstantMessaging",       FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "Chat",                   FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "IRCClient",              FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "FileTransfer",           FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "HamRadio",               FALSE, FALSE, FALSE, { "Network", "Audio", NULL } },
-  { "News",                   FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "P2P",                    FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "RemoteAccess",           FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "Telephony",              FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "TelephonyTools",         FALSE, FALSE, FALSE, { "Utility", NULL } },
-  { "VideoConference",        FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "WebBrowser",             FALSE, FALSE, FALSE, { "Network", NULL } },
-  { "WebDevelopment",         FALSE, FALSE, FALSE, { "Network", "Development", NULL } },
-  { "Midi",                   FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
-  { "Mixer",                  FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
-  { "Sequencer",              FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
-  { "Tuner",                  FALSE, FALSE, FALSE, { "AudioVideo;Audio", NULL } },
-  { "TV",                     FALSE, FALSE, FALSE, { "AudioVideo;Video", NULL } },
-  { "AudioVideoEditing",      FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
-  { "Player",                 FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
-  { "Recorder",               FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
-  { "DiscBurning",            FALSE, FALSE, FALSE, { "Audio", "Video", "AudioVideo", NULL } },
-  { "ActionGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "AdventureGame",          FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "ArcadeGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "BoardGame",              FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "BlocksGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "CardGame",               FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "KidsGame",               FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "LogicGame",              FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "RolePlaying",            FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "Simulation",             FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "SportsGame",             FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "StrategyGame",           FALSE, FALSE, FALSE, { "Game", NULL } },
-  { "Art",                    FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "Construction",           FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "Music",                  FALSE, FALSE, FALSE, { "AudioVideo;Education", NULL } },
-  { "Languages",              FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "Science",                FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "ArtificialIntelligence", FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Astronomy",              FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Biology",                FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Chemistry",              FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "ComputerScience",        FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "DataVisualization",      FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Economy",                FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "Electricity",            FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Geography",              FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "Geology",                FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Geoscience",             FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "History",                FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "ImageProcessing",        FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Literature",             FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "Math",                   FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "NumericalAnalysis",      FALSE, FALSE, FALSE, { "Education;Science;Math", NULL } },
-  { "MedicalSoftware",        FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Physics",                FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Robotics",               FALSE, FALSE, FALSE, { "Education;Science", NULL } },
-  { "Sports",                 FALSE, FALSE, FALSE, { "Education", NULL } },
-  { "ParallelComputing",      FALSE, FALSE, FALSE, { "Education;Science;ComputerScience", NULL } },
-  { "Amusement",              FALSE, FALSE, FALSE, { NULL } },
-  { "Archiving",              FALSE, FALSE, FALSE, { "Utility", NULL } },
-  { "Compression",            FALSE, FALSE, FALSE, { "Utility;Archiving", NULL } },
-  { "Electronics",            FALSE, FALSE, FALSE, { NULL } },
-  { "Emulator",               FALSE, FALSE, FALSE, { "System", "Game", NULL } },
-  { "Engineering",            FALSE, FALSE, FALSE, { NULL } },
-  { "FileTools",              FALSE, FALSE, FALSE, { "Utility", "System", NULL } },
-  { "FileManager",            FALSE, FALSE, FALSE, { "System;FileTools", NULL } },
-  { "TerminalEmulator",       FALSE, FALSE, FALSE, { "System", NULL } },
-  { "Filesystem",             FALSE, FALSE, FALSE, { "System", NULL } },
-  { "Monitor",                FALSE, FALSE, FALSE, { "System", NULL } },
-  { "Security",               FALSE, FALSE, FALSE, { "Settings", "System", NULL } },
-  { "Accessibility",          FALSE, FALSE, FALSE, { "Settings", "Utility", NULL } },
-  { "Calculator",             FALSE, FALSE, FALSE, { "Utility", NULL } },
-  { "Clock",                  FALSE, FALSE, FALSE, { "Utility", NULL } },
-  { "TextEditor",             FALSE, FALSE, FALSE, { "Utility", NULL } },
-  { "Documentation",          FALSE, FALSE, FALSE, { NULL } },
-  { "Adult",                  FALSE, FALSE, FALSE, { NULL } },
-  { "Core",                   FALSE, FALSE, FALSE, { NULL } },
-  { "KDE",                    FALSE, FALSE, FALSE, { "Qt", NULL } },
-  { "GNOME",                  FALSE, FALSE, FALSE, { "GTK", NULL } },
-  { "XFCE",                   FALSE, FALSE, FALSE, { "GTK", NULL } },
-  { "GTK",                    FALSE, FALSE, FALSE, { NULL } },
-  { "Qt",                     FALSE, FALSE, FALSE, { NULL } },
-  { "Motif",                  FALSE, FALSE, FALSE, { NULL } },
-  { "Java",                   FALSE, FALSE, FALSE, { NULL } },
-  { "ConsoleOnly",            FALSE, FALSE, FALSE, { NULL } },
-  { "Screensaver",            FALSE, TRUE,  FALSE, { NULL } },
-  { "TrayIcon",               FALSE, TRUE,  FALSE, { NULL } },
-  { "Applet",                 FALSE, TRUE,  FALSE, { NULL } },
-  { "Shell",                  FALSE, TRUE,  FALSE, { NULL } },
-  { "Application",            FALSE, FALSE, TRUE,  { NULL } },
-  { "Applications",           FALSE, FALSE, TRUE,  { NULL } }
+  { "AudioVideo",             TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Audio",                  TRUE,  FALSE, FALSE, { "AudioVideo", NULL }, { NULL } },
+  { "Video",                  TRUE,  FALSE, FALSE, { "AudioVideo", NULL }, { NULL } },
+  { "Development",            TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Education",              TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Game",                   TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Graphics",               TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Network",                TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Office",                 TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Settings",               TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "System",                 TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Utility",                TRUE,  FALSE, FALSE, { NULL }, { NULL } },
+  { "Audio",                  FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "Video",                  FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "Building",               FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "Debugger",               FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "IDE",                    FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "GUIDesigner",            FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "Profiling",              FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "RevisionControl",        FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "Translation",            FALSE, FALSE, FALSE, { NULL }, { "Development", NULL } },
+  { "Calendar",               FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "ContactManagement",      FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "Database",               FALSE, FALSE, FALSE, { NULL }, { "Office", "Development", "AudioVideo", NULL } },
+  { "Dictionary",             FALSE, FALSE, FALSE, { NULL }, { "Office;TextTools", NULL } },
+  { "Chart",                  FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "Email",                  FALSE, FALSE, FALSE, { NULL }, { "Office;Network", NULL } },
+  { "Finance",                FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "FlowChart",              FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "PDA",                    FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "ProjectManagement",      FALSE, FALSE, FALSE, { NULL }, { "Office;Development", NULL } },
+  { "Presentation",           FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "Spreadsheet",            FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "WordProcessor",          FALSE, FALSE, FALSE, { NULL }, { "Office", NULL } },
+  { "2DGraphics",             FALSE, FALSE, FALSE, { NULL }, { "Graphics", NULL } },
+  { "VectorGraphics",         FALSE, FALSE, FALSE, { NULL }, { "Graphics;2DGraphics", NULL } },
+  { "RasterGraphics",         FALSE, FALSE, FALSE, { NULL }, { "Graphics;2DGraphics", NULL } },
+  { "3DGraphics",             FALSE, FALSE, FALSE, { NULL }, { "Graphics", NULL } },
+  { "Scanning",               FALSE, FALSE, FALSE, { NULL }, { "Graphics", NULL } },
+  { "OCR",                    FALSE, FALSE, FALSE, { NULL }, { "Graphics;Scanning", NULL } },
+  { "Photography",            FALSE, FALSE, FALSE, { NULL }, { "Graphics", "Office", NULL } },
+  { "Publishing",             FALSE, FALSE, FALSE, { NULL }, { "Graphics", "Office", NULL } },
+  { "Viewer",                 FALSE, FALSE, FALSE, { NULL }, { "Graphics", "Office", NULL } },
+  { "TextTools",              FALSE, FALSE, FALSE, { NULL }, { "Utility", NULL } },
+  { "DesktopSettings",        FALSE, FALSE, FALSE, { NULL }, { "Settings", NULL } },
+  { "HardwareSettings",       FALSE, FALSE, FALSE, { NULL }, { "Settings", NULL } },
+  { "Printing",               FALSE, FALSE, FALSE, { NULL }, { "HardwareSettings;Settings", NULL } },
+  { "PackageManager",         FALSE, FALSE, FALSE, { NULL }, { "Settings", NULL } },
+  { "Dialup",                 FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "InstantMessaging",       FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "Chat",                   FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "IRCClient",              FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "FileTransfer",           FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "HamRadio",               FALSE, FALSE, FALSE, { NULL }, { "Network", "Audio", NULL } },
+  { "News",                   FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "P2P",                    FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "RemoteAccess",           FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "Telephony",              FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "TelephonyTools",         FALSE, FALSE, FALSE, { NULL }, { "Utility", NULL } },
+  { "VideoConference",        FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "WebBrowser",             FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "WebDevelopment",         FALSE, FALSE, FALSE, { NULL }, { "Network", "Development", NULL } },
+  { "Midi",                   FALSE, FALSE, FALSE, { NULL }, { "AudioVideo;Audio", NULL } },
+  { "Mixer",                  FALSE, FALSE, FALSE, { NULL }, { "AudioVideo;Audio", NULL } },
+  { "Sequencer",              FALSE, FALSE, FALSE, { NULL }, { "AudioVideo;Audio", NULL } },
+  { "Tuner",                  FALSE, FALSE, FALSE, { NULL }, { "AudioVideo;Audio", NULL } },
+  { "TV",                     FALSE, FALSE, FALSE, { NULL }, { "AudioVideo;Video", NULL } },
+  { "AudioVideoEditing",      FALSE, FALSE, FALSE, { NULL }, { "Audio", "Video", "AudioVideo", NULL } },
+  { "Player",                 FALSE, FALSE, FALSE, { NULL }, { "Audio", "Video", "AudioVideo", NULL } },
+  { "Recorder",               FALSE, FALSE, FALSE, { NULL }, { "Audio", "Video", "AudioVideo", NULL } },
+  { "DiscBurning",            FALSE, FALSE, FALSE, { NULL }, { "Audio", "Video", "AudioVideo", NULL } },
+  { "ActionGame",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "AdventureGame",          FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "ArcadeGame",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "BoardGame",              FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "BlocksGame",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "CardGame",               FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "KidsGame",               FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "LogicGame",              FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "RolePlaying",            FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "Simulation",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "SportsGame",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "StrategyGame",           FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "Art",                    FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "Construction",           FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "Music",                  FALSE, FALSE, FALSE, { NULL }, { "AudioVideo;Education", NULL } },
+  { "Languages",              FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "Science",                FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "ArtificialIntelligence", FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Astronomy",              FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Biology",                FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Chemistry",              FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "ComputerScience",        FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "DataVisualization",      FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Economy",                FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "Electricity",            FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Geography",              FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "Geology",                FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Geoscience",             FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "History",                FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "ImageProcessing",        FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Literature",             FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "Math",                   FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "NumericalAnalysis",      FALSE, FALSE, FALSE, { NULL }, { "Education;Science;Math", NULL } },
+  { "MedicalSoftware",        FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Physics",                FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Robotics",               FALSE, FALSE, FALSE, { NULL }, { "Education;Science", NULL } },
+  { "Sports",                 FALSE, FALSE, FALSE, { NULL }, { "Education", NULL } },
+  { "ParallelComputing",      FALSE, FALSE, FALSE, { NULL }, { "Education;Science;ComputerScience", NULL } },
+  { "Amusement",              FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Archiving",              FALSE, FALSE, FALSE, { NULL }, { "Utility", NULL } },
+  { "Compression",            FALSE, FALSE, FALSE, { NULL }, { "Utility;Archiving", NULL } },
+  { "Electronics",            FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Emulator",               FALSE, FALSE, FALSE, { NULL }, { "System", "Game", NULL } },
+  { "Engineering",            FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "FileTools",              FALSE, FALSE, FALSE, { NULL }, { "Utility", "System", NULL } },
+  { "FileManager",            FALSE, FALSE, FALSE, { NULL }, { "System;FileTools", NULL } },
+  { "TerminalEmulator",       FALSE, FALSE, FALSE, { NULL }, { "System", NULL } },
+  { "Filesystem",             FALSE, FALSE, FALSE, { NULL }, { "System", NULL } },
+  { "Monitor",                FALSE, FALSE, FALSE, { NULL }, { "System", NULL } },
+  { "Security",               FALSE, FALSE, FALSE, { NULL }, { "Settings", "System", NULL } },
+  { "Accessibility",          FALSE, FALSE, FALSE, { NULL }, { "Settings", "Utility", NULL } },
+  { "Calculator",             FALSE, FALSE, FALSE, { NULL }, { "Utility", NULL } },
+  { "Clock",                  FALSE, FALSE, FALSE, { NULL }, { "Utility", NULL } },
+  { "TextEditor",             FALSE, FALSE, FALSE, { NULL }, { "Utility", NULL } },
+  { "Documentation",          FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Adult",                  FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Core",                   FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "KDE",                    FALSE, FALSE, FALSE, { NULL }, { "Qt", NULL } },
+  { "GNOME",                  FALSE, FALSE, FALSE, { NULL }, { "GTK", NULL } },
+  { "XFCE",                   FALSE, FALSE, FALSE, { NULL }, { "GTK", NULL } },
+  { "GTK",                    FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Qt",                     FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Motif",                  FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Java",                   FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "ConsoleOnly",            FALSE, FALSE, FALSE, { NULL }, { NULL } },
+  { "Screensaver",            FALSE, TRUE,  FALSE, { NULL }, { NULL } },
+  { "TrayIcon",               FALSE, TRUE,  FALSE, { NULL }, { NULL } },
+  { "Applet",                 FALSE, TRUE,  FALSE, { NULL }, { NULL } },
+  { "Shell",                  FALSE, TRUE,  FALSE, { NULL }, { NULL } },
+  { "Application",            FALSE, FALSE, TRUE,  { NULL }, { NULL } },
+  { "Applications",           FALSE, FALSE, TRUE,  { NULL }, { NULL } }
 };
 
 static void
@@ -1492,9 +1493,12 @@ handle_mime_key (kf_validator *kf,
  *   "catch-all" section of application menu.
  *   Checked.
  *   FIXME: decide if it's okay to have an empty list of categories.
- * + Some categories, if include, require that another category is included.
- *   Eg: if Audio is there, AudioVideo must be there. Same for most additional
- *   categories.
+ * + Some categories, if included, require that another category is included.
+ *   Eg: if Audio is there, AudioVideo must be there.
+ *   Checked.
+ * + Some categories, if included, suggest that another category is included.
+ *   Eg: Debugger suggests Development.
+ *   This is the case for most additional categories.
  *   Checked.
  */
 static gboolean
@@ -1600,6 +1604,8 @@ handle_categories_key (kf_validator *kf,
       }
     }
 
+    /* required categories */
+
     for (k = 0; registered_categories[j].requires[k] != NULL; k++) {
       char **required_categories;
       int    l;
@@ -1622,7 +1628,9 @@ handle_categories_key (kf_validator *kf,
       g_strfreev (required_categories);
     }
 
-    /* there was a required category and it wasn't found */
+    /* we've reached the end of a non-empty set of required categories; this
+     * means none of the possible required category (or list of required
+     * categories) was found */
     if (k != 0 && registered_categories[j].requires[k] == NULL) {
       GString *output_required;
 
@@ -1639,6 +1647,50 @@ handle_categories_key (kf_validator *kf,
 
       g_string_free (output_required, TRUE);
       retval = FALSE;
+    }
+
+    /* suggested categories */
+
+    for (k = 0; registered_categories[j].suggests[k] != NULL; k++) {
+      char **suggested_categories;
+      int    l;
+
+      suggested_categories = g_strsplit (registered_categories[j].suggests[k],
+                                         ";", 0);
+
+      for (l = 0; suggested_categories[l]; l++) {
+        if (!g_hash_table_lookup (hashtable, suggested_categories[l]))
+          break;
+      }
+
+      /* we've reached the end of a list of suggested categories, so
+       * the condition is satisfied */
+      if (suggested_categories[l] == NULL) {
+        g_strfreev (suggested_categories);
+        break;
+      }
+
+      g_strfreev (suggested_categories);
+    }
+
+    /* we've reached the end of a non-empty set of suggested categories; this
+     * means none of the possible suggested category (or list of suggested
+     * categories) was found */
+    if (k != 0 && registered_categories[j].suggests[k] == NULL) {
+      GString *output_suggested;
+
+      output_suggested = g_string_new (registered_categories[j].suggests[0]);
+      for (k = 1; registered_categories[j].suggests[k] != NULL; k++)
+        g_string_append_printf (output_suggested, ", or %s",
+                                registered_categories[j].suggests[k]);
+
+      print_hint (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
+                  "can be extended with another category among the "
+                  "following categories: %s\n",
+                  categories[i], locale_key, kf->current_group,
+                  output_suggested->str);
+
+      g_string_free (output_suggested, TRUE);
     }
 
   }

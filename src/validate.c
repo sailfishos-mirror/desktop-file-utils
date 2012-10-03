@@ -1484,6 +1484,9 @@ handle_mime_key (kf_validator *kf,
  *   FIXME: it's not really deprecated, so the error message is wrong
  * + All categories extending the format should start with "X-".
  *   Checked.
+ * + Using multiple main categories may lead to appearing more than once in
+ *   application menu.
+ *   Checked.
  * + One main category should be included, otherwise application will appear in
  *   "catch-all" section of application menu.
  *   Checked.
@@ -1504,6 +1507,7 @@ handle_categories_key (kf_validator *kf,
   int            i;
   unsigned int   j;
   gboolean       main_category_present;
+  gboolean       more_than_one_main_category;
 
   handle_key_for_application (kf, locale_key, value);
 
@@ -1538,6 +1542,7 @@ handle_categories_key (kf_validator *kf,
 
   /* second pass */
   main_category_present = FALSE;
+  more_than_one_main_category = FALSE;
 
   for (i = 0; categories[i]; i++) {
     unsigned int k;
@@ -1562,6 +1567,15 @@ handle_categories_key (kf_validator *kf,
                        value, locale_key, kf->current_group, categories[i]);
       retval = FALSE;
       continue;
+    }
+
+    if (registered_categories[j].main && main_category_present &&
+        !more_than_one_main_category) {
+      print_hint (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                  "contains more than one main category; application "
+                  "might appear more than once in the application menu\n",
+                  value, locale_key, kf->current_group);
+      more_than_one_main_category = TRUE;
     }
 
     if (registered_categories[j].main)

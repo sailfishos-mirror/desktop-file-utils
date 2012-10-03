@@ -497,6 +497,7 @@ static struct {
   { "Clock",                  FALSE, FALSE, FALSE, { "Utility", NULL } },
   { "TextEditor",             FALSE, FALSE, FALSE, { "Utility", NULL } },
   { "Documentation",          FALSE, FALSE, FALSE, { NULL } },
+  { "Adult",                  FALSE, FALSE, FALSE, { NULL } },
   { "Core",                   FALSE, FALSE, FALSE, { NULL } },
   { "KDE",                    FALSE, FALSE, FALSE, { "Qt", NULL } },
   { "GNOME",                  FALSE, FALSE, FALSE, { "GTK", NULL } },

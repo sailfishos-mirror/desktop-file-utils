@@ -1484,7 +1484,8 @@ handle_mime_key (kf_validator *kf,
  *   FIXME: it's not really deprecated, so the error message is wrong
  * + All categories extending the format should start with "X-".
  *   Checked.
- * + At least one main category must be included.
+ * + One main category should be included, otherwise application will appear in
+ *   "catch-all" section of application menu.
  *   Checked.
  *   FIXME: decide if it's okay to have an empty list of categories.
  * + Some categories, if include, require that another category is included.
@@ -1630,12 +1631,12 @@ handle_categories_key (kf_validator *kf,
   g_strfreev (categories);
   g_hash_table_destroy (hashtable);
 
-  if (!main_category_present) {
-    print_future_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                        "does not contain a registered main category\n",
-                        value, locale_key, kf->current_group, categories[i]);
-    retval = FALSE;
-  }
+  if (!main_category_present)
+    print_hint (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                "does not contain a registered main category; application "
+                "might only show up in a \"catch-all\" section of the "
+                "application menu\n",
+                value, locale_key, kf->current_group);
 
   return retval;
 }

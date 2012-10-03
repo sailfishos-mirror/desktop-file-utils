@@ -365,6 +365,16 @@ static const char *show_in_registered[] = {
 };
 
 static struct {
+  const char   *name;
+  const char   *first_arg[3];
+  unsigned int  additional_args;
+} registered_autostart_condition[] = {
+  { "GNOME",     { NULL }, 1 },
+  { "GNOME3",    { "if-session", "unless-session", NULL }, 1},
+  { "GSettings", { NULL }, 2 }
+};
+
+static struct {
   const char *name;
   gboolean    main;
   gboolean    require_only_show_in;
@@ -1870,6 +1880,7 @@ handle_encoding_key (kf_validator *kf,
  *   - if-exists FILE
  *   - unless-exists FILE
  *   - DESKTOP-ENVIRONMENT-NAME [DESKTOP-SPECIFIC-TEST]
+ *   - other known conditions (GNOME3, GSettings, etc.)
  *   Checked.
  * + FILE must be a path to a filename, relative to $XDG_CONFIG_HOME.
  *   Checked.
@@ -1931,9 +1942,124 @@ handle_autostart_condition_key (kf_validator *kf,
                          value, locale_key, kf->current_group, argument);
     }
 
+  } else if (strncmp (condition, "X-", 2) == 0) {
+    if (argument && argument[0] == '\0')
+      print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "has trailing space(s)\n",
+                         value, locale_key, kf->current_group);
   } else {
-    if (strncmp (condition, "X-", 2)) {
-      unsigned int i;
+    unsigned int i;
+    unsigned int j;
+
+    /* Look if it's a registered AutostartCondition */
+
+    for (i = 0; i < G_N_ELEMENTS (registered_autostart_condition); i++) {
+
+      if (strcmp (condition, registered_autostart_condition[i].name) != 0)
+        continue;
+
+      /* check if first argument is one of the expected ones */
+      for (j = 0; registered_autostart_condition[i].first_arg[j] != NULL; j++) {
+        const char *first = registered_autostart_condition[i].first_arg[j];
+        char       *after_first = argument;
+
+        if (argument && !strncmp (argument, first, strlen (first))) {
+          after_first += strlen (first);
+          if (after_first[0] == '\0' || after_first[0] == ' ') {
+            /* find next argument */
+            argument = after_first;
+            while (*argument == ' ')
+              argument++;
+          }
+
+          break;
+        }
+      }
+
+      /* we've reached the end of a non-empty set of first arguments; this
+       * means none of the possible first arguments was found */
+      if (j != 0 && registered_autostart_condition[i].first_arg[j] == NULL) {
+        GString *output;
+
+        output = g_string_new (registered_autostart_condition[i].first_arg[0]);
+        for (j = 1; registered_autostart_condition[i].first_arg[j] != NULL; j++)
+          g_string_append_printf (output, ", or %s",
+                                  registered_autostart_condition[i].first_arg[j]);
+
+        print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                     "does not contain a valid first argument for condition "
+                     "\"%s\"; valid first arguments are: %s\n",
+                     value, locale_key, kf->current_group,
+                     condition, output->str);
+        retval = FALSE;
+
+        g_string_free (output, TRUE);
+
+      } else {
+
+        switch (registered_autostart_condition[i].additional_args) {
+          case 0:
+            if (argument && argument[0] != '\0') {
+              print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                               "has too many arguments for condition \"%s\"\n",
+                           value, locale_key, kf->current_group, condition);
+              retval = FALSE;
+            }
+            break;
+
+          case 1:
+            /* we handle the "one argument" case specially, as spaces might be
+             * normal there, and therefore we don't want to split the string
+             * based on spaces */
+            if (!argument || argument[0] == '\0') {
+              print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                               "is missing a last argument for condition "
+                               "\"%s\"\n",
+                           value, locale_key, kf->current_group, condition);
+              retval = FALSE;
+            }
+            break;
+
+          default:
+            {
+              int argc_diff = -registered_autostart_condition[i].additional_args;
+
+              while (argument && argument[0] != '\0') {
+                argc_diff++;
+                argument = g_utf8_strchr (argument, -1, ' ');
+                while (argument && *argument == ' ')
+                  argument++;
+              }
+
+              if (argc_diff > 0) {
+                print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                                 "has %d too many arguments for condition "
+                                 "\"%s\"\n",
+                             value, locale_key, kf->current_group,
+                             argc_diff, condition);
+                retval = FALSE;
+              } else if (argc_diff < 0) {
+                print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                                 "has %d too few arguments for condition "
+                                 "\"%s\"\n",
+                             value, locale_key, kf->current_group,
+                             -argc_diff, condition);
+                retval = FALSE;
+              }
+            }
+            break;
+        }
+
+      }
+
+      break;
+
+    }
+
+    /* Now, if we didn't find condition in list of registered
+     * AutostartCondition... */
+    if (i == G_N_ELEMENTS (registered_autostart_condition)) {
+      /* Accept conditions with same name as OnlyShowIn values */
 
       for (i = 0; i < G_N_ELEMENTS (show_in_registered); i++) {
         if (!strcmp (condition, show_in_registered[i]))
@@ -1948,12 +2074,11 @@ handle_autostart_condition_key (kf_validator *kf,
                          value, locale_key, kf->current_group, condition);
         retval = FALSE;
       }
-    }
 
-    if (argument && argument[0] == '\0') {
-      print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                         "has trailing space(s)\n",
-                         value, locale_key, kf->current_group);
+      if (argument && argument[0] == '\0')
+        print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                           "has trailing space(s)\n",
+                           value, locale_key, kf->current_group);
     }
   }
 

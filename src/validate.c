@@ -1055,11 +1055,12 @@ handle_icon_key (kf_validator *kf,
   if (g_str_has_suffix (value, ".png") ||
       g_str_has_suffix (value, ".xpm") ||
       g_str_has_suffix (value, ".svg")) {
-    print_future_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" is an icon "
-                        "name with an extension, but there should be no extension "
-                        "as described in the Icon Theme Specification if the "
-                        "value is not an absolute path\n",
-                        value, locale_key, kf->current_group);
+    print_future_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" is an "
+                            "icon name with an extension, but there should be "
+                            "no extension as described in the Icon Theme "
+                            "Specification if the value is not an absolute "
+                            "path\n",
+                            value, locale_key, kf->current_group);
     return FALSE;
   }
 
@@ -1462,10 +1463,10 @@ handle_mime_key (kf_validator *kf,
         break;
       case MU_INVALID:
         print_future_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                            "contains value \"%s\" which is an invalid MIME "
-                            "type: %s\n",
-                            value, locale_key, kf->current_group,
-                            types[i], valid_error);
+                                "contains value \"%s\" which is an invalid "
+                                "MIME type: %s\n",
+                                value, locale_key, kf->current_group,
+                                types[i], valid_error);
 
         retval = FALSE;
         g_free (valid_error);
@@ -1629,9 +1630,9 @@ handle_categories_key (kf_validator *kf,
 
     if (registered_categories[j].main && main_categories_nb > 1)
       print_hint (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                  "contains more than one main category; application "
-                  "might appear more than once in the application menu\n",
-                  value, locale_key, kf->current_group);
+                      "contains more than one main category; application "
+                      "might appear more than once in the application menu\n",
+                      value, locale_key, kf->current_group);
 
 
     if (registered_categories[j].deprecated) {
@@ -1688,10 +1689,10 @@ handle_categories_key (kf_validator *kf,
                                 registered_categories[j].requires[k]);
 
       print_future_fatal (kf, "value item \"%s\" in key \"%s\" in group \"%s\" "
-                          "requires another category to be present among the "
-                          "following categories: %s\n",
-                          categories[i], locale_key, kf->current_group,
-                          output_required->str);
+                              "requires another category to be present among "
+                              "the following categories: %s\n",
+                              categories[i], locale_key, kf->current_group,
+                              output_required->str);
 
       g_string_free (output_required, TRUE);
       retval = FALSE;
@@ -1733,10 +1734,10 @@ handle_categories_key (kf_validator *kf,
                                 registered_categories[j].suggests[k]);
 
       print_hint (kf, "value item \"%s\" in key \"%s\" in group \"%s\" "
-                  "can be extended with another category among the "
-                  "following categories: %s\n",
-                  categories[i], locale_key, kf->current_group,
-                  output_suggested->str);
+                      "can be extended with another category among the "
+                      "following categories: %s\n",
+                      categories[i], locale_key, kf->current_group,
+                      output_suggested->str);
 
       g_string_free (output_suggested, TRUE);
     }
@@ -1750,10 +1751,10 @@ handle_categories_key (kf_validator *kf,
 
   if (main_categories_nb == 0)
     print_hint (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                "does not contain a registered main category; application "
-                "might only show up in a \"catch-all\" section of the "
-                "application menu\n",
-                value, locale_key, kf->current_group);
+                    "does not contain a registered main category; application "
+                    "might only show up in a \"catch-all\" section of the "
+                    "application menu\n",
+                    value, locale_key, kf->current_group);
 
   return retval;
 }
@@ -1987,10 +1988,10 @@ handle_autostart_condition_key (kf_validator *kf,
                                   registered_autostart_condition[i].first_arg[j]);
 
         print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                     "does not contain a valid first argument for condition "
-                     "\"%s\"; valid first arguments are: %s\n",
-                     value, locale_key, kf->current_group,
-                     condition, output->str);
+                         "does not contain a valid first argument for "
+                         "condition \"%s\"; valid first arguments are: %s\n",
+                         value, locale_key, kf->current_group,
+                         condition, output->str);
         retval = FALSE;
 
         g_string_free (output, TRUE);
@@ -2002,7 +2003,7 @@ handle_autostart_condition_key (kf_validator *kf,
             if (argument && argument[0] != '\0') {
               print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                                "has too many arguments for condition \"%s\"\n",
-                           value, locale_key, kf->current_group, condition);
+                               value, locale_key, kf->current_group, condition);
               retval = FALSE;
             }
             break;
@@ -2015,7 +2016,7 @@ handle_autostart_condition_key (kf_validator *kf,
               print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                                "is missing a last argument for condition "
                                "\"%s\"\n",
-                           value, locale_key, kf->current_group, condition);
+                               value, locale_key, kf->current_group, condition);
               retval = FALSE;
             }
             break;
@@ -2035,15 +2036,15 @@ handle_autostart_condition_key (kf_validator *kf,
                 print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                                  "has %d too many arguments for condition "
                                  "\"%s\"\n",
-                             value, locale_key, kf->current_group,
-                             argc_diff, condition);
+                                 value, locale_key, kf->current_group,
+                                 argc_diff, condition);
                 retval = FALSE;
               } else if (argc_diff < 0) {
                 print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
                                  "has %d too few arguments for condition "
                                  "\"%s\"\n",
-                             value, locale_key, kf->current_group,
-                             -argc_diff, condition);
+                                 value, locale_key, kf->current_group,
+                                 -argc_diff, condition);
                 retval = FALSE;
               }
             }

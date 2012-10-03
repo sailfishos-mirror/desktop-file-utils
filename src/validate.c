@@ -1596,7 +1596,7 @@ handle_categories_key (kf_validator *kf,
 
     if (registered_categories[j].require_only_show_in) {
       if (!g_hash_table_lookup (kf->current_keys, "OnlyShowIn")) {
-        print_fatal (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
+        print_fatal (kf, "value item \"%s\" in key \"%s\" in group \"%s\" "
                          "is a reserved category, so a \"OnlyShowIn\" key "
                          "must be included\n",
                          categories[i], locale_key, kf->current_group);
@@ -1639,7 +1639,7 @@ handle_categories_key (kf_validator *kf,
         g_string_append_printf (output_required, ", or %s",
                                 registered_categories[j].requires[k]);
 
-      print_future_fatal (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
+      print_future_fatal (kf, "value item \"%s\" in key \"%s\" in group \"%s\" "
                           "requires another category to be present among the "
                           "following categories: %s\n",
                           categories[i], locale_key, kf->current_group,
@@ -1684,7 +1684,7 @@ handle_categories_key (kf_validator *kf,
         g_string_append_printf (output_suggested, ", or %s",
                                 registered_categories[j].suggests[k]);
 
-      print_hint (kf, "value \"%s\" in key \"%s\" in group \"%s\" "
+      print_hint (kf, "value item \"%s\" in key \"%s\" in group \"%s\" "
                   "can be extended with another category among the "
                   "following categories: %s\n",
                   categories[i], locale_key, kf->current_group,

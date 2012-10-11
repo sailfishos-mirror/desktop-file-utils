@@ -463,6 +463,7 @@ static struct {
   { "KidsGame",               FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "LogicGame",              FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "RolePlaying",            FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "Shooter",                FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "Simulation",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "SportsGame",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "StrategyGame",           FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },

@@ -435,6 +435,7 @@ static struct {
   { "InstantMessaging",       FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
   { "Chat",                   FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
   { "IRCClient",              FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
+  { "Feed",                   FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
   { "FileTransfer",           FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },
   { "HamRadio",               FALSE, FALSE, FALSE, { NULL }, { "Network", "Audio", NULL } },
   { "News",                   FALSE, FALSE, FALSE, { NULL }, { "Network", NULL } },

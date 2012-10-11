@@ -485,6 +485,7 @@ static struct {
   { "Humanities",             FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", NULL } },
   { "ImageProcessing",        FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", NULL } },
   { "Literature",             FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", NULL } },
+  { "Maps",                   FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", "Utility", NULL } },
   { "Math",                   FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", NULL } },
   { "NumericalAnalysis",      FALSE, FALSE, FALSE, { NULL }, { "Education;Math", "Science;Math", NULL } },
   { "MedicalSoftware",        FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", NULL } },

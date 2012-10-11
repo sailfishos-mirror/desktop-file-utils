@@ -505,7 +505,7 @@ static struct {
   { "FileManager",            FALSE, FALSE, FALSE, { NULL }, { "System;FileTools", NULL } },
   { "TerminalEmulator",       FALSE, FALSE, FALSE, { NULL }, { "System", NULL } },
   { "Filesystem",             FALSE, FALSE, FALSE, { NULL }, { "System", NULL } },
-  { "Monitor",                FALSE, FALSE, FALSE, { NULL }, { "System", NULL } },
+  { "Monitor",                FALSE, FALSE, FALSE, { NULL }, { "System", "Network", NULL } },
   { "Security",               FALSE, FALSE, FALSE, { NULL }, { "Settings", "System", NULL } },
   { "Accessibility",          FALSE, FALSE, FALSE, { NULL }, { "Settings", "Utility", NULL } },
   { "Calculator",             FALSE, FALSE, FALSE, { NULL }, { "Utility", NULL } },

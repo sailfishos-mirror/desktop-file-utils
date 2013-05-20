@@ -57,7 +57,8 @@ autoconf || echo "autoconf failed - version 2.5x is probably required"
 
 cd $ORIGDIR
 
-$srcdir/configure "$@"
-
-echo 
-echo "Now type 'make' to compile $PROJECT."
+if test -z "$NOCONFIGURE"; then
+    $srcdir/configure "$@"
+    echo 
+    echo "Now type 'make' to compile $PROJECT."
+fi

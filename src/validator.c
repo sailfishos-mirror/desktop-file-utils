@@ -36,7 +36,7 @@ static char     **filename = NULL;
 static GOptionEntry option_entries[] = {
   { "no-hints", 0, 0, G_OPTION_ARG_NONE, &no_hints, "Do not output hints to improve desktop file", NULL },
   { "no-warn-deprecated", 0, 0, G_OPTION_ARG_NONE, &no_warn_deprecated, "Do not warn about usage of deprecated items", NULL },
-  { "warn-kde", 0, 0, G_OPTION_ARG_NONE, &warn_kde, "Warn about usage of KDE extensions to the specification", NULL },
+  { "warn-kde", 0, 0, G_OPTION_ARG_NONE, &warn_kde, "Warn if KDE extensions to the specification are used", NULL },
   { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &filename, NULL, "<desktop-file>" },
   { NULL }
 };

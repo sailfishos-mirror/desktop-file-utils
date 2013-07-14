@@ -27,7 +27,7 @@
 
 #include <glib.h>
 
-#define CURRENT_SPEC_VERSION "1.0"
+#define CURRENT_SPEC_VERSION "1.1"
 
 #define GROUP_KDE_DESKTOP_ENTRY "KDE Desktop Entry"
 #define GROUP_DESKTOP_ACTION "Desktop Action "

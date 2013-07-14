@@ -313,6 +313,8 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
    * specified) */
   { DESKTOP_STRING_LIST_TYPE,       "Actions",           FALSE, FALSE, FALSE, handle_actions_key },
 
+  { DESKTOP_BOOLEAN_TYPE,           "DBusActivatable",   FALSE, FALSE, FALSE, NULL },
+
   /* Keys reserved for KDE */
 
   /* since 0.9.4 */

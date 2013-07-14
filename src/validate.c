@@ -357,8 +357,8 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
 static DesktopKeyDefinition registered_action_keys[] = {
   { DESKTOP_LOCALESTRING_TYPE,      "Name",               TRUE,  FALSE, FALSE, NULL },
   { DESKTOP_LOCALESTRING_TYPE,      "Icon",               FALSE, FALSE, FALSE, handle_icon_key },
-  { DESKTOP_STRING_LIST_TYPE,       "OnlyShowIn",         FALSE, FALSE, FALSE, handle_show_in_key },
-  { DESKTOP_STRING_LIST_TYPE,       "NotShowIn",          FALSE, FALSE, FALSE, handle_show_in_key },
+  { DESKTOP_STRING_LIST_TYPE,       "OnlyShowIn",         FALSE, TRUE, FALSE, handle_show_in_key },
+  { DESKTOP_STRING_LIST_TYPE,       "NotShowIn",          FALSE, TRUE, FALSE, handle_show_in_key },
   { DESKTOP_STRING_TYPE,            "Exec",               TRUE,  FALSE, FALSE, handle_exec_key }
 };
 

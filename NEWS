@@ -1,4 +1,21 @@
 ============
+Version 0.22
+============
+
+ desktop-file-validate
+  - add DBusActivatable key to allowed keys (Matthias Clasen)
+  - warn about OnlyShowIn in Action groups (Matthias Clasen)
+  - allow validating multiple desktop files (Matthias Clasen)
+  - improve help output (Matthias Clasen)
+  - update man page (Matthias Clasen)
+
+ update-desktop-database
+  - list only once a desktop file per mime type (Vincent)
+
+ misc
+  - honor NOCONFIGURE=1 (Colin Walters)
+
+============
 Version 0.21
 ============
 

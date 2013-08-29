@@ -78,9 +78,7 @@ main (int argc, char *argv[])
     if (!g_file_test (filename[i], G_FILE_TEST_IS_REGULAR)) {
       g_printerr ("%s: file does not exist\n", filename[i]);
       all_valid = FALSE;
-    }
-
-    if (!desktop_file_validate (filename[i], warn_kde, no_warn_deprecated, no_hints))
+    } else if (!desktop_file_validate (filename[i], warn_kde, no_warn_deprecated, no_hints))
       all_valid = FALSE;
   }
 

@@ -41,15 +41,11 @@
 
 #define NAME "update-desktop-database"
 #define CACHE_FILENAME "mimeinfo.cache"
-#define TEMP_CACHE_FILENAME_PREFIX ".mimeinfo.cache.XXXXXX"
 
 #define udd_print(...) if (!quiet) g_printerr (__VA_ARGS__)
 #define udd_verbose_print(...) if (!quiet && verbose) g_printerr (__VA_ARGS__)
 
-static FILE *open_temp_cache_file (const char  *dir,
-                                   char       **filename,
-                                   GError     **error);
-static void add_mime_type (const char *mime_type, GList *desktop_files, FILE *f);
+static void add_mime_type (const char *mime_type, GList *desktop_files, GString *str);
 static void sync_database (const char *dir, GError **error);
 static void cache_desktop_file (const char  *desktop_file,
                                 const char  *mime_type,
@@ -255,114 +251,43 @@ process_desktop_files (const char  *desktop_dir,
   g_dir_close (dir);
 }
 
-static FILE *
-open_temp_cache_file (const char *dir, char **filename, GError **error)
-{
-  int fd;
-  char *file;
-  FILE *fp;
-  mode_t mask;
-
-  file = g_build_filename (dir, TEMP_CACHE_FILENAME_PREFIX, NULL);
-  fd = g_mkstemp (file);
-
-  if (fd < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   "%s", g_strerror (errno));
-      g_free (file);
-      return NULL;
-    }
-
-  mask = umask(0);
-  (void) umask (mask);
-
-  fchmod (fd, 0666 & ~mask);
-
-  fp = fdopen (fd, "w+");
-  if (fp == NULL)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   "%s", g_strerror (errno));
-      g_free (file);
-      close (fd);
-      return NULL;
-    }
-
-  if (filename)
-    *filename = file;
-  else
-    g_free (file);
-
-  return fp;
-}
-
 static void
-add_mime_type (const char *mime_type, GList *desktop_files, FILE *f)
+add_mime_type (const char *mime_type, GList *desktop_files, GString *str)
 {
-  GString *list;
   GList *desktop_file;
 
-  list = g_string_new (mime_type);
-  g_string_append_c (list, '=');
+  g_string_append (str, mime_type);
+  g_string_append_c (str, '=');
   for (desktop_file = desktop_files;
        desktop_file != NULL;
        desktop_file = desktop_file->next)
     {
-      g_string_append (list, (const char *) desktop_file->data);
-      g_string_append_c (list, ';');
+      g_string_append (str, (const char *) desktop_file->data);
+      g_string_append_c (str, ';');
     }
-  g_string_append_c (list, '\n');
-
-  fputs (list->str, f);
-
-  g_string_free (list, TRUE);
+  g_string_append_c (str, '\n');
 }
 
 static void
 sync_database (const char *dir, GError **error)
 {
-  GError *sync_error;
-  char *temp_cache_file, *cache_file;
-  FILE *tmp_file;
+  char *cache_file;
   GList *keys, *key;
+  GString *contents;
 
-  temp_cache_file = NULL;
-  sync_error = NULL;
-  tmp_file = open_temp_cache_file (dir, &temp_cache_file, &sync_error);
-
-  if (sync_error != NULL)
-    {
-      g_propagate_error (error, sync_error);
-      return;
-    }
-
-  fputs ("[MIME Cache]\n", tmp_file);
+  contents = g_string_new ("[MIME Cache]\n");
 
   keys = g_hash_table_get_keys (mime_types_map);
   keys = g_list_sort (keys, (GCompareFunc) g_strcmp0);
 
   for (key = keys; key != NULL; key = key->next)
-    add_mime_type (key->data,
-                   g_hash_table_lookup (mime_types_map, key->data),
-                   tmp_file);
+    add_mime_type (key->data, g_hash_table_lookup (mime_types_map, key->data), contents);
 
   g_list_free (keys);
-  fclose (tmp_file);
 
   cache_file = g_build_filename (dir, CACHE_FILENAME, NULL);
-  if (rename (temp_cache_file, cache_file) < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Cache file \"%s\" could not be written: %s"),
-                   cache_file, g_strerror (errno));
-
-      unlink (temp_cache_file);
-    }
-  g_free (temp_cache_file);
+  g_file_set_contents (cache_file, contents->str, -1, error);
+  g_string_free (contents, TRUE);
   g_free (cache_file);
 }
 

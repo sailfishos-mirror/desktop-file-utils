@@ -255,14 +255,29 @@ add_mime_type (const char *mime_type, GList *desktop_files, GString *str)
   g_string_append_c (str, '\n');
 }
 
-static void
-sync_database (GHashTable  *mime_types_map,
-               const char  *dir,
-               GError     **error)
+static GBytes *
+mime_cache_build (const char  *desktop_dir,
+                  GError     **error)
 {
-  char *cache_file;
+  GHashTable *mime_types_map;
+  GError *update_error;
   GList *keys, *key;
   GString *contents;
+  GBytes *result;
+  gsize size;
+
+  result = NULL;
+
+  mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  update_error = NULL;
+  process_desktop_files (mime_types_map, desktop_dir, "", &update_error);
+
+  if (update_error != NULL)
+    {
+      g_propagate_error (error, update_error);
+      goto out;
+    }
 
   contents = g_string_new ("[MIME Cache]\n");
 
@@ -274,35 +289,37 @@ sync_database (GHashTable  *mime_types_map,
 
   g_list_free (keys);
 
-  cache_file = g_build_filename (dir, CACHE_FILENAME, NULL);
-  g_file_set_contents (cache_file, contents->str, -1, error);
-  g_string_free (contents, TRUE);
-  g_free (cache_file);
+  size = contents->len;
+  result = g_bytes_new_take (g_string_free (contents, FALSE), size);
+
+out:
+  g_hash_table_foreach (mime_types_map, (GHFunc) list_free_deep, NULL);
+  g_hash_table_unref (mime_types_map);
+
+  return result;
 }
 
-static void
+static gboolean
 update_database (const char  *desktop_dir,
                  GError     **error)
 {
-  GHashTable *mime_types_map;
-  GError *update_error;
+  gboolean success;
+  char *cache_file;
+  GBytes *cache;
 
-  mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  cache = mime_cache_build (desktop_dir, error);
+  if (!cache)
+    return FALSE;
 
-  update_error = NULL;
-  process_desktop_files (mime_types_map, desktop_dir, "", &update_error);
+  cache_file = g_build_filename (desktop_dir, CACHE_FILENAME, NULL);
+  success = g_file_set_contents (cache_file,
+                                 g_bytes_get_data (cache, NULL),
+                                 g_bytes_get_size (cache),
+                                 error);
+  g_bytes_unref (cache);
+  g_free (cache_file);
 
-  if (update_error != NULL)
-    g_propagate_error (error, update_error);
-  else
-    {
-      sync_database (mime_types_map, desktop_dir, &update_error);
-      if (update_error != NULL)
-        g_propagate_error (error, update_error);
-    }
-
-  g_hash_table_foreach (mime_types_map, (GHFunc) list_free_deep, NULL);
-  g_hash_table_unref (mime_types_map);
+  return success;
 }
 
 static const char **

@@ -45,22 +45,6 @@
 #define udd_print(...) if (!quiet) g_printerr (__VA_ARGS__)
 #define udd_verbose_print(...) if (!quiet && verbose) g_printerr (__VA_ARGS__)
 
-static void add_mime_type (const char *mime_type, GList *desktop_files, GString *str);
-static void sync_database (const char *dir, GError **error);
-static void cache_desktop_file (const char  *desktop_file,
-                                const char  *mime_type,
-                                GError     **error);
-static void process_desktop_file (const char  *desktop_file,
-                                  const char  *name,
-                                  GError     **error);
-static void process_desktop_files (const char *desktop_dir,
-                                   const char *prefix,
-                                   GError **error);
-static void update_database (const char *desktop_dir, GError **error);
-static const char ** get_default_search_path (void);
-static void print_desktop_dirs (const char **dirs);
-
-static GHashTable *mime_types_map = NULL;
 static gboolean verbose = FALSE, quiet = FALSE;
 
 static void
@@ -71,7 +55,8 @@ list_free_deep (gpointer key, GList *l, gpointer data)
 }
 
 static void
-cache_desktop_file (const char  *desktop_file,
+cache_desktop_file (GHashTable  *mime_types_map,
+                    const char  *desktop_file,
                     const char  *mime_type,
                     GError     **error)
 {
@@ -92,7 +77,8 @@ cache_desktop_file (const char  *desktop_file,
 
 
 static void
-process_desktop_file (const char  *desktop_file,
+process_desktop_file (GHashTable  *mime_types_map,
+                      const char  *desktop_file,
                       const char  *name,
                       GError     **error)
 {
@@ -161,7 +147,7 @@ process_desktop_file (const char  *desktop_file,
           g_assert_not_reached ();
       }
 
-      cache_desktop_file (name, mime_type, &load_error);
+      cache_desktop_file (mime_types_map, name, mime_type, &load_error);
 
       if (load_error != NULL)
         {
@@ -174,7 +160,8 @@ process_desktop_file (const char  *desktop_file,
 }
 
 static void
-process_desktop_files (const char  *desktop_dir,
+process_desktop_files (GHashTable  *mime_types_map,
+                       const char  *desktop_dir,
                        const char  *prefix,
                        GError     **error)
 {
@@ -203,7 +190,7 @@ process_desktop_files (const char  *desktop_dir,
 
           sub_prefix = g_strdup_printf ("%s%s-", prefix, filename);
 
-          process_desktop_files (full_path, sub_prefix, &process_error);
+          process_desktop_files (mime_types_map, full_path, sub_prefix, &process_error);
           g_free (sub_prefix);
 
           if (process_error != NULL)
@@ -223,7 +210,7 @@ process_desktop_files (const char  *desktop_dir,
         }
 
       name = g_strdup_printf ("%s%s", prefix, filename);
-      process_desktop_file (full_path, name, &process_error);
+      process_desktop_file (mime_types_map, full_path, name, &process_error);
       g_free (name);
 
       if (process_error != NULL)
@@ -269,7 +256,9 @@ add_mime_type (const char *mime_type, GList *desktop_files, GString *str)
 }
 
 static void
-sync_database (const char *dir, GError **error)
+sync_database (GHashTable  *mime_types_map,
+               const char  *dir,
+               GError     **error)
 {
   char *cache_file;
   GList *keys, *key;
@@ -295,25 +284,25 @@ static void
 update_database (const char  *desktop_dir,
                  GError     **error)
 {
+  GHashTable *mime_types_map;
   GError *update_error;
 
-  mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                          (GDestroyNotify)g_free,
-                                          NULL);
+  mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   update_error = NULL;
-  process_desktop_files (desktop_dir, "", &update_error);
+  process_desktop_files (mime_types_map, desktop_dir, "", &update_error);
 
   if (update_error != NULL)
     g_propagate_error (error, update_error);
   else
     {
-      sync_database (desktop_dir, &update_error);
+      sync_database (mime_types_map, desktop_dir, &update_error);
       if (update_error != NULL)
         g_propagate_error (error, update_error);
     }
+
   g_hash_table_foreach (mime_types_map, (GHFunc) list_free_deep, NULL);
-  g_hash_table_destroy (mime_types_map);
+  g_hash_table_unref (mime_types_map);
 }
 
 static const char **
@@ -340,7 +329,7 @@ get_default_search_path (void)
   return (const char **) args;
 }
 
-void
+static void
 print_desktop_dirs (const char **dirs)
 {
   char *directories;

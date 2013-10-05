@@ -29,6 +29,18 @@ desktop_file_install_SOURCES =			\
 	install.c
 
 update_desktop_database_SOURCES =		\
+	dfi-builder.c				\
+	dfi-builder.h				\
+	dfi-id-list.c				\
+	dfi-id-list.h				\
+	dfi-keyfile.c				\
+	dfi-keyfile.h				\
+	dfi-string-list.c			\
+	dfi-string-list.h			\
+	dfi-string-table.c			\
+	dfi-string-table.h			\
+	dfi-text-index.c			\
+	dfi-text-index.h			\
 	mimeutils.c				\
 	mimeutils.h				\
 	mime-cache.c				\

@@ -28,9 +28,14 @@
 #include <glib.h>
 #include <glib/gi18n.h>
 
+#include <sys/types.h>
+#include <sys/time.h>
+
 #include "mime-cache.h"
+#include "dfi-builder.h"
 
 #define CACHE_FILENAME "mimeinfo.cache"
+#define INDEX_FILENAME "desktop-file-index"
 
 static gboolean verbose = FALSE, quiet = FALSE;
 
@@ -53,21 +58,50 @@ static gboolean
 update_database (const char  *desktop_dir,
                  GError     **error)
 {
-  gboolean success;
-  char *cache_file;
+  gboolean success = FALSE;
+  gchar *cache_file;
+  gchar *index_file;
   GBytes *cache;
+  GBytes *dfi;
+
+  cache_file = g_build_filename (desktop_dir, CACHE_FILENAME, NULL);
+  index_file = g_build_filename (desktop_dir, INDEX_FILENAME, NULL);
+  dfi = NULL;
 
   cache = mime_cache_build (desktop_dir, error);
   if (!cache)
-    return FALSE;
+    goto out;
 
-  cache_file = g_build_filename (desktop_dir, CACHE_FILENAME, NULL);
-  success = g_file_set_contents (cache_file,
-                                 g_bytes_get_data (cache, NULL),
-                                 g_bytes_get_size (cache),
-                                 error);
+  dfi = dfi_builder_build (desktop_dir, error);
+  if (!dfi)
+    goto out;
+
+  if (!g_file_set_contents (cache_file,
+                            g_bytes_get_data (cache, NULL),
+                            g_bytes_get_size (cache),
+                            error))
+    goto out;
+
+  if (!g_file_set_contents (index_file,
+                            g_bytes_get_data (dfi, NULL),
+                            g_bytes_get_size (dfi),
+                            error))
+    goto out;
+
+  /* Touch the timestamp after we have written both files in order to
+   * ensure that each file has a timestamp newer than the directory
+   * itself.
+   */
+  utimes (cache_file, NULL);
+  utimes (index_file, NULL);
+
+  success = TRUE;
+
+out:
   g_bytes_unref (cache);
+  g_bytes_unref (dfi);
   g_free (cache_file);
+  g_free (index_file);
 
   return success;
 }

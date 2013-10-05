@@ -25,89 +25,56 @@
 #include "dfi-id-list.h"
 
 #include <string.h>
+#include <stdlib.h>
 
-typedef struct
+struct _DfiTextIndex
 {
-  /* Our GSequence compare function treats DesktopFileIndexTextIndexItem
-   * as a subclass of 'string' for purposes of comparison.
-   *
-   * The string, therefore, must come first.
-   */
-  gchar *token;
+  GHashTable *table;
+  gchar **tokens;
+};
 
-  GArray *id_list;
-} DesktopFileIndexTextIndexItem;
-
-static gint
-dfi_text_index_string_compare (gconstpointer a,
-                               gconstpointer b,
-                               gpointer      user_data)
-{
-  /* As mentioned above: the pointers can equivalently be pointers to a
-   * 'DesktopFileIndexTextIndexItem' or to a 'gchar *'.
-   */
-  const gchar * const *str_a = a;
-  const gchar * const *str_b = b;
-
-  return strcmp (*str_a, *str_b);
-}
-
-static DesktopFileIndexTextIndexItem *
-dfi_text_index_item_new (const gchar *token)
-{
-  DesktopFileIndexTextIndexItem *item;
-
-  item = g_slice_new (DesktopFileIndexTextIndexItem);
-  item->token = g_strdup (token);
-  item->id_list = dfi_id_list_new ();
-
-  return item;
-}
-
-static void
-dfi_text_index_item_free (gpointer data)
-{
-  DesktopFileIndexTextIndexItem *item = data;
-
-  dfi_id_list_free (item->id_list);
-  g_free (item->token);
-
-  g_slice_free (DesktopFileIndexTextIndexItem, item);
-}
-
-GSequence *
+DfiTextIndex *
 dfi_text_index_new (void)
 {
-  return g_sequence_new (dfi_text_index_item_free);
+  DfiTextIndex *text_index;
+
+  text_index = g_slice_new0 (DfiTextIndex);
+  text_index->table = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, dfi_id_list_free);
+
+  return text_index;
 }
 
 void
 dfi_text_index_free (gpointer data)
 {
-  g_sequence_free (data);
+  DfiTextIndex *text_index = data;
+
+  g_hash_table_unref (text_index->table);
+  g_free (text_index->tokens);
+
+  g_slice_free (DfiTextIndex, text_index);
 }
 
 void
-dfi_text_index_add_ids (GSequence     *text_index,
+dfi_text_index_add_ids (DfiTextIndex  *text_index,
                         const gchar   *token,
                         const guint16 *ids,
                         gint           n_ids)
 {
-  DesktopFileIndexTextIndexItem *item;
-  GSequenceIter *iter;
+  DfiIdList *id_list;
 
-  iter = g_sequence_lookup (text_index, &token, dfi_text_index_string_compare, NULL);
-  if (iter)
+  /* Ensure we're not already converted */
+  g_assert (text_index->tokens == NULL);
+
+  id_list = g_hash_table_lookup (text_index->table, token);
+
+  if (id_list == NULL)
     {
-      item = g_sequence_get (iter);
-    }
-  else
-    {
-      item = dfi_text_index_item_new (token);
-      g_sequence_insert_sorted (text_index, item, dfi_text_index_string_compare, NULL);
+      id_list = dfi_id_list_new ();
+      g_hash_table_insert (text_index->table, g_strdup (token), id_list);
     }
 
-  dfi_id_list_add_ids (item->id_list, ids, n_ids);
+  dfi_id_list_add_ids (id_list, ids, n_ids);
 }
 
 static void
@@ -196,7 +163,7 @@ dfi_text_index_split_words (const gchar *value)
 }
 
 void
-dfi_text_index_add_ids_tokenised (GSequence     *text_index,
+dfi_text_index_add_ids_tokenised (DfiTextIndex  *text_index,
                                   const gchar   *string_to_tokenise,
                                   const guint16 *ids,
                                   gint           n_ids)
@@ -218,36 +185,70 @@ dfi_text_index_add_ids_tokenised (GSequence     *text_index,
 
       dfi_text_index_add_ids (text_index, tokens[i], ids, n_ids);
     }
-
 }
 
 void
-dfi_text_index_get_item (GSequenceIter  *iter,
-                         const gchar   **token,
-                         GArray        **id_list)
+dfi_text_index_convert (DfiTextIndex *text_index)
 {
-  DesktopFileIndexTextIndexItem *item;
+  GHashTableIter iter;
+  gpointer key;
+  guint n, i;
 
-  item = g_sequence_get (iter);
+  /* Ensure we're not already converted */
+  g_assert (text_index->tokens == NULL);
 
-  *token = item->token;
-  *id_list = item->id_list;
+  n = g_hash_table_size (text_index->table);
+  text_index->tokens = g_new (gchar *, n + 1);
+  i = 0;
+
+  g_hash_table_iter_init (&iter, text_index->table);
+  while (g_hash_table_iter_next (&iter, &key, NULL))
+    text_index->tokens[i++] = key;
+  g_assert_cmpint (i, ==, n);
+  text_index->tokens[n] = NULL;
+
+  qsort (text_index->tokens, n, sizeof (char *), (GCompareFunc) strcmp);
+}
+
+const gchar * const *
+dfi_text_index_get_tokens (DfiTextIndex  *text_index,
+                           guint         *n_tokens)
+{
+  /* Ensure that we've been converted */
+  g_assert (text_index->tokens);
+
+  if (n_tokens)
+    *n_tokens = g_hash_table_size (text_index->table);
+
+  return (const gchar **) text_index->tokens;
+}
+
+DfiIdList *
+dfi_text_index_get_id_list_for_token (DfiTextIndex *text_index,
+                                      const gchar  *token)
+{
+  DfiIdList *id_list;
+
+  /* Ensure that we've been converted */
+  g_assert (text_index->tokens);
+
+  id_list = g_hash_table_lookup (text_index->table, token);
+  g_assert (id_list != NULL);
+
+  return id_list;
 }
 
 void
-dfi_text_index_populate_strings (GSequence      *text_index,
+dfi_text_index_populate_strings (DfiTextIndex   *text_index,
                                  DfiStringTable *string_table)
 {
-  GSequenceIter *iter;
+  GHashTableIter iter;
+  gpointer string;
 
-  iter = g_sequence_get_begin_iter (text_index);
+  /* Ensure that we've been converted */
+  g_assert (text_index->tokens);
 
-  while (!g_sequence_iter_is_end (iter))
-    {
-      DesktopFileIndexTextIndexItem *item = g_sequence_get (iter);
-
-      dfi_string_table_add_string (string_table, item->token);
-
-      iter = g_sequence_iter_next (iter);
-    }
+  g_hash_table_iter_init (&iter, text_index->table);
+  while (g_hash_table_iter_next (&iter, &string, NULL))
+    dfi_string_table_add_string (string_table, string);
 }

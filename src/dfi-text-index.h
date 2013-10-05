@@ -23,8 +23,9 @@
 #define __dfi_text_index_h__
 
 #include "dfi-string-table.h"
+#include "dfi-id-list.h"
 
-typedef GSequence DfiTextIndex;
+typedef struct _DfiTextIndex                                DfiTextIndex;
 
 DfiTextIndex *          dfi_text_index_new                              (void);
 
@@ -40,9 +41,13 @@ void                    dfi_text_index_add_ids_tokenised                (DfiText
                                                                          const guint16   *ids,
                                                                          gint             n_ids);
 
-void                    dfi_text_index_get_item                         (GSequenceIter   *iter,
-                                                                         const gchar    **token,
-                                                                         GArray         **id_list);
+void                    dfi_text_index_convert                          (DfiTextIndex    *text_index);
+
+const gchar * const *   dfi_text_index_get_tokens                       (DfiTextIndex    *text_index,
+                                                                         guint           *n_tokens);
+
+DfiIdList *             dfi_text_index_get_id_list_for_token            (DfiTextIndex    *text_index,
+                                                                         const gchar     *token);
 
 void                    dfi_text_index_populate_strings                 (DfiTextIndex    *text_index,
                                                                          DfiStringTable  *string_table);

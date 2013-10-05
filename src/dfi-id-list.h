@@ -28,7 +28,7 @@ typedef GArray DfiIdList;
 
 DfiIdList *             dfi_id_list_new                                 (void);
 
-void                    dfi_id_list_free                                (DfiIdList     *id_list);
+void                    dfi_id_list_free                                (gpointer       id_list);
 
 void                    dfi_id_list_add_ids                             (DfiIdList     *id_list,
                                                                          const guint16 *ids,

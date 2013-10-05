@@ -50,11 +50,6 @@ typedef struct
   GString    *string;                /* file contents */
 } DfiBuilder;
 
-#define foreach_sequence_item_and_position(iter, sequence, counter) \
-  for (counter = 0, iter = g_sequence_get_begin_iter (sequence);        \
-       !g_sequence_iter_is_end (iter);                                  \
-       iter = g_sequence_iter_next (iter), counter++)
-
 static GHashTable *
 dfi_builder_get_string_table (DfiBuilder  *builder,
                               const gchar *locale)
@@ -289,11 +284,10 @@ dfi_builder_write_text_index (DfiBuilder  *builder,
                               const gchar *key,
                               gpointer     data)
 {
-  GSequence *text_index = data;
+  DfiTextIndex *text_index = data;
   const gchar *locale = key;
   GHashTable *string_table;
-  GSequenceIter *iter;
-  const gchar **strings;
+  const gchar * const *tokens;
   guint *id_lists;
   guint offset;
   guint n_items;
@@ -308,18 +302,16 @@ dfi_builder_write_text_index (DfiBuilder  *builder,
       dfi_string_table_write (string_table, c_string_table, builder->string);
     }
 
-  n_items = g_sequence_get_length (text_index);
-
-  strings = g_new (const gchar *, n_items);
+  tokens = dfi_text_index_get_tokens (text_index, &n_items);
   id_lists = g_new (guint, n_items);
 
   dfi_builder_align (builder, sizeof (guint16));
 
-  foreach_sequence_item_and_position (iter, text_index, i)
+  for (i = 0; i < n_items; i++)
     {
-      GArray *id_list;
+      DfiIdList *id_list;
 
-      dfi_text_index_get_item (iter, &strings[i], &id_list);
+      id_list = dfi_text_index_get_id_list_for_token (text_index, tokens[i]);
       id_lists[i] = dfi_builder_write_id_list (builder, NULL, id_list);
     }
 
@@ -331,11 +323,10 @@ dfi_builder_write_text_index (DfiBuilder  *builder,
 
   for (i = 0; i < n_items; i++)
     {
-      dfi_builder_write_string (builder, locale, strings[i]);
+      dfi_builder_write_string (builder, locale, tokens[i]);
       dfi_builder_write_uint32 (builder, id_lists[i]);
     }
 
-  g_free (strings);
   g_free (id_lists);
 
   return offset;
@@ -504,7 +495,7 @@ dfi_builder_add_strings (DfiBuilder *builder)
   }
 }
 
-static GSequence *
+static DfiTextIndex *
 dfi_builder_index_one_locale (DfiBuilder  *builder,
                               const gchar *locale)
 {
@@ -512,7 +503,7 @@ dfi_builder_index_one_locale (DfiBuilder  *builder,
   gchar **locale_variants;
   GHashTableIter keyfile_iter;
   gpointer key, val;
-  GSequence *text_index;
+  DfiTextIndex *text_index;
 
   if (locale)
     locale_variants = g_get_locale_variants (locale);
@@ -549,6 +540,8 @@ dfi_builder_index_one_locale (DfiBuilder  *builder,
 
   g_free (locale_variants);
 
+  dfi_text_index_convert (text_index);
+
   return text_index;
 }
 
@@ -571,7 +564,7 @@ dfi_builder_index_strings (DfiBuilder *builder)
     {
       const gchar *locale = locale_names[i];
       GHashTable *string_table;
-      GSequence *text_index;
+      DfiTextIndex *text_index;
 
       text_index = dfi_builder_index_one_locale (builder, locale);
       g_hash_table_insert (builder->locale_text_indexes, g_strdup (locale), text_index);

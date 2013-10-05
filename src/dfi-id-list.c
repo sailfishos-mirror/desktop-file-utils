@@ -32,9 +32,9 @@ dfi_id_list_new (void)
 }
 
 void
-dfi_id_list_free (GArray *id_list)
+dfi_id_list_free (gpointer data)
 {
-  g_array_free (id_list, TRUE);
+  g_array_free (data, TRUE);
 }
 
 void

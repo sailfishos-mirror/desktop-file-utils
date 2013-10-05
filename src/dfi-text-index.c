@@ -187,6 +187,13 @@ dfi_text_index_add_ids_tokenised (DfiTextIndex  *text_index,
     }
 }
 
+static int
+indirect_strcmp (gconstpointer a,
+                 gconstpointer b)
+{
+  return strcmp (*(gchar **) a, *(gchar **) b);
+}
+
 void
 dfi_text_index_convert (DfiTextIndex *text_index)
 {
@@ -207,7 +214,7 @@ dfi_text_index_convert (DfiTextIndex *text_index)
   g_assert_cmpint (i, ==, n);
   text_index->tokens[n] = NULL;
 
-  qsort (text_index->tokens, n, sizeof (char *), (GCompareFunc) strcmp);
+  qsort (text_index->tokens, n, sizeof (char *), indirect_strcmp);
 }
 
 const gchar * const *

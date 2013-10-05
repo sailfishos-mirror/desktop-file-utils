@@ -64,6 +64,13 @@ dfi_string_list_ensure (DfiStringList *string_list,
     g_hash_table_add (string_list->table, g_strdup (string));
 }
 
+static int
+indirect_strcmp (gconstpointer a,
+                 gconstpointer b)
+{
+  return strcmp (*(gchar **) a, *(gchar **) b);
+}
+
 void
 dfi_string_list_convert (DfiStringList *string_list)
 {
@@ -84,7 +91,7 @@ dfi_string_list_convert (DfiStringList *string_list)
   g_assert_cmpint (i, ==, n);
   string_list->strings[n] = NULL;
 
-  qsort (string_list->strings, n, sizeof (char *), (GCompareFunc) strcmp);
+  qsort (string_list->strings, n, sizeof (char *), indirect_strcmp);
 
   /* Store the id of each string back into the table for fast lookup.
    *

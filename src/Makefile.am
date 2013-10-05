@@ -31,6 +31,8 @@ desktop_file_install_SOURCES =			\
 update_desktop_database_SOURCES =		\
 	mimeutils.c				\
 	mimeutils.h				\
+	mime-cache.c				\
+	mime-cache.h				\
 	update-desktop-database.c
 
 desktop_file_validate_LDADD = $(DESKTOP_FILE_UTILS_LIBS)

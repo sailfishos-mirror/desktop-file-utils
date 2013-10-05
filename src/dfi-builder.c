@@ -436,38 +436,32 @@ dfi_builder_serialise (DfiBuilder *builder)
 }
 
 static void
-dfi_builder_add_strings_for_keyfile (DfiBuilder              *builder,
+dfi_builder_add_strings_for_keyfile (DfiBuilder *builder,
                                      DfiKeyfile *keyfile)
 {
-  guint n_groups;
-  guint i;
+  gint n_groups, n_items;
+  gint i;
 
   n_groups = dfi_keyfile_get_n_groups (keyfile);
+  n_items = dfi_keyfile_get_n_items (keyfile);
 
   for (i = 0; i < n_groups; i++)
     {
       const gchar *group_name;
-      guint start, end;
-      guint j;
 
       group_name = dfi_keyfile_get_group_name (keyfile, i);
-      dfi_keyfile_get_group_range (keyfile, i, &start, &end);
-
       dfi_string_list_ensure (builder->group_names, group_name);
+    }
 
-      for (j = start; j < end; j++)
-        {
-          const gchar *key, *locale, *value;
+  for (i = 0; i < n_items; i++)
+    {
+      const gchar *key, *locale, *value;
 
-          dfi_keyfile_get_item (keyfile, j, &key, &locale, &value);
+      dfi_keyfile_get_item (keyfile, i, &key, &locale, &value);
 
-          dfi_string_list_ensure (builder->key_names, key);
-
-          if (locale)
-            dfi_string_list_ensure (builder->locale_names, locale);
-
-          dfi_string_tables_add_string (builder->locale_string_tables, locale, value);
-        }
+      dfi_string_list_ensure (builder->key_names, key);
+      dfi_string_list_ensure (builder->locale_names, locale); /* may be "" */
+      dfi_string_tables_add_string (builder->locale_string_tables, locale, value);
     }
 }
 

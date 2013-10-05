@@ -5,6 +5,7 @@ bin_PROGRAMS =					\
 
 AM_CPPFLAGS =					\
 	$(DESKTOP_FILE_UTILS_CFLAGS)		\
+	-DG_LOG_DOMAIN=\"desktop-file-utils\"	\
 	-DDATADIR="\"$(datadir)\"" 		\
 	-D_FILE_OFFSET_BITS=64			\
 	-D_LARGEFILE64_SOURCE

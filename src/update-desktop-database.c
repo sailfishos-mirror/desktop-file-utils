@@ -42,10 +42,22 @@
 #define NAME "update-desktop-database"
 #define CACHE_FILENAME "mimeinfo.cache"
 
-#define udd_print(...) if (!quiet) g_printerr (__VA_ARGS__)
-#define udd_verbose_print(...) if (!quiet && verbose) g_printerr (__VA_ARGS__)
-
 static gboolean verbose = FALSE, quiet = FALSE;
+
+static void
+log_handler (const gchar    *log_domain,
+             GLogLevelFlags  log_level,
+             const gchar    *message,
+             gpointer        user_data)
+{
+  if (g_str_equal (log_domain, G_LOG_DOMAIN))
+    {
+      if (verbose || ((log_level & G_LOG_LEVEL_WARNING) && !quiet))
+        g_printerr ("%s\n", message);
+    }
+  else
+    g_log_default_handler (log_domain, log_level, message, NULL);
+}
 
 static void
 list_free_deep (gpointer key, GList *l, gpointer data)
@@ -131,13 +143,13 @@ process_desktop_file (GHashTable  *mime_types_map,
         case MU_VALID:
           break;
         case MU_DISCOURAGED:
-          udd_print (_("Warning in file \"%s\": usage of MIME type \"%s\" is "
+          g_warning (_("Warning in file \"%s\": usage of MIME type \"%s\" is "
                        "discouraged (%s)\n"),
                      desktop_file, mime_types[i], valid_error);
           g_free (valid_error);
           break;
         case MU_INVALID:
-          udd_print (_("Error in file \"%s\": \"%s\" is an invalid MIME type "
+          g_warning (_("Error in file \"%s\": \"%s\" is an invalid MIME type "
                        "(%s)\n"),
                      desktop_file, mime_types[i], valid_error);
           g_free (valid_error);
@@ -195,8 +207,7 @@ process_desktop_files (GHashTable  *mime_types_map,
 
           if (process_error != NULL)
             {
-              udd_verbose_print (_("Could not process directory \"%s\": %s\n"),
-                                 full_path, process_error->message);
+              g_warning (_("Could not process directory \"%s\": %s\n"), full_path, process_error->message);
               g_error_free (process_error);
               process_error = NULL;
             }
@@ -219,13 +230,11 @@ process_desktop_files (GHashTable  *mime_types_map,
                                 G_KEY_FILE_ERROR,
                                 G_KEY_FILE_ERROR_KEY_NOT_FOUND))
             {
-              udd_print (_("Could not parse file \"%s\": %s\n"), full_path,
-                         process_error->message);
+              g_warning (_("Could not parse file \"%s\": %s\n"), full_path, process_error->message);
             }
           else
             {
-              udd_verbose_print (_("File \"%s\" lacks MimeType key\n"),
-                                 full_path);
+              g_debug (_("File \"%s\" lacks MimeType key\n"), full_path);
             }
 
           g_error_free (process_error);
@@ -352,7 +361,7 @@ print_desktop_dirs (const char **dirs)
   char *directories;
 
   directories = g_strjoinv (", ", (char **) dirs);
-  udd_verbose_print(_("Search path is now: [%s]\n"), directories);
+  g_debug (_("Search path is now: [%s]\n"), directories);
   g_free (directories);
 }
 
@@ -396,6 +405,8 @@ main (int    argc,
     return 1;
   }
 
+  g_log_set_default_handler (log_handler, NULL);
+
   if (desktop_dirs == NULL || desktop_dirs[0] == NULL)
     desktop_dirs = get_default_search_path ();
 
@@ -409,8 +420,7 @@ main (int    argc,
 
       if (error != NULL)
         {
-          udd_verbose_print (_("Could not create cache file in \"%s\": %s\n"),
-                             desktop_dirs[i], error->message);
+          g_warning (_("Could not create cache file in \"%s\": %s\n"), desktop_dirs[i], error->message);
           g_error_free (error);
           error = NULL;
         }
@@ -424,8 +434,7 @@ main (int    argc,
       char *directories;
 
       directories = g_strjoinv (", ", (char **) desktop_dirs);
-      udd_print (_("The databases in [%s] could not be updated.\n"),
-                 directories);
+      g_warning (_("The databases in [%s] could not be updated.\n"), directories);
 
       g_free (directories);
 

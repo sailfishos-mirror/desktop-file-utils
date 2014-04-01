@@ -363,7 +363,7 @@ static DesktopKeyDefinition registered_action_keys[] = {
 };
 
 static const char *show_in_registered[] = {
-  "Cinnamon", "GNOME", "KDE", "LXDE", "MATE", "Razor", "ROX", "TDE", "Unity", "XFCE", "Old"
+  "GNOME", "KDE", "LXDE", "MATE", "Razor", "ROX", "TDE", "Unity", "XFCE", "Cinnamon", "EDE", "Old"
 };
 
 static struct {

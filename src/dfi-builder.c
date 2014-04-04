@@ -269,6 +269,9 @@ dfi_builder_write_id_list (DfiBuilder  *builder,
   guint n_ids;
   guint i;
 
+  if (data == NULL)
+    return 0;
+
   ids = dfi_id_list_get_ids (id_list, &n_ids);
 
   offset = dfi_builder_write_uint16 (builder, n_ids);
@@ -332,15 +335,36 @@ dfi_builder_write_text_index (DfiBuilder  *builder,
   return offset;
 }
 
+enum
+{
+  DFI_ITEM_APP_NAMES,
+  DFI_ITEM_KEY_NAMES,
+  DFI_ITEM_LOCALE_NAMES,
+  DFI_ITEM_GROUP_NAMES,
+  DFI_ITEM_KEYFILE_CONTENTS,
+  DFI_ITEM_MIME_INDEX,
+  DFI_ITEM_IMPLEMENTS_INDEX,
+  DFI_ITEM_TEXT_INDEX,
+  DFI_N_ITEMS
+};
+
 static void
 dfi_builder_serialise (DfiBuilder *builder)
 {
-  guint32 header_fields[8] = { 0, };
+  guint32 items[DFI_N_ITEMS] = { 0, };
 
-  builder->string = g_string_new (NULL);
+  builder->string = g_string_new ("\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+                                  "desktopfileindex"
+                                  "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+                                  "\0\0\0\0\0\0\0\0\0\0\0\0");
 
-  /* Make room for the header */
-  g_string_append_len (builder->string, (char *) header_fields, sizeof header_fields);
+  /* Write the number of supported items.  This effectively serves as a
+   * version field.
+   */
+  dfi_builder_write_uint32 (builder, DFI_N_ITEMS);
+
+  /* Make space for the item offsets */
+  g_string_set_size (builder->string, builder->string->len + sizeof items);
 
   /* Write out the C string table, filling in the offsets
    *
@@ -358,21 +382,19 @@ dfi_builder_serialise (DfiBuilder *builder)
    * refer to strings in the C locale.
    */
   {
-    header_fields[0] = dfi_builder_write_string_list (builder, builder->app_names);
-    header_fields[1] = dfi_builder_write_string_list (builder, builder->key_names);
-    header_fields[2] = dfi_builder_write_string_list (builder, builder->locale_names);
-    header_fields[3] = dfi_builder_write_string_list (builder, builder->group_names);
+    items[DFI_ITEM_APP_NAMES] = dfi_builder_write_string_list (builder, builder->app_names);
+    items[DFI_ITEM_KEY_NAMES] = dfi_builder_write_string_list (builder, builder->key_names);
+    items[DFI_ITEM_LOCALE_NAMES] = dfi_builder_write_string_list (builder, builder->locale_names);
+    items[DFI_ITEM_GROUP_NAMES] = dfi_builder_write_string_list (builder, builder->group_names);
   }
 
   /* Write out the group implementors */
   {
-    /*
-    header_fields[4] = dfi_builder_write_pointer_array (builder,
-                                                                       builder->group_names,
-                                                                       header_fields[3],
-                                                                       builder->group_implementors,
-                                                                       dfi_builder_write_id_list);
-                                                                       */
+    items[DFI_ITEM_IMPLEMENTS_INDEX] = dfi_builder_write_pointer_array (builder,
+                                                                        builder->group_names,
+                                                                        items[DFI_ITEM_GROUP_NAMES],
+                                                                        builder->implementations,
+                                                                        dfi_builder_write_id_list);
   }
 
   /* Write out the text indexes for the actual locales.
@@ -386,11 +408,11 @@ dfi_builder_serialise (DfiBuilder *builder)
    * locality.
    */
   {
-    header_fields[5] = dfi_builder_write_pointer_array (builder,
-                                                                       builder->locale_names,
-                                                                       header_fields[2],
-                                                                       builder->locale_text_indexes,
-                                                                       dfi_builder_write_text_index);
+    items[DFI_ITEM_TEXT_INDEX] = dfi_builder_write_pointer_array (builder,
+                                                                  builder->locale_names,
+                                                                  items[DFI_ITEM_LOCALE_NAMES],
+                                                                  builder->locale_text_indexes,
+                                                                  dfi_builder_write_text_index);
   }
 
   /* Write out the desktop file contents.
@@ -398,22 +420,18 @@ dfi_builder_serialise (DfiBuilder *builder)
    * We have to do this last because the desktop files refer to strings
    * from all the locales and those are only actually written in the
    * last step.
-   *
-   * TODO: we could improve things a bit by storing the desktop files at
-   * the front of the cache, but this would require a two-pass
-   * approach...
    */
   {
-    header_fields[6] = dfi_builder_write_pointer_array (builder,
-                                                                       builder->app_names,
-                                                                       header_fields[0],
-                                                                       builder->desktop_files,
-                                                                       dfi_builder_write_keyfile);
+    items[DFI_ITEM_KEYFILE_CONTENTS] = dfi_builder_write_pointer_array (builder,
+                                                                        builder->app_names,
+                                                                        items[DFI_ITEM_APP_NAMES],
+                                                                        builder->desktop_files,
+                                                                        dfi_builder_write_keyfile);
   }
 
   /* Write out the mime types index */
   {
-    //header_fields[7] = dfi_builder_write_text_index (builder, NULL, builder->mime_types);
+    items[DFI_ITEM_MIME_INDEX] = dfi_builder_write_text_index (builder, NULL, builder->mime_types);
   }
 
   /* Replace the header */
@@ -421,8 +439,8 @@ dfi_builder_serialise (DfiBuilder *builder)
     guint32 *file = (guint32 *) builder->string->str;
     guint i;
 
-    for (i = 0; i < G_N_ELEMENTS (header_fields); i++)
-      file[i] = GUINT32_TO_LE (header_fields[i]);
+    for (i = 0; i < G_N_ELEMENTS (items); i++)
+      file[i] = GUINT32_TO_LE (items[i]);
   }
 }
 
@@ -546,6 +564,55 @@ dfi_builder_index_one_locale (DfiBuilder  *builder,
 }
 
 static void
+dfi_builder_collect_implementations (DfiBuilder *builder)
+{
+  GHashTableIter keyfile_iter;
+  gpointer key, val;
+
+  g_hash_table_iter_init (&keyfile_iter, builder->desktop_files);
+  while (g_hash_table_iter_next (&keyfile_iter, &key, &val))
+    {
+      DfiKeyfile *kf = val;
+      const gchar *app = key;
+      const gchar *implements;
+      gchar **ifaces;
+      gint i;
+
+      implements = dfi_keyfile_get_value (kf, NULL, "Desktop Entry", "Implements");
+      if (!implements)
+        continue;
+
+      ifaces = g_strsplit (implements, ";", -1);
+      if (!ifaces)
+        continue;
+
+      for (i = 0; ifaces[i]; i++)
+        {
+          const gchar *iface = ifaces[i];
+          DfiIdList *id_list;
+          guint16 id;
+
+          if (!iface[0])
+            continue;
+
+          dfi_string_list_ensure (builder->group_names, iface);
+
+          id_list = g_hash_table_lookup (builder->implementations, iface);
+          if (!id_list)
+            {
+              id_list = dfi_id_list_new ();
+              g_hash_table_insert (builder->implementations, g_strdup (iface), id_list);
+            }
+
+          id = dfi_string_list_get_id (builder->app_names, app);
+          dfi_id_list_add_ids (id_list, &id, 1);
+        }
+
+      g_strfreev (ifaces);
+    }
+}
+
+static void
 dfi_builder_index_strings (DfiBuilder *builder)
 {
   const gchar * const *locale_names;
@@ -634,6 +701,8 @@ dfi_builder_build (const gchar  *desktop_dir,
   g_dir_close (dir);
 
   dfi_builder_add_strings (builder);
+
+  dfi_builder_collect_implementations (builder);
 
   dfi_builder_index_strings (builder);
 

@@ -38,6 +38,8 @@ void                    dfi_string_list_convert                         (DfiStri
 void                    dfi_string_list_populate_strings                (DfiStringList  *string_list,
                                                                          DfiStringTable *string_table);
 
+guint                   dfi_string_list_get_length                      (DfiStringList  *string_list);
+
 const gchar * const *   dfi_string_list_get_strings                     (DfiStringList  *string_list,
                                                                          guint          *n_strings);
 

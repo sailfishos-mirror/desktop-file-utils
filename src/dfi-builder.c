@@ -117,6 +117,21 @@ dfi_builder_write_uint32 (DfiBuilder *builder,
   return offset;
 }
 
+static guint
+dfi_builder_write_uint64 (DfiBuilder *builder,
+                          guint64     value)
+{
+  guint offset = dfi_builder_get_offset (builder);
+
+  dfi_builder_check_alignment (builder, sizeof (guint64));
+
+  value = GUINT64_TO_LE (value);
+
+  g_string_append_len (builder->string, (gpointer) &value, sizeof value);
+
+  return offset;
+}
+
 #if 0
 static guint
 dfi_builder_write_raw_string (DfiBuilder *builder,
@@ -159,6 +174,20 @@ dfi_builder_write_string_list (DfiBuilder    *builder,
 
   for (i = 0; i < n; i++)
     dfi_builder_write_string (builder, "", strings[i]);
+
+  return offset;
+}
+
+static guint
+dfi_builder_write_uint64_list (DfiBuilder    *builder,
+                               const guint64 *items,
+                               guint          n_items)
+{
+  guint offset = dfi_builder_get_aligned (builder, sizeof (guint64));
+  guint i;
+
+  for (i = 0; i < n_items; i++)
+    dfi_builder_write_uint64 (builder, items[i]);
 
   return offset;
 }
@@ -337,6 +366,8 @@ dfi_builder_write_text_index (DfiBuilder  *builder,
 
 enum
 {
+  DFI_ITEM_SUBDIRS,
+  DFI_ITEM_TIMESTAMPS,
   DFI_ITEM_APP_NAMES,
   DFI_ITEM_KEY_NAMES,
   DFI_ITEM_LOCALE_NAMES,
@@ -382,6 +413,8 @@ dfi_builder_serialise (DfiBuilder *builder)
    * refer to strings in the C locale.
    */
   {
+    items[DFI_ITEM_SUBDIRS] = dfi_builder_write_string_list (builder, builder->subdirs);
+    items[DFI_ITEM_TIMESTMAPS] = dfi_builder_write_
     items[DFI_ITEM_APP_NAMES] = dfi_builder_write_string_list (builder, builder->app_names);
     items[DFI_ITEM_KEY_NAMES] = dfi_builder_write_string_list (builder, builder->key_names);
     items[DFI_ITEM_LOCALE_NAMES] = dfi_builder_write_string_list (builder, builder->locale_names);

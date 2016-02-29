@@ -1225,6 +1225,16 @@ handle_exec_key (kf_validator *kf,
         break;
       case '\\':
         PRINT_INVALID_IF_FLAG;
+
+        /* Escape character immediately followed by \0? */
+        if (*(c + 1) == '\0') {
+          print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                           "ends in an incomplete escape sequence\n",
+                           value, locale_key, kf->current_group);
+          retval = FALSE;
+          break;
+        }
+
         c++;
         if (*c == '\\' && in_quote)
           escaped = !escaped;

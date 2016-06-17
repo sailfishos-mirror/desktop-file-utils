@@ -211,6 +211,10 @@ handle_actions_key (kf_validator *kf,
                     const char   *locale_key,
                     const char   *value);
 static gboolean
+handle_dbus_activatable_key (kf_validator *kf,
+                             const char   *locale_key,
+                             const char   *value);
+static gboolean
 handle_dev_key (kf_validator *kf,
                 const char   *locale_key,
                 const char   *value);
@@ -313,7 +317,7 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
    * specified) */
   { DESKTOP_STRING_LIST_TYPE,       "Actions",           FALSE, FALSE, FALSE, handle_actions_key },
 
-  { DESKTOP_BOOLEAN_TYPE,           "DBusActivatable",   FALSE, FALSE, FALSE, NULL },
+  { DESKTOP_BOOLEAN_TYPE,           "DBusActivatable",   FALSE, FALSE, FALSE, handle_dbus_activatable_key },
 
   /* Keys reserved for KDE */
 
@@ -1787,6 +1791,46 @@ handle_actions_key (kf_validator *kf,
 
   g_strfreev (actions);
 
+  return retval;
+}
+
+/* + If the file describes a D-Bus activatable service, the filename must be in
+ *   reverse-DNS notation, i.e. contain at least two dots including the dot
+ *   in ".desktop".
+ *   Checked.
+ */
+static gboolean
+handle_dbus_activatable_key (kf_validator *kf,
+                             const char   *locale_key,
+                             const char   *value)
+{
+  gchar *basename_utf8;
+  gchar *basename;
+  const gchar *p = NULL;
+  gboolean retval = TRUE;
+
+  /* If DBusActivatable=false, don't check */
+  if (strcmp (value, "true") && strcmp (value, "1"))
+    return TRUE;
+
+  basename = g_path_get_basename (kf->filename);
+  basename_utf8 = g_filename_to_utf8 (basename, -1, NULL, NULL, NULL);
+  if (!basename_utf8)
+    goto out;
+
+  p = g_utf8_strchr (basename_utf8, -1, '.');
+  if (!p)
+    goto out;
+  p = g_utf8_strchr (p + 1, -1, '.');
+
+out:
+  if (!p) {
+    print_fatal (kf, "DBusActivatable filename must conform to reverse-DNS notation\n");
+    retval = FALSE;
+  }
+
+  g_free (basename_utf8);
+  g_free (basename);
   return retval;
 }
 

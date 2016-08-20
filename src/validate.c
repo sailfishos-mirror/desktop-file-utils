@@ -366,8 +366,9 @@ static DesktopKeyDefinition registered_action_keys[] = {
   { DESKTOP_STRING_TYPE,            "Exec",               TRUE,  FALSE, FALSE, handle_exec_key }
 };
 
+/* This should be the same list as in xdg-specs/menu/menu-spec.xml */
 static const char *show_in_registered[] = {
-    "GNOME", "KDE", "LXDE", "LXQt", "MATE", "Razor", "ROX", "TDE", "Unity", "XFCE", "Cinnamon", "EDE", "Old"
+    "GNOME", "KDE", "LXDE", "LXQt", "MATE", "Razor", "ROX", "TDE", "Unity", "XFCE", "EDE", "Cinnamon", "Pantheon", "Old"
 };
 
 static struct {

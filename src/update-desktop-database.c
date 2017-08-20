@@ -307,6 +307,7 @@ add_mime_type (const char *mime_type, GList *desktop_files, FILE *f)
 
   list = g_string_new (mime_type);
   g_string_append_c (list, '=');
+  desktop_files = g_list_sort (desktop_files, (GCompareFunc) g_strcmp0);
   for (desktop_file = desktop_files;
        desktop_file != NULL;
        desktop_file = desktop_file->next)

@@ -450,6 +450,13 @@ main (int    argc,
      { NULL }
    };
 
+#if HAVE_PLEDGE
+  if (pledge("stdio rpath wpath cpath fattr", NULL) == -1) {
+    g_printerr ("pledge\n");
+    return 1;
+  }
+#endif
+
   context = g_option_context_new ("");
   g_option_context_set_summary (context, _("Build cache database of MIME types handled by desktop files."));
   g_option_context_add_main_entries (context, options, NULL);

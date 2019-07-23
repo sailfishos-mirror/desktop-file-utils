@@ -368,7 +368,7 @@ static DesktopKeyDefinition registered_action_keys[] = {
 
 /* This should be the same list as in xdg-specs/menu/menu-spec.xml */
 static const char *show_in_registered[] = {
-    "GNOME", "KDE", "LXDE", "LXQt", "MATE", "Razor", "ROX", "TDE", "Unity", "XFCE", "EDE", "Cinnamon", "Pantheon", "Budgie", "Enlightenment", "Old"
+    "GNOME", "KDE", "LXDE", "LXQt", "MATE", "Razor", "ROX", "TDE", "Unity", "XFCE", "EDE", "Cinnamon", "Pantheon", "Budgie", "Enlightenment", "Deepin", "Old"
 };
 
 static struct {

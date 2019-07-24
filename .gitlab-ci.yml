@@ -2,7 +2,7 @@ image: fedora:28
 
 autotools-build:
     script:
-    - dnf -y install dnf-plugins-core
+    - dnf -y install dnf-plugins-core automake
     - dnf -y groupinstall buildsys-build
     - dnf -y builddep desktop-file-utils
     - ./autogen.sh

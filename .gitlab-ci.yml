@@ -4,6 +4,6 @@ autotools-build:
     script:
     - dnf -y install dnf-plugins-core
     - dnf -y groupinstall buildsys-build
-    - dnf -y builddep glib2
+    - dnf -y builddep desktop-file-utils
     - ./autogen.sh
     - make -sj4 check

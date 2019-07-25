@@ -1,4 +1,27 @@
 ============
+Version 0.24
+============
+
+ desktop-file-validate
+  - Allow desktop file spec version 1.2 (Severin Glöckner).
+  - Add Budgie, Deepin, Enlightenment and Pantheon to list of
+    registered desktop environments (fdo#10, fdo#11, fdo#16, oldfdo#97385)
+    (Ikey Doherty, sensor.wen, Joonas Niilola, David Faure).
+
+ update-desktop-database
+  - Sort output lines internally to conserve reproduceability (fdo#12)
+    (Chris Lamb).
+  - Use pledge(2) on OpenBSD to limit capabilities (fdo#13) (Jasper Lievisse
+    Adriaanse).
+
+ common
+  - Fix missing ; when appending to a list not ending with one (oldfdo#97388)
+    (Pascal Terjan).
+  - Add font as valid media type (Matthias Clasen).
+  - Fix broken emacs blocking compile (fdo#15) (Hans Petter Jansson, reported
+    by John).
+
+============
 Version 0.23
 ============
 

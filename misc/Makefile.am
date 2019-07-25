@@ -1,9 +1,3 @@
-lisp_LISP = desktop-entry-mode.el
-
-EXTRA_DIST =			\
-	desktop-entry-mode.el
-
-MAINTAINERCLEANFILES = \
-	$(srcdir)/elc-stamp
+dist_lisp_DATA = desktop-entry-mode.el
 
 -include $(top_srcdir)/git.mk

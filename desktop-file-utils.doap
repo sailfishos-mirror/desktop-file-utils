@@ -9,12 +9,12 @@
   <homepage rdf:resource="http://www.freedesktop.org/wiki/Software/desktop-file-utils" />
   <mailing-list rdf:resource="http://lists.freedesktop.org/mailman/listinfo/xdg" />
   <download-page rdf:resource="http://www.freedesktop.org/software/desktop-file-utils/releases/" />
-  <bug-database rdf:resource="https://bugs.freedesktop.org/enter_bug.cgi?product=desktop-file-utils" />
+  <bug-database rdf:resource="https://gitlab.freedesktop.org/xdg/desktop-file-utils/issues/new" />
 
   <maintainer>
     <foaf:Person>
-      <foaf:name>Vincent Untz</foaf:name>
-      <foaf:mbox rdf:resource="mailto:vuntz@gnome.org" />
+      <foaf:name>Hans Petter Jansson</foaf:name>
+      <foaf:mbox rdf:resource="mailto:hpj@cl.no" />
     </foaf:Person>
   </maintainer>
 </Project>

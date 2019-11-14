@@ -128,6 +128,8 @@ struct _kf_validator {
   GHashTable  *action_groups;
 
   gboolean     fatal_error;
+
+  gboolean     use_colors;
 };
 
 static gboolean
@@ -538,6 +540,20 @@ static struct {
   { "Applications",           FALSE, FALSE, TRUE,  { NULL }, { NULL } }
 };
 
+/* Escape values for console colors */
+#define UNDERLINE     "\033[4m"
+#define MAGENTA       "\033[35m"
+#define RED           "\033[31m"
+#define YELLOW        "\033[33m"
+
+/* Colour definitions */
+#define RESET_COLOR        (kf->use_colors ? "\033[0m" : "")
+#define FILENAME_COLOR     (kf->use_colors ? UNDERLINE : "")
+#define FATAL_COLOR        (kf->use_colors ? RED : "")
+#define FUTURE_FATAL_COLOR (kf->use_colors ? RED : "")
+#define WARNING_COLOR      (kf->use_colors ? MAGENTA : "")
+#define HINT_COLOR         (kf->use_colors ? YELLOW : "")
+
 static void
 print_fatal (kf_validator *kf, const char *format, ...)
 {
@@ -552,7 +568,9 @@ print_fatal (kf_validator *kf, const char *format, ...)
   str = g_strdup_vprintf (format, args);
   va_end (args);
 
-  g_print ("%s: error: %s", kf->filename, str);
+  g_print ("%s%s%s: %serror%s: %s",
+           FILENAME_COLOR, kf->filename, RESET_COLOR,
+           FATAL_COLOR, RESET_COLOR, str);
 
   g_free (str);
 }
@@ -569,7 +587,9 @@ print_future_fatal (kf_validator *kf, const char *format, ...)
   str = g_strdup_vprintf (format, args);
   va_end (args);
 
-  g_print ("%s: error: (will be fatal in the future): %s", kf->filename, str);
+  g_print ("%s%s%s: %serror%s: (will be fatal in the future): %s",
+           FILENAME_COLOR, kf->filename, RESET_COLOR,
+           FUTURE_FATAL_COLOR, RESET_COLOR, str);
 
   g_free (str);
 }
@@ -586,7 +606,9 @@ print_warning (kf_validator *kf, const char *format, ...)
   str = g_strdup_vprintf (format, args);
   va_end (args);
 
-  g_print ("%s: warning: %s", kf->filename, str);
+  g_print ("%s%s%s: %swarning%s: %s",
+           FILENAME_COLOR, kf->filename, RESET_COLOR,
+           WARNING_COLOR, RESET_COLOR, str);
 
   g_free (str);
 }
@@ -606,7 +628,9 @@ print_hint (kf_validator *kf, const char *format, ...)
   str = g_strdup_vprintf (format, args);
   va_end (args);
 
-  g_print ("%s: hint: %s", kf->filename, str);
+  g_print ("%s%s%s: %shint%s: %s",
+           FILENAME_COLOR, kf->filename, RESET_COLOR,
+           HINT_COLOR, RESET_COLOR, str);
 
   g_free (str);
 }
@@ -3088,6 +3112,11 @@ desktop_file_validate (const char *filename,
   kf.action_groups    = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                NULL, g_free);
   kf.fatal_error      = FALSE;
+#if GLIB_CHECK_VERSION(2, 50, 0)
+  kf.use_colors       = g_log_writer_supports_color (fileno (stdout));
+#else
+  kf.use_colors       = FALSE;
+#endif
 
   validate_load_and_parse (&kf);
   //FIXME: this does not work well if there are both a Desktop Entry and a KDE

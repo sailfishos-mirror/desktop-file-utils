@@ -993,9 +993,9 @@ handle_comment_key (kf_validator *kf,
 
   if (keyvalue && g_ascii_strcasecmp (value, keyvalue->value) == 0) {
     print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                       "looks redundant with value \"%s\" of key \"%s\"\n",
+                       "looks the same as that of key \"%s\"\n",
                        value, locale_key, kf->current_group,
-                       keyvalue->value, keyvalue->key);
+                       keyvalue->key);
     return FALSE;
   }
 
@@ -1006,9 +1006,9 @@ handle_comment_key (kf_validator *kf,
 
   if (keyvalue && g_ascii_strcasecmp (value, keyvalue->value) == 0) {
     print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                       "looks redundant with value \"%s\" of key \"%s\"\n",
+                       "looks the same as that of key \"%s\"\n",
                        value, locale_key, kf->current_group,
-                       keyvalue->value, keyvalue->key);
+                       keyvalue->key);
     return FALSE;
   }
 

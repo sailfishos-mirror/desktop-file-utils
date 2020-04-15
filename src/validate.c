@@ -318,6 +318,8 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
   /* since 1.1 (used to be in the spec before 1.0, but was not really
    * specified) */
   { DESKTOP_STRING_LIST_TYPE,       "Actions",           FALSE, FALSE, FALSE, handle_actions_key },
+  /* Since 1.2 */
+  { DESKTOP_STRING_LIST_TYPE,       "Implements",        FALSE, FALSE, FALSE, NULL },
 
   { DESKTOP_BOOLEAN_TYPE,           "DBusActivatable",   FALSE, FALSE, FALSE, handle_dbus_activatable_key },
 

@@ -323,6 +323,9 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
 
   { DESKTOP_BOOLEAN_TYPE,           "DBusActivatable",   FALSE, FALSE, FALSE, handle_dbus_activatable_key },
 
+  /* Since 1.4 */
+  { DESKTOP_BOOLEAN_TYPE,           "PrefersNonDefaultGPU", FALSE, FALSE, FALSE, NULL },
+
   /* Keys reserved for KDE */
 
   /* since 0.9.4 */
@@ -355,6 +358,8 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
   /* since 0.9.6 */
   { DESKTOP_STRING_LIST_TYPE,       "SortOrder",         FALSE, TRUE,  FALSE, NULL },
   { DESKTOP_REGEXP_LIST_TYPE,       "FilePattern",       FALSE, TRUE,  FALSE, NULL },
+  /* since 1.4 */
+  { DESKTOP_BOOLEAN_TYPE,           "X-KDE-RunOnDiscreteGpu", FALSE, TRUE, FALSE, NULL },
 
   /* Keys from other specifications */
 

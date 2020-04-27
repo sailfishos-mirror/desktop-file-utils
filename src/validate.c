@@ -2249,9 +2249,6 @@ validate_known_key (kf_validator         *kf,
   unsigned int i;
   unsigned int j;
 
-  if (!strncmp (key, "X-", 2))
-    return TRUE;
-
   for (i = 0; i < n_keys; i++) {
     if (strcmp (key, keys[i].name))
       continue;
@@ -2259,6 +2256,8 @@ validate_known_key (kf_validator         *kf,
     if (keys[i].type != DESKTOP_LOCALESTRING_TYPE &&
         keys[i].type != DESKTOP_LOCALESTRING_LIST_TYPE &&
         locale != NULL) {
+      if (!strncmp (key, "X-", 2))
+        return TRUE;
       print_fatal (kf, "file contains key \"%s\" in group \"%s\", "
                        "but \"%s\" is not defined as a locale string\n",
                        locale_key, kf->current_group, key);
@@ -2280,6 +2279,9 @@ validate_known_key (kf_validator         *kf,
       print_warning (kf, "key \"%s\" in group \"%s\" is a reserved key for "
                          "KDE\n",
                          locale_key, kf->current_group);
+
+    if (!strncmp (key, "X-", 2))
+      return TRUE;
 
     if (!validate_for_type[j].validate (kf, key, locale, value))
       return FALSE;

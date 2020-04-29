@@ -1,9 +1,7 @@
 image: fedora:31
 
-autotools-build:
+meson-build:
     script:
-    - dnf -y install dnf-plugins-core automake
-    - dnf -y groupinstall buildsys-build
-    - dnf -y builddep desktop-file-utils
-    - ./autogen.sh
-    - make -sj4 check
+    - dnf -y install @development-tools meson glib2-devel
+    - meson _build
+    - ninja -C _build test

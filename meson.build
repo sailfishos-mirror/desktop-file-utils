@@ -76,7 +76,9 @@ subdir('misc')
 subdir('src')
 
 # This script installs a symlink desktop-file-edit -> desktop-file-install
-meson.add_install_script('install.sh')
+meson.add_install_script('install.py')
 
 # This script writes git log to Changelog.
-meson.add_dist_script('make_dist.sh')
+run_target('changelog', command: 'changelog.py')
+
+meson.add_dist_script('changelog.py')

@@ -2299,7 +2299,7 @@ validate_known_key (kf_validator         *kf,
     break;
   }
 
-  if (i == n_keys) {
+  if (i == n_keys && strncmp (key, "X-", 2)) {
     print_fatal (kf, "file contains key \"%s\" in group \"%s\", but "
                      "keys extending the format should start with "
                      "\"X-\"\n", key, kf->current_group);

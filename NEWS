@@ -1,4 +1,26 @@
 ============
+Version 0.25
+============
+
+This version adds support for the Meson build system and deprecates
+Autotools. Support for the latter will be removed in the next release.
+
+ common
+  - Add Meson build system (fdo#14) (Félix Piédallu).
+
+ desktop-file-validate
+  - Allow desktop file spec version 1.4.
+  - Make it possible to deprecate keys starting with "X-" (Bastien Nocera).
+  - Add the "Implements" field from spec version 1.2 (fdo#55) (Dylan Baker).
+  - Add the "PrefersNonDefaultGPU" key and deprecate "X-KDE-RunOnDiscreteGpu"
+    (Bastien Nocera).
+  - Set locale for correct output message encoding (Philip Withnall).
+  - Add coloured output support (Philip Withnall).
+  - Fix parsing of escaped double quote in quoted strings (fdo#56). Found
+    by Frédéric Brière.
+  - Add GNOME Flashback, GNOME Classic desktops (Alberts Muktupāvels).
+
+============
 Version 0.24
 ============
 

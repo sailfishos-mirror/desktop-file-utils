@@ -25,6 +25,9 @@
  * USA.
  */
 
+#ifndef __DFU_VALIDATE_H__
+#define __DFU_VALIDATE_H__
+
 #include <glib.h>
 
 #define CURRENT_SPEC_VERSION "1.2"
@@ -39,3 +42,4 @@ gboolean desktop_file_validate (const char *filename,
 gboolean desktop_file_fixup    (GKeyFile   *keyfile,
                                 const char *filename);
 
+#endif /* __DFU_VALIDATE_H__ */

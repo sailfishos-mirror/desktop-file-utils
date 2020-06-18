@@ -958,6 +958,12 @@ handle_version_key (kf_validator *kf,
                     const char   *locale_key,
                     const char   *value)
 {
+  if (!strcmp (value, "1.4"))
+    return TRUE;
+
+  if (!strcmp (value, "1.3"))
+    return TRUE;
+
   if (!strcmp (value, "1.2"))
     return TRUE;
 

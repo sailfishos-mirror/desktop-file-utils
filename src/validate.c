@@ -1239,10 +1239,10 @@ handle_exec_key (kf_validator *kf,
                              "a reserved character\n",
                              value, locale_key, kf->current_group);
             retval = FALSE;
-
-            escaped = FALSE;
           }
         }
+
+        escaped = FALSE;
         break;
       case '`':
       case '$':

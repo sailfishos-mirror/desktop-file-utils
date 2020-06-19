@@ -1,4 +1,16 @@
 ============
+Version 0.26
+============
+
+This version fixes an error that snuck into the Meson build files in version
+0.25. The Autotools build is unaffected. Since the previous release has only
+been out for a day, Autotools support is maintained in this release.
+
+ update-desktop-database
+  - Fix erroneous installation as "desktop-file-update" when using the Meson
+    build system (fdo#58) (Antoine Jacoutot).
+
+============
 Version 0.25
 ============
 

@@ -28,6 +28,10 @@
 
 #include <locale.h>
 
+#ifdef HAVE_PLEDGE
+#include <unistd.h>
+#endif
+
 #include "validate.h"
 
 static gboolean   warn_kde = FALSE;
@@ -50,6 +54,13 @@ main (int argc, char *argv[])
   GError         *error;
   int i;
   gboolean all_valid;
+
+#ifdef HAVE_PLEDGE
+  if (pledge ("stdio rpath", NULL) == -1) {
+    g_printerr ("pledge\n");
+    return 1;
+  }
+#endif
 
   setlocale (LC_ALL, "");
 

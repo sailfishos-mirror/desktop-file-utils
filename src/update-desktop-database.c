@@ -451,8 +451,8 @@ main (int    argc,
      { NULL }
    };
 
-#if HAVE_PLEDGE
-  if (pledge("stdio rpath wpath cpath fattr", NULL) == -1) {
+#ifdef HAVE_PLEDGE
+  if (pledge ("stdio rpath wpath cpath fattr", NULL) == -1) {
     g_printerr ("pledge\n");
     return 1;
   }

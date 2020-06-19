@@ -837,6 +837,13 @@ main (int argc, char **argv)
   mode_t dir_permissions;
   char *basename;
 
+#ifdef HAVE_PLEDGE
+  if (pledge ("stdio rpath wpath cpath fattr", NULL) == -1) {
+    g_printerr ("pledge\n");
+    return 1;
+  }
+#endif
+
   setlocale (LC_ALL, "");
 
   basename = g_path_get_basename (argv[0]);
@@ -854,6 +861,16 @@ main (int argc, char **argv)
       g_option_group_add_entries (group, install_options);
       g_option_context_add_group (context, group);
     }
+#ifdef HAVE_PLEDGE
+  else
+    {
+      /* In edit mode we can drop the fattr pledge. */
+      if (pledge ("stdio rpath wpath cpath", NULL) == -1) {
+        g_printerr ("pledge in edit_mode\n");
+        return 1;
+      }
+    }
+#endif
 
   group = g_option_group_new ("edit", _("Edition options for desktop file"), _("Show desktop file edition options"), NULL, NULL);
   g_option_group_add_entries (group, edit_options);

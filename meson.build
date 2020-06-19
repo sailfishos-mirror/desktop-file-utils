@@ -1,6 +1,6 @@
 project('desktop-file-utils',
   'c',
-  version: '0.26',
+  version: '0.27',
   meson_version: '>=0.49.0',
   default_options: [
     'c_std=gnu11',

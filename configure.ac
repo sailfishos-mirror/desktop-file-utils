@@ -1,4 +1,4 @@
-AC_INIT([desktop-file-utils], [0.26],
+AC_INIT([desktop-file-utils], [0.27],
         [https://bugs.freedesktop.org/enter_bug.cgi?product=desktop-file-utils])
 AC_CONFIG_SRCDIR(src/validate.h)
 

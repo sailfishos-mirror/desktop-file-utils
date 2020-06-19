@@ -24,7 +24,7 @@ executable('desktop-file-install',
   install: true,
 )
 
-executable('desktop-file-update',
+executable('update-desktop-database',
   'update-desktop-database.c',
   link_with: desktop_file_lib,
   dependencies: glib,

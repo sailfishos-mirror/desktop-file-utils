@@ -326,6 +326,9 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
   /* Since 1.4 */
   { DESKTOP_BOOLEAN_TYPE,           "PrefersNonDefaultGPU", FALSE, FALSE, FALSE, NULL },
 
+  /* Since 1.5 */
+  { DESKTOP_BOOLEAN_TYPE,           "SingleMainWindow", FALSE, FALSE, FALSE, NULL },
+
   /* Keys reserved for KDE */
 
   /* since 0.9.4 */

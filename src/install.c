@@ -43,6 +43,7 @@ static gboolean edit_mode = FALSE;
 static const char** args = NULL;
 static gboolean delete_original = FALSE;
 static gboolean rebuild_mime_info_cache = FALSE;
+static gboolean print_version = FALSE;
 static char *vendor_name = NULL;
 static char *target_dir = NULL;
 static GSList *edit_actions = NULL;
@@ -316,6 +317,15 @@ static const GOptionEntry main_options[] = {
     G_OPTION_ARG_NONE,
     &rebuild_mime_info_cache,
     N_("Rebuild the MIME types application database after processing desktop files"),
+    NULL
+  },
+  {
+    "version",
+    '\0',
+    '\0',
+    G_OPTION_ARG_NONE,
+    &print_version,
+    N_("Show the program version"),
     NULL
   },
   {
@@ -885,6 +895,11 @@ main (int argc, char **argv)
     g_printerr (_("Run '%s --help' to see a full list of available command line options.\n"), argv[0]);
     g_error_free (err);
     return 1;
+  }
+
+  if (print_version) {
+    g_print("desktop-file-install %s\n", VERSION);
+    return 0;
   }
 
   if (!edit_mode)

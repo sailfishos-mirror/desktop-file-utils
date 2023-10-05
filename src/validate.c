@@ -566,7 +566,7 @@ static struct {
 #define WARNING_COLOR      (kf->use_colors ? MAGENTA : "")
 #define HINT_COLOR         (kf->use_colors ? YELLOW : "")
 
-static void
+G_GNUC_PRINTF (2, 3) static void
 print_fatal (kf_validator *kf, const char *format, ...)
 {
   va_list args;
@@ -587,7 +587,7 @@ print_fatal (kf_validator *kf, const char *format, ...)
   g_free (str);
 }
 
-static void
+G_GNUC_PRINTF (2, 3) static void
 print_future_fatal (kf_validator *kf, const char *format, ...)
 {
   va_list args;
@@ -606,7 +606,7 @@ print_future_fatal (kf_validator *kf, const char *format, ...)
   g_free (str);
 }
 
-static void
+G_GNUC_PRINTF (2, 3) static void
 print_warning (kf_validator *kf, const char *format, ...)
 {
   va_list args;
@@ -625,7 +625,7 @@ print_warning (kf_validator *kf, const char *format, ...)
   g_free (str);
 }
 
-static void
+G_GNUC_PRINTF (2, 3) static void
 print_hint (kf_validator *kf, const char *format, ...)
 {
   va_list args;

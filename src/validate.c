@@ -1333,8 +1333,8 @@ handle_exec_key (kf_validator *kf,
         if (flag) {
           if (file_uri) {
             print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                             "may contain at most one \"%f\", \"%u\", "
-                             "\"%F\" or \"%U\" field code\n",
+                             "may contain at most one \"%%f\", \"%%u\", "
+                             "\"%%F\" or \"%%U\" field code\n",
                              value, locale_key, kf->current_group);
             retval = FALSE;
           }
@@ -1348,8 +1348,8 @@ handle_exec_key (kf_validator *kf,
         if (flag) {
           if (file_uri) {
             print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
-                             "may contain at most one \"%f\", \"%u\", "
-                             "\"%F\" or \"%U\" field code\n",
+                             "may contain at most one \"%%f\", \"%%u\", "
+                             "\"%%F\" or \"%%U\" field code\n",
                              value, locale_key, kf->current_group);
             retval = FALSE;
           }

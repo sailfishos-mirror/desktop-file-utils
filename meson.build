@@ -1,7 +1,7 @@
 project('desktop-file-utils',
   'c',
   version: '0.27',
-  meson_version: '>=0.49.0',
+  meson_version: '>=0.61.0',
   default_options: [
     'c_std=gnu11',
   ],
@@ -75,8 +75,11 @@ subdir('man')
 subdir('misc')
 subdir('src')
 
-# This script installs a symlink desktop-file-edit -> desktop-file-install
-meson.add_install_script('install.py')
+install_symlink(
+  'desktop-file-edit',
+  install_dir: 'bin',
+  pointing_to: 'desktop-file-install'
+)
 
 # This script writes git log to Changelog.
 run_target('changelog', command: 'changelog.py')

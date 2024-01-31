@@ -41,6 +41,7 @@
 
 #include <glib.h>
 #include <glib/gstdio.h>
+#include <gio/gio.h>
 
 #include "keyfileutils.h"
 #include "mimeutils.h"
@@ -124,6 +125,7 @@ struct _kf_validator {
   GList       *fsdevice_keys;
   GList       *mimetype_keys;
 
+  GHashTable  *interfaces;
   GHashTable  *action_values;
   GHashTable  *action_groups;
 
@@ -212,6 +214,10 @@ static gboolean
 handle_actions_key (kf_validator *kf,
                     const char   *locale_key,
                     const char   *value);
+static gboolean
+handle_implements_key (kf_validator *kf,
+                       const char   *locale_key,
+                       const char   *value);
 static gboolean
 handle_dbus_activatable_key (kf_validator *kf,
                              const char   *locale_key,
@@ -319,7 +325,7 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
    * specified) */
   { DESKTOP_STRING_LIST_TYPE,       "Actions",           FALSE, FALSE, FALSE, handle_actions_key },
   /* Since 1.2 */
-  { DESKTOP_STRING_LIST_TYPE,       "Implements",        FALSE, FALSE, FALSE, NULL },
+  { DESKTOP_STRING_LIST_TYPE,       "Implements",        FALSE, FALSE, FALSE, handle_implements_key },
 
   { DESKTOP_BOOLEAN_TYPE,           "DBusActivatable",   FALSE, FALSE, FALSE, handle_dbus_activatable_key },
 
@@ -1846,6 +1852,50 @@ handle_actions_key (kf_validator *kf,
   return retval;
 }
 
+/* + DBus interface names. Check they are using a valid format.
+ *   Checked.
+ *
+ * Note that we will check later on (in * validate_actions()) that there is a
+ * "Desktop Action foobar" group for each "foobar" identifier.
+ */
+static gboolean
+handle_implements_key (kf_validator *kf,
+                       const char   *locale_key,
+                       const char   *value)
+{
+  char **interfaces;
+  char  *interface;
+  int    i;
+  gboolean retval;
+
+  retval = TRUE;
+  interfaces = g_strsplit (value, ";", 0);
+
+  for (i = 0; interfaces[i]; i++) {
+    if (!g_dbus_is_interface_name (interfaces[i])) {
+      print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                       "contains an invalid interface name \"%s\"\n",
+                       value, locale_key, kf->current_group, interfaces[i]);
+      retval = FALSE;
+      break;
+    }
+
+    if (g_hash_table_lookup (kf->interfaces, interfaces[i])) {
+      print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "contains interface \"%s\" more than once\n",
+                         value, locale_key, kf->current_group, interfaces[i]);
+      continue;
+    }
+
+    interface = g_strdup (interfaces[i]);
+    g_hash_table_insert (kf->interfaces, interface, interface);
+  }
+
+  g_strfreev (interfaces);
+
+  return retval;
+}
+
 /* + If the file describes a D-Bus activatable service, the filename must be in
  *   reverse-DNS notation, i.e. contain at least two dots including the dot
  *   in ".desktop".
@@ -2467,6 +2517,9 @@ validate_keys_for_current_group (kf_validator *kf)
  * + Accept "Desktop Action foobar" group, where foobar is a valid key
  *   name.
  *   Checked.
+ * + Accept a group with the same name as the interface listed in
+ *   "Implements"
+ *   Checked.
  *
  * Note that for "Desktop Action foobar" group, we will check later on (in
  * validate_actions()) that the Actions key contains "foobar".
@@ -2540,6 +2593,9 @@ validate_group_name (kf_validator *kf,
       return TRUE;
     }
   }
+
+  if (g_hash_table_lookup (kf->interfaces, group))
+      return TRUE;
 
   print_fatal (kf, "file contains group \"%s\", but groups extending "
                    "the format should start with \"X-\"\n", group);
@@ -3130,6 +3186,8 @@ desktop_file_validate (const char *filename,
   kf.link_keys        = NULL;
   kf.fsdevice_keys    = NULL;
   kf.mimetype_keys    = NULL;
+  kf.interfaces       = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                               NULL, g_free);
   kf.action_values    = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                NULL, g_free);
   kf.action_groups    = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -3160,6 +3218,7 @@ desktop_file_validate (const char *filename,
   g_list_foreach (kf.mimetype_keys, (GFunc) g_free, NULL);
   g_list_free (kf.mimetype_keys);
 
+  g_hash_table_destroy (kf.interfaces);
   g_hash_table_destroy (kf.action_values);
   g_hash_table_destroy (kf.action_groups);
 

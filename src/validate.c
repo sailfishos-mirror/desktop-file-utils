@@ -132,6 +132,8 @@ struct _kf_validator {
   gboolean     fatal_error;
 
   gboolean     use_colors;
+
+  gboolean     dbus_activatable;
 };
 
 static gboolean
@@ -381,7 +383,7 @@ static DesktopKeyDefinition registered_action_keys[] = {
   { DESKTOP_LOCALESTRING_TYPE,      "Icon",               FALSE, FALSE, FALSE, handle_icon_key },
   { DESKTOP_STRING_LIST_TYPE,       "OnlyShowIn",         FALSE, TRUE, FALSE, handle_show_in_key },
   { DESKTOP_STRING_LIST_TYPE,       "NotShowIn",          FALSE, TRUE, FALSE, handle_show_in_key },
-  { DESKTOP_STRING_TYPE,            "Exec",               TRUE,  FALSE, FALSE, handle_exec_key }
+  { DESKTOP_STRING_TYPE,            "Exec",               FALSE, FALSE, FALSE, handle_exec_key }
 };
 
 /* This should be the same list as in xdg-specs/menu/menu-spec.xml */
@@ -1919,6 +1921,8 @@ handle_dbus_activatable_key (kf_validator *kf,
   if (strcmp (value, "true") && strcmp (value, "1"))
     return TRUE;
 
+  kf->dbus_activatable = TRUE;
+
   basename = g_path_get_basename (kf->filename);
   basename_utf8 = g_filename_to_utf8 (basename, -1, NULL, NULL, NULL);
   if (!basename_utf8)
@@ -2642,6 +2646,21 @@ validate_required_keys (kf_validator         *kf,
     }
   }
 
+  if (kf->type == APPLICATION_TYPE && !g_hash_table_lookup (hashtable, "Exec")) {
+    if (!kf->dbus_activatable) {
+      print_fatal (kf, "key \"Exec\" in group \"%s\" is required if key "
+                       "\"DBusActivatable\" is not set to true in the main "
+                       "desktop entry group.\n",
+                       group_name);
+      retval = FALSE;
+    } else {
+      print_warning (kf, "key \"Exec\" in group \"%s\" should be specified "
+                         "for compatibility with implementations that do not "
+                         "understand key \"DBusActivatable\".\n",
+                         group_name);
+    }
+  }
+
   g_hash_table_destroy (hashtable);
 
   return retval;
@@ -3202,6 +3221,7 @@ desktop_file_validate (const char *filename,
 #else
   kf.use_colors       = FALSE;
 #endif
+  kf.dbus_activatable = FALSE;
 
   validate_load_and_parse (&kf);
   //FIXME: this does not work well if there are both a Desktop Entry and a KDE

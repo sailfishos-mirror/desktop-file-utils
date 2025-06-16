@@ -493,6 +493,8 @@ static struct {
   { "Simulation",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "SportsGame",             FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "StrategyGame",           FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "GameTool",               FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
+  { "LauncherStore",          FALSE, FALSE, FALSE, { NULL }, { "Game", NULL } },
   { "Art",                    FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", NULL } },
   { "Construction",           FALSE, FALSE, FALSE, { NULL }, { "Education", "Science", NULL } },
   { "Music",                  FALSE, FALSE, FALSE, { NULL }, { "AudioVideo", "Education", NULL } },

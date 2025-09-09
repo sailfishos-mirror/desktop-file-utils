@@ -41,11 +41,39 @@
 
 #define NAME "update-desktop-database"
 #define MIMEINFO_CACHE_FILENAME "mimeinfo.cache"
+#define INTENT_CACHE_FILENAME "intent.cache"
 
 #define udd_print(...) if (!opt_quiet) g_printerr (__VA_ARGS__)
 #define udd_verbose_print(...) if (!opt_quiet && opt_verbose) g_printerr (__VA_ARGS__)
 
 static gboolean opt_verbose = FALSE, opt_quiet = FALSE;
+
+typedef struct _IntentEntry
+{
+  GPtrArray *defaults; /* (owned); list of default desktop file IDs */
+  GHashTable *scopes;  /* (owned) (element-type utf8 GPtrArray); maps scope to list of desktop file IDs */
+} IntentEntry;
+
+static IntentEntry *
+intent_entry_new (void)
+{
+  IntentEntry *entry = g_new0 (IntentEntry, 1);
+  entry->defaults = g_ptr_array_new_with_free_func (g_free);
+  entry->scopes = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                         g_free,
+                                         (GDestroyNotify) g_ptr_array_unref);
+  return entry;
+}
+
+static void
+intent_entry_free (IntentEntry *entry)
+{
+  g_clear_pointer (&entry->defaults, g_ptr_array_unref);
+  g_clear_pointer (&entry->scopes, g_hash_table_unref);
+  g_free (entry);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(IntentEntry, intent_entry_free)
 
 static gboolean
 mime_type_map_add_desktop_file (GHashTable  *mime_types_map,
@@ -151,8 +179,147 @@ process_desktop_file_mime (GKeyFile    *keyfile,
 }
 
 static gboolean
+intents_map_add_desktop_file (GHashTable  *intents_map,
+                              const char  *interface,
+                              GStrv        scopes,
+                              const char  *name,
+                              GError     **error)
+{
+  g_autoptr(IntentEntry) owned_entry = NULL;
+  g_autofree char *owned_interface = NULL;
+
+  if (!g_hash_table_steal_extended (intents_map,
+                                    interface,
+                                    (gpointer*) &owned_interface,
+                                    (gpointer*) &owned_entry))
+    {
+      owned_entry = intent_entry_new ();
+      owned_interface = g_strdup (interface);
+    }
+
+  if (!g_ptr_array_find_with_equal_func (owned_entry->defaults,
+                                         name,
+                                         g_str_equal,
+                                         NULL))
+    {
+      g_ptr_array_add (owned_entry->defaults, g_strdup (name));
+    }
+
+
+  for (size_t i = 0; scopes && scopes[i] != NULL; i++)
+    {
+      const char *scope = scopes[i];
+      g_autoptr(GPtrArray) owned_names = NULL;
+      g_autofree char *owned_scope = NULL;
+
+      if (!g_hash_table_steal_extended (owned_entry->scopes,
+                                        scope,
+                                        (gpointer*) &owned_scope,
+                                        (gpointer*) &owned_names))
+        {
+          owned_names = g_ptr_array_new_with_free_func (g_free);
+          owned_scope = g_strdup (scope);
+        }
+
+      if (!g_ptr_array_find_with_equal_func (owned_names,
+                                             name,
+                                             g_str_equal,
+                                             NULL))
+        {
+          g_ptr_array_add (owned_names, g_strdup (name));
+        }
+
+      g_hash_table_insert (owned_entry->scopes,
+                           g_steal_pointer (&owned_scope),
+                           g_steal_pointer (&owned_names));
+    }
+
+  g_hash_table_insert (intents_map,
+                       g_steal_pointer (&owned_interface),
+                       g_steal_pointer (&owned_entry));
+
+  return TRUE;
+}
+
+static gboolean
+process_desktop_file_intents (GKeyFile    *keyfile,
+                              const char  *desktop_file,
+                              GHashTable  *intents_map,
+                              const char  *name,
+                              GError     **error)
+{
+  g_auto(GStrv) implements = NULL;
+  g_autoptr(GError) local_error = NULL;
+
+  implements = g_key_file_get_string_list (keyfile,
+                                           GROUP_DESKTOP_ENTRY,
+                                           "Implements",
+                                           NULL,
+                                           &local_error);
+  if (!implements)
+    {
+      if (g_error_matches (local_error,
+                           G_KEY_FILE_ERROR,
+                           G_KEY_FILE_ERROR_KEY_NOT_FOUND))
+        {
+          udd_verbose_print (_("File \"%s\" lacks Implements key\n"),
+                             desktop_file);
+          return TRUE;
+        }
+      else
+        {
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+    }
+
+  for (size_t i = 0; implements[i] != NULL; i++)
+    {
+      const char *interface = implements[i];
+      g_auto(GStrv) scopes = NULL;
+      g_autoptr(GError) scope_error = NULL;
+
+      scopes = g_key_file_get_string_list (keyfile,
+                                           interface,
+                                           "Supports",
+                                           NULL,
+                                           &scope_error);
+
+      if (!scopes)
+        {
+          if (g_error_matches (scope_error,
+                               G_KEY_FILE_ERROR,
+                               G_KEY_FILE_ERROR_KEY_NOT_FOUND) ||
+              g_error_matches (scope_error,
+                               G_KEY_FILE_ERROR,
+                               G_KEY_FILE_ERROR_GROUP_NOT_FOUND))
+            {
+              udd_verbose_print (_("File \"%s\" has no scope metadata for intent %s\n"),
+                                 desktop_file,
+                                 interface);
+            }
+          else
+            {
+              g_propagate_error (error, g_steal_pointer (&local_error));
+              return FALSE;
+            }
+        }
+
+      if (!intents_map_add_desktop_file (intents_map,
+                                         interface,
+                                         scopes,
+                                         name,
+                                         error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
 process_desktop_file (const char  *desktop_file,
                       GHashTable  *mime_types_map,
+                      GHashTable  *intents_map,
                       const char  *name,
                       GError     **error)
 {
@@ -176,12 +343,20 @@ process_desktop_file (const char  *desktop_file,
                                   error))
     return FALSE;
 
+  if (!process_desktop_file_intents (keyfile,
+                                     desktop_file,
+                                     intents_map,
+                                     name,
+                                     error))
+    return FALSE;
+
   return TRUE;
 }
 
 static gboolean
 process_desktop_files (const char  *desktop_dir,
                        GHashTable  *mime_types_map,
+                       GHashTable  *intents_map,
                        const char  *prefix,
                        GError     **error)
 {
@@ -207,6 +382,7 @@ process_desktop_files (const char  *desktop_dir,
           sub_prefix = g_strdup_printf ("%s%s-", prefix, filename);
           if (!process_desktop_files (full_path,
                                       mime_types_map,
+                                      intents_map,
                                       sub_prefix,
                                       &process_error))
             {
@@ -223,6 +399,7 @@ process_desktop_files (const char  *desktop_dir,
       name = g_strdup_printf ("%s%s", prefix, filename);
       if (!process_desktop_file (full_path,
                                  mime_types_map,
+                                 intents_map,
                                  name,
                                  &process_error))
         {
@@ -303,6 +480,127 @@ update_mime_cache_database (const char  *dir,
 }
 
 static void
+serialize_intent_cache_for_iface (GString     *contents,
+                                  const char  *interface,
+                                  IntentEntry *entry)
+{
+  g_autoptr(GPtrArray) sorted_names = NULL;
+
+  g_string_append (contents, interface);
+  g_string_append_c (contents, '=');
+
+  sorted_names = g_ptr_array_copy (entry->defaults, (GCopyFunc) g_strdup, NULL);
+  g_ptr_array_sort_values (sorted_names, (GCompareFunc) g_strcmp0);
+
+  for (size_t i = 0; i < sorted_names->len; i++)
+    {
+      const char *name = sorted_names->pdata[i];
+
+      g_string_append (contents, name);
+      g_string_append_c (contents, ';');
+    }
+
+  g_string_append_c (contents, '\n');
+}
+
+static void
+serialize_intent_cache_scoped_for_iface (GString     *contents,
+                                         const char  *interface,
+                                         IntentEntry *entry)
+{
+  const char *scope;
+  GPtrArray *names;
+  GHashTableIter iter;
+
+  if (g_hash_table_size (entry->scopes) == 0)
+    return;
+
+  g_string_append_c (contents, '\n');
+  g_string_append_c (contents, '[');
+  g_string_append (contents, interface);
+  g_string_append_c (contents, ']');
+  g_string_append_c (contents, '\n');
+
+  g_hash_table_iter_init (&iter, entry->scopes);
+  while (g_hash_table_iter_next (&iter,
+                                 (gpointer *) &scope,
+                                 (gpointer *) &names))
+    {
+      g_autoptr(GPtrArray) sorted_names = NULL;
+
+      g_string_append (contents, scope);
+      g_string_append_c (contents, '=');
+
+      sorted_names = g_ptr_array_copy (names, (GCopyFunc) g_strdup, NULL);
+      g_ptr_array_sort_values (sorted_names, (GCompareFunc) g_strcmp0);
+
+      for (size_t i = 0; i < sorted_names->len; i++)
+        {
+          const char *name = sorted_names->pdata[i];
+
+          g_string_append (contents, name);
+          g_string_append_c (contents, ';');
+        }
+    }
+
+  g_string_append_c (contents, '\n');
+}
+
+static char *
+serialize_intent_cache (const char  *dir,
+                        GHashTable  *intents_map,
+                        GError     **error)
+{
+  g_autoptr(GList) keys = NULL;
+  g_autoptr(GString) contents = g_string_new ("[Intent Cache]\n");
+
+  keys = g_hash_table_get_keys (intents_map);
+  keys = g_list_sort (keys, (GCompareFunc) g_strcmp0);
+
+  for (GList *l = keys; l != NULL; l = l->next)
+    {
+      const char *interface = l->data;
+      IntentEntry *entry = g_hash_table_lookup (intents_map, interface);
+
+      serialize_intent_cache_for_iface (contents, interface, entry);
+    }
+
+  for (GList *l = keys; l != NULL; l = l->next)
+    {
+      const char *interface = l->data;
+      IntentEntry *entry = g_hash_table_lookup (intents_map, interface);
+
+      serialize_intent_cache_scoped_for_iface (contents, interface, entry);
+    }
+
+  return g_string_free_and_steal (g_steal_pointer (&contents));
+}
+
+static gboolean
+update_intent_cache_database (const char  *dir,
+                              GHashTable  *intents_map,
+                              GError     **error)
+{
+  g_autofree char *intent_cache_file = NULL;
+  g_autofree char *intent_cache_contents = NULL;
+
+  intent_cache_contents = serialize_intent_cache (dir, intents_map, error);
+  if (!intent_cache_contents)
+    return FALSE;
+
+  intent_cache_file = g_build_filename (dir, INTENT_CACHE_FILENAME, NULL);
+  if (!g_file_set_contents_full (intent_cache_file,
+                                 intent_cache_contents,
+                                 -1,
+                                 G_FILE_SET_CONTENTS_CONSISTENT,
+                                 0666,
+                                 error))
+      return FALSE;
+
+  return TRUE;
+}
+
+static void
 list_free_deep (GList *l)
 {
   g_list_free_full (l, g_free);
@@ -313,18 +611,27 @@ update_databases (const char  *desktop_dir,
                   GError     **error)
 {
   g_autoptr(GHashTable) mime_types_map = NULL;
+  g_autoptr(GHashTable) intents_map = NULL;
 
   mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal,
                                           (GDestroyNotify) g_free,
                                           (GDestroyNotify) list_free_deep);
 
+  intents_map = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                       (GDestroyNotify) g_free,
+                                       (GDestroyNotify) intent_entry_free);
+
   if (!process_desktop_files (desktop_dir,
                               mime_types_map,
+                              intents_map,
                               "",
                               error))
     return FALSE;
 
   if (!update_mime_cache_database (desktop_dir, mime_types_map, error))
+    return FALSE;
+
+  if (!update_intent_cache_database (desktop_dir, intents_map, error))
     return FALSE;
 
   return TRUE;

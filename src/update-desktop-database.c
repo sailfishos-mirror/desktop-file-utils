@@ -40,417 +40,355 @@
 #include "mimeutils.h"
 
 #define NAME "update-desktop-database"
-#define CACHE_FILENAME "mimeinfo.cache"
-#define TEMP_CACHE_FILENAME_PREFIX ".mimeinfo.cache.XXXXXX"
+#define MIMEINFO_CACHE_FILENAME "mimeinfo.cache"
 
-#define udd_print(...) if (!quiet) g_printerr (__VA_ARGS__)
-#define udd_verbose_print(...) if (!quiet && verbose) g_printerr (__VA_ARGS__)
+#define udd_print(...) if (!opt_quiet) g_printerr (__VA_ARGS__)
+#define udd_verbose_print(...) if (!opt_quiet && opt_verbose) g_printerr (__VA_ARGS__)
 
-static FILE *open_temp_cache_file (const char  *dir,
-                                   char       **filename,
-                                   GError     **error);
-static void add_mime_type (const char *mime_type, GList *desktop_files, FILE *f);
-static void sync_database (const char *dir, GError **error);
-static void cache_desktop_file (const char  *desktop_file,
+static gboolean opt_verbose = FALSE, opt_quiet = FALSE;
+
+static gboolean
+mime_type_map_add_desktop_file (GHashTable  *mime_types_map,
                                 const char  *mime_type,
-                                GError     **error);
-static void process_desktop_file (const char  *desktop_file,
-                                  const char  *name,
-                                  GError     **error);
-static void process_desktop_files (const char *desktop_dir,
-                                   const char *prefix,
-                                   GError **error);
-static void update_database (const char *desktop_dir, GError **error);
-static const char ** get_default_search_path (void);
-static void print_desktop_dirs (const char **dirs);
-
-static GHashTable *mime_types_map = NULL;
-static gboolean verbose = FALSE, quiet = FALSE, print_version = FALSE;
-
-static void
-list_free_deep (gpointer key, GList *l, gpointer data)
+                                const char  *desktop_file,
+                                GError     **error)
 {
-  g_list_foreach (l, (GFunc)g_free, NULL);
-  g_list_free (l);
-}
+  GList *owned_desktop_files;
+  g_autofree char *owned_mime_type = NULL;
 
-static void
-cache_desktop_file (const char  *desktop_file,
-                    const char  *mime_type,
-                    GError     **error)
-{
-  GList *desktop_files;
-
-  desktop_files = (GList *) g_hash_table_lookup (mime_types_map, mime_type);
+  if (!g_hash_table_steal_extended (mime_types_map,
+                                    mime_type,
+                                    (gpointer*) &owned_mime_type,
+                                    (gpointer*) &owned_desktop_files))
+    {
+      owned_mime_type = g_strdup (mime_type);
+    }
 
   /* do not add twice a desktop file mentioning the mime type more than once
    * (no need to use g_list_find() because we cache all mime types registered
    * by a desktop file before moving to another desktop file) */
-  if (desktop_files &&
-      strcmp (desktop_file, (const char *) desktop_files->data) == 0)
-    return;
+  if (!owned_desktop_files ||
+      strcmp (desktop_file, (const char *) owned_desktop_files->data) != 0)
+    {
+      owned_desktop_files = g_list_prepend (owned_desktop_files,
+                                            g_strdup (desktop_file));
+    }
 
-  desktop_files = g_list_prepend (desktop_files, g_strdup (desktop_file));
-  g_hash_table_insert (mime_types_map, g_strdup (mime_type), desktop_files);
+  g_hash_table_insert (mime_types_map,
+                       g_steal_pointer (&owned_mime_type),
+                       g_steal_pointer (&owned_desktop_files));
+
+  return TRUE;
 }
 
-
-static void
-process_desktop_file (const char  *desktop_file,
-                      const char  *name,
-                      GError     **error)
+static gboolean
+process_desktop_file_mime (GKeyFile    *keyfile,
+                           const char  *desktop_file,
+                           GHashTable  *mime_types_map,
+                           const char  *name,
+                           GError     **error)
 {
-  GError *load_error;
-  GKeyFile *keyfile;
-  char **mime_types;
-  int i;
-
-  keyfile = g_key_file_new ();
-
-  load_error = NULL;
-  g_key_file_load_from_file (keyfile, desktop_file,
-                             G_KEY_FILE_NONE, &load_error);
-
-  if (load_error != NULL)
-    {
-      g_propagate_error (error, load_error);
-      return;
-    }
-
-  /* Hidden=true means that the .desktop file should be completely ignored */
-  if (g_key_file_get_boolean (keyfile, GROUP_DESKTOP_ENTRY, "Hidden", NULL))
-    {
-      g_key_file_free (keyfile);
-      return;
-    }
+  g_auto(GStrv) mime_types = NULL;
+  g_autoptr(GError) local_error = NULL;
 
   mime_types = g_key_file_get_string_list (keyfile,
                                            GROUP_DESKTOP_ENTRY,
-                                           "MimeType", NULL, &load_error);
-
-  g_key_file_free (keyfile);
-
-  if (load_error != NULL)
+                                           "MimeType",
+                                           NULL,
+                                           &local_error);
+  if (!mime_types)
     {
-      g_propagate_error (error, load_error);
-      return;
+      if (g_error_matches (local_error,
+                           G_KEY_FILE_ERROR,
+                           G_KEY_FILE_ERROR_KEY_NOT_FOUND))
+        {
+          udd_verbose_print (_("File \"%s\" lacks MimeType key\n"),
+                             desktop_file);
+          return TRUE;
+        }
+      else
+        {
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
     }
 
-  for (i = 0; mime_types[i] != NULL; i++)
+  for (size_t i = 0; mime_types[i] != NULL; i++)
     {
       char *mime_type;
       MimeUtilsValidity valid;
-      char *valid_error;
+      g_autofree char *valid_error = NULL;
 
       mime_type = g_strchomp (mime_types[i]);
       valid = mu_mime_type_is_valid (mime_types[i], &valid_error);
       switch (valid)
-      {
+        {
         case MU_VALID:
           break;
         case MU_DISCOURAGED:
           udd_print (_("Warning in file \"%s\": usage of MIME type \"%s\" is "
                        "discouraged (%s)\n"),
                      desktop_file, mime_types[i], valid_error);
-          g_free (valid_error);
           break;
         case MU_INVALID:
           udd_print (_("Error in file \"%s\": \"%s\" is an invalid MIME type "
                        "(%s)\n"),
                      desktop_file, mime_types[i], valid_error);
-          g_free (valid_error);
           /* not a break: we continue to the next mime type */
           continue;
         default:
           g_assert_not_reached ();
-      }
-
-      cache_desktop_file (name, mime_type, &load_error);
-
-      if (load_error != NULL)
-        {
-          g_propagate_error (error, load_error);
-          g_strfreev (mime_types);
-          return;
         }
+
+      if (!mime_type_map_add_desktop_file (mime_types_map,
+                                           mime_type,
+                                           name,
+                                           error))
+        return FALSE;
     }
-  g_strfreev (mime_types);
+
+  return TRUE;
 }
 
-static void
+static gboolean
+process_desktop_file (const char  *desktop_file,
+                      GHashTable  *mime_types_map,
+                      const char  *name,
+                      GError     **error)
+{
+  g_autoptr(GKeyFile) keyfile = NULL;
+
+  keyfile = g_key_file_new ();
+  if (!g_key_file_load_from_file (keyfile,
+                                  desktop_file,
+                                  G_KEY_FILE_NONE,
+                                  error))
+    return FALSE;
+
+  /* Hidden=true means that the .desktop file should be completely ignored */
+  if (g_key_file_get_boolean (keyfile, GROUP_DESKTOP_ENTRY, "Hidden", NULL))
+    return TRUE;
+
+  if (!process_desktop_file_mime (keyfile,
+                                  desktop_file,
+                                  mime_types_map,
+                                  name,
+                                  error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
 process_desktop_files (const char  *desktop_dir,
+                       GHashTable  *mime_types_map,
                        const char  *prefix,
                        GError     **error)
 {
-  GError *process_error;
-  GDir *dir;
+  g_autoptr(GDir) dir = NULL;
   const char *filename;
 
-  process_error = NULL;
-  dir = g_dir_open (desktop_dir, 0, &process_error);
-
-  if (process_error != NULL)
-    {
-      g_propagate_error (error, process_error);
-      return;
-    }
+  dir = g_dir_open (desktop_dir, 0, error);
+  if (!dir)
+    return FALSE;
 
   while ((filename = g_dir_read_name (dir)) != NULL)
     {
-      char *full_path, *name;
+      g_autofree char *full_path = NULL;
+      g_autofree char *name = NULL;
+      g_autoptr(GError) process_error = NULL;
 
       full_path = g_build_filename (desktop_dir, filename, NULL);
 
       if (g_file_test (full_path, G_FILE_TEST_IS_DIR))
         {
-          char *sub_prefix;
+          g_autofree char *sub_prefix = NULL;
 
           sub_prefix = g_strdup_printf ("%s%s-", prefix, filename);
-
-          process_desktop_files (full_path, sub_prefix, &process_error);
-          g_free (sub_prefix);
-
-          if (process_error != NULL)
+          if (!process_desktop_files (full_path,
+                                      mime_types_map,
+                                      sub_prefix,
+                                      &process_error))
             {
               udd_verbose_print (_("Could not process directory \"%s\": %s\n"),
                                  full_path, process_error->message);
-              g_error_free (process_error);
-              process_error = NULL;
             }
-          g_free (full_path);
           continue;
         }
       else if (!g_str_has_suffix (filename, ".desktop"))
         {
-          g_free (full_path);
           continue;
         }
 
       name = g_strdup_printf ("%s%s", prefix, filename);
-      process_desktop_file (full_path, name, &process_error);
-      g_free (name);
-
-      if (process_error != NULL)
+      if (!process_desktop_file (full_path,
+                                 mime_types_map,
+                                 name,
+                                 &process_error))
         {
-          if (!g_error_matches (process_error,
-                                G_KEY_FILE_ERROR,
-                                G_KEY_FILE_ERROR_KEY_NOT_FOUND))
-            {
-              udd_print (_("Could not parse file \"%s\": %s\n"), full_path,
-                         process_error->message);
-            }
-          else
-            {
-              udd_verbose_print (_("File \"%s\" lacks MimeType key\n"),
-                                 full_path);
-            }
-
-          g_error_free (process_error);
-          process_error = NULL;
+          udd_print (_("Could not parse file \"%s\": %s\n"), full_path,
+                     process_error->message);
         }
-
-      g_free (full_path);
     }
 
-  g_dir_close (dir);
-}
-
-static FILE *
-open_temp_cache_file (const char *dir, char **filename, GError **error)
-{
-  int fd;
-  char *file;
-  FILE *fp;
-  mode_t mask;
-
-  file = g_build_filename (dir, TEMP_CACHE_FILENAME_PREFIX, NULL);
-  fd = g_mkstemp (file);
-
-  if (fd < 0)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   "%s", g_strerror (errno));
-      g_free (file);
-      return NULL;
-    }
-
-  mask = umask(0);
-  (void) umask (mask);
-
-  fchmod (fd, 0666 & ~mask);
-
-  fp = fdopen (fd, "w+");
-  if (fp == NULL)
-    {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   "%s", g_strerror (errno));
-      g_free (file);
-      close (fd);
-      return NULL;
-    }
-
-  if (filename)
-    *filename = file;
-  else
-    g_free (file);
-
-  return fp;
+  return TRUE;
 }
 
 static void
-add_mime_type (const char *mime_type, GList *desktop_files, FILE *f)
+serialize_mime_cache_for_type (GString    *contents,
+                               const char *mime_type,
+                               GList      *desktop_files)
 {
-  GString *list;
-  GList *desktop_file;
+  GList *sorted_desktop_files;
 
-  list = g_string_new (mime_type);
-  g_string_append_c (list, '=');
-  desktop_files = g_list_sort (desktop_files, (GCompareFunc) g_strcmp0);
-  for (desktop_file = desktop_files;
-       desktop_file != NULL;
-       desktop_file = desktop_file->next)
+  g_string_append (contents, mime_type);
+  g_string_append_c (contents, '=');
+
+  sorted_desktop_files = g_list_sort (desktop_files,
+                                      (GCompareFunc) g_strcmp0);
+
+  for (GList *l = sorted_desktop_files; l != NULL; l = l->next)
     {
-      g_string_append (list, (const char *) desktop_file->data);
-      g_string_append_c (list, ';');
+      g_string_append (contents, (const char *) l->data);
+      g_string_append_c (contents, ';');
     }
-  g_string_append_c (list, '\n');
 
-  fputs (list->str, f);
-
-  g_string_free (list, TRUE);
+  g_string_append_c (contents, '\n');
 }
 
-static void
-sync_database (const char *dir, GError **error)
+static char *
+serialize_mime_cache (const char  *dir,
+                      GHashTable  *mime_types_map,
+                      GError     **error)
 {
-  GError *sync_error;
-  char *temp_cache_file, *cache_file;
-  FILE *tmp_file;
-  GList *keys, *key;
-
-  temp_cache_file = NULL;
-  sync_error = NULL;
-  tmp_file = open_temp_cache_file (dir, &temp_cache_file, &sync_error);
-
-  if (sync_error != NULL)
-    {
-      g_propagate_error (error, sync_error);
-      return;
-    }
-
-  fputs ("[MIME Cache]\n", tmp_file);
+  g_autoptr(GList) keys = NULL;
+  g_autoptr(GString) contents = g_string_new ("[MIME Cache]\n");
 
   keys = g_hash_table_get_keys (mime_types_map);
   keys = g_list_sort (keys, (GCompareFunc) g_strcmp0);
 
-  for (key = keys; key != NULL; key = key->next)
-    add_mime_type (key->data,
-                   g_hash_table_lookup (mime_types_map, key->data),
-                   tmp_file);
-
-  g_list_free (keys);
-  fclose (tmp_file);
-
-  cache_file = g_build_filename (dir, CACHE_FILENAME, NULL);
-  if (rename (temp_cache_file, cache_file) < 0)
+  for (GList *l = keys; l != NULL; l = l->next)
     {
-      g_set_error (error, G_FILE_ERROR,
-                   g_file_error_from_errno (errno),
-                   _("Cache file \"%s\" could not be written: %s"),
-                   cache_file, g_strerror (errno));
+      const char *mime_type = l->data;
+      GList *desktop_files = g_hash_table_lookup (mime_types_map, mime_type);
 
-      unlink (temp_cache_file);
+      serialize_mime_cache_for_type (contents, mime_type, desktop_files);
     }
-  g_free (temp_cache_file);
-  g_free (cache_file);
+
+  return g_string_free_and_steal (g_steal_pointer (&contents));
+}
+
+static gboolean
+update_mime_cache_database (const char  *dir,
+                            GHashTable  *mime_types_map,
+                            GError     **error)
+{
+  g_autofree char *mime_cache_file = NULL;
+  g_autofree char *mime_cache_contents = NULL;
+
+  mime_cache_contents = serialize_mime_cache (dir, mime_types_map, error);
+  if (!mime_cache_contents)
+    return FALSE;
+
+  mime_cache_file = g_build_filename (dir, MIMEINFO_CACHE_FILENAME, NULL);
+  if (!g_file_set_contents_full (mime_cache_file,
+                                 mime_cache_contents,
+                                 -1,
+                                 G_FILE_SET_CONTENTS_CONSISTENT,
+                                 0666,
+                                 error))
+      return FALSE;
+
+  return TRUE;
 }
 
 static void
-update_database (const char  *desktop_dir,
-                 GError     **error)
+list_free_deep (GList *l)
 {
-  GError *update_error;
+  g_list_free_full (l, g_free);
+}
+
+static gboolean
+update_databases (const char  *desktop_dir,
+                  GError     **error)
+{
+  g_autoptr(GHashTable) mime_types_map = NULL;
 
   mime_types_map = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                          (GDestroyNotify)g_free,
-                                          NULL);
+                                          (GDestroyNotify) g_free,
+                                          (GDestroyNotify) list_free_deep);
 
-  update_error = NULL;
-  process_desktop_files (desktop_dir, "", &update_error);
+  if (!process_desktop_files (desktop_dir,
+                              mime_types_map,
+                              "",
+                              error))
+    return FALSE;
 
-  if (update_error != NULL)
-    g_propagate_error (error, update_error);
-  else
-    {
-      sync_database (desktop_dir, &update_error);
-      if (update_error != NULL)
-        g_propagate_error (error, update_error);
-    }
-  g_hash_table_foreach (mime_types_map, (GHFunc) list_free_deep, NULL);
-  g_hash_table_destroy (mime_types_map);
+  if (!update_mime_cache_database (desktop_dir, mime_types_map, error))
+    return FALSE;
+
+  return TRUE;
 }
 
-static const char **
-get_default_search_path (void)
+static GStrv
+get_default_search_path (const char **desktop_dirs)
 {
-  static char **args = NULL;
+  g_autoptr(GStrvBuilder) builder = NULL;
   const char * const *data_dirs;
-  int i;
 
-  if (args != NULL)
-    return (const char **) args;
+  if (desktop_dirs)
+    return g_strdupv ((GStrv) desktop_dirs);
 
+  builder = g_strv_builder_new ();
   data_dirs = g_get_system_data_dirs ();
 
-  for (i = 0; data_dirs[i] != NULL; i++);
+  for (size_t i = 0; data_dirs[i] != NULL; i++)
+    {
+      g_autofree char *path = NULL;
 
-  args = g_new (char *, i + 1);
+      path = g_build_filename (data_dirs[i], "applications", NULL);
+      g_strv_builder_add (builder, path);
+    }
 
-  for (i = 0; data_dirs[i] != NULL; i++)
-    args[i] = g_build_filename (data_dirs[i], "applications", NULL);
-
-  args[i] = NULL;
-
-  return (const char **) args;
+  return g_strv_builder_end (builder);
 }
 
-void
-print_desktop_dirs (const char **dirs)
+static void
+print_desktop_dirs (GStrv dirs)
 {
-  char *directories;
+  g_autofree char *directories = NULL;
 
   directories = g_strjoinv (", ", (char **) dirs);
-  udd_verbose_print(_("Search path is now: [%s]\n"), directories);
-  g_free (directories);
+  udd_verbose_print (_("Search path is now: [%s]\n"), directories);
 }
 
 int
 main (int    argc,
       char **argv)
 {
-  GError *error;
-  GOptionContext *context;
-  const char **desktop_dirs;
-  int i;
+  g_autoptr(GOptionContext) context = NULL;
+  g_auto(GStrv) desktop_dirs = NULL;
   gboolean found_processable_dir;
+  g_autoptr(GError) error = NULL;
+
+  gboolean opt_print_version = FALSE;
+  const char **opt_desktop_dirs = NULL;
 
   const GOptionEntry options[] =
    {
-     { "quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
+     { "quiet", 'q', 0, G_OPTION_ARG_NONE, &opt_quiet,
        N_("Do not display any information about processing and "
           "updating progress"), NULL},
 
-     { "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
+     { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose,
        N_("Display more information about processing and updating progress"),
        NULL},
 
-     { "version", 0, 0, G_OPTION_ARG_NONE, &print_version,
+     { "version", 0, 0, G_OPTION_ARG_NONE, &opt_print_version,
        N_("Show the program version"),
        NULL},
 
-     { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &desktop_dirs,
+     { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &opt_desktop_dirs,
        NULL, N_("[DIRECTORY...]") },
      { NULL }
    };
@@ -466,54 +404,45 @@ main (int    argc,
   g_option_context_set_summary (context, _("Build cache database of MIME types handled by desktop files."));
   g_option_context_add_main_entries (context, options, NULL);
 
-  desktop_dirs = NULL;
-  error = NULL;
-  g_option_context_parse (context, &argc, &argv, &error);
+  if (!g_option_context_parse (context, &argc, &argv, &error))
+    {
+      g_printerr ("%s\n", error->message);
+      g_printerr (_("Run \"%s --help\" to see a full list of available command line options.\n"), argv[0]);
+      return 1;
+    }
 
-  if (error != NULL) {
-    g_printerr ("%s\n", error->message);
-    g_printerr (_("Run \"%s --help\" to see a full list of available command line options.\n"), argv[0]);
-    g_error_free (error);
-    return 1;
-  }
+  if (opt_print_version)
+    {
+      g_print("update-desktop-database %s\n", VERSION);
+      return 0;
+    }
 
-  if (print_version) {
-    g_print("update-desktop-database %s\n", VERSION);
-    return 0;
-  }
-
-  if (desktop_dirs == NULL || desktop_dirs[0] == NULL)
-    desktop_dirs = get_default_search_path ();
+  desktop_dirs = get_default_search_path (opt_desktop_dirs);
 
   print_desktop_dirs (desktop_dirs);
 
   found_processable_dir = FALSE;
-  for (i = 0; desktop_dirs[i] != NULL; i++)
+  for (size_t i = 0; desktop_dirs[i] != NULL; i++)
     {
-      error = NULL;
-      update_database (desktop_dirs[i], &error);
+      g_autoptr(GError) update_error = NULL;
 
-      if (error != NULL)
+      if (!update_databases (desktop_dirs[i], &update_error))
         {
           udd_verbose_print (_("Could not create cache file in \"%s\": %s\n"),
-                             desktop_dirs[i], error->message);
-          g_error_free (error);
-          error = NULL;
+                             desktop_dirs[i], update_error->message);
+          continue;
         }
-      else
-        found_processable_dir = TRUE;
+
+      found_processable_dir = TRUE;
     }
-  g_option_context_free (context);
 
   if (!found_processable_dir)
     {
-      char *directories;
+      g_autofree char *directories = NULL;
 
       directories = g_strjoinv (", ", (char **) desktop_dirs);
       udd_print (_("The databases in [%s] could not be updated.\n"),
                  directories);
-
-      g_free (directories);
 
       return 1;
     }

@@ -66,8 +66,8 @@ endforeach
 ###############################################################################
 # Dependencies
 
-glib = dependency('glib-2.0', version: '>=2.26')
-gio = dependency('gio-2.0', version: '>=2.26')
+glib = dependency('glib-2.0', version: '>=2.68')
+gio = dependency('gio-2.0', version: '>=2.68')
 
 ###############################################################################
 

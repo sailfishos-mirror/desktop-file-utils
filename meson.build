@@ -74,6 +74,7 @@ gio = dependency('gio-2.0', version: '>=2.68')
 subdir('man')
 subdir('misc')
 subdir('src')
+subdir('tests')
 
 install_symlink(
   'desktop-file-edit',

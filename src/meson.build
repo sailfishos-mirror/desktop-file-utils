@@ -10,21 +10,21 @@ desktop_file_lib = static_library('desktop_file',
   dependencies: [glib, gio],
 )
 
-executable('desktop-file-validate',
+desktop_file_validate = executable('desktop-file-validate',
   'validator.c',
   link_with: desktop_file_lib,
   dependencies: glib,
   install: true,
 )
 
-executable('desktop-file-install',
+desktop_file_install = executable('desktop-file-install',
   'install.c',
   link_with: desktop_file_lib,
   dependencies: glib,
   install: true,
 )
 
-executable('update-desktop-database',
+update_desktop_database = executable('update-desktop-database',
   'update-desktop-database.c',
   link_with: desktop_file_lib,
   dependencies: glib,

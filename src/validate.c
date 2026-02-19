@@ -171,11 +171,11 @@ validate_localestring_list_key (kf_validator *kf,
                                 const char   *key,
                                 const char   *locale,
                                 const char   *value);
+
 static gboolean
 handle_keywords_key (kf_validator *kf,
                      const char   *locale_key,
                      const char   *value);
-
 static gboolean
 handle_type_key (kf_validator *kf,
                  const char   *locale_key,

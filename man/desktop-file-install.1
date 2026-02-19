@@ -42,8 +42,8 @@ Set the permissions of the destination files to \fIMODE\fP.
 Add a vendor prefix to the desktop files. If a file already has this
 prefix, nothing happens; else, the file will be named
 \fIVENDOR\fP-\fIFILE\fP. For example: if \fIVENDOR\fP is
-\fBfreedesktop.org\fP and \fIFILE\fP is \fBspecification.desktop\fP, the
-result file will be \fBfreedesktop.org-specification.desktop\fP.
+\fB\%freedesktop.org\fP and \fIFILE\fP is \fB\%specification.desktop\fP, the
+result file will be \fB\%freedesktop.org-specification.desktop\fP.
 .TP
 .I --delete-original
 Delete the source desktop files, leaving only the target files.
@@ -58,30 +58,30 @@ database.
 The following edit options are supported:
 .TP
 .I --set-key=KEY
-Set the KEY key to the value passed to the next \fI--set-value\fP
-option. A matching \fI--set-value\fP option is mandatory.
+Set the KEY key to the value passed to the next \fI\%--set-value\fP
+option. A matching \fI\%--set-value\fP option is mandatory.
 .TP
 .I --set-value=VALUE
-Set the key specified with the previous \fI--set-key\fP option to VALUE.
-A matching \fI--set-key\fP option is mandatory.
+Set the key specified with the previous \fI\%--set-key\fP option to VALUE.
+A matching \fI\%--set-key\fP option is mandatory.
 .TP
 .I --set-name=NAME
 Set the name (key \fBName\fP) to NAME. If a name was already set, it
 will be overridden. Localizations of the old name will be removed.
 .TP
 .I --copy-name-to-generic-name
-Copy the value of the \fBName\fP key to the \fBGenericName\fP key. Note
+Copy the value of the \fBName\fP key to the \fB\%GenericName\fP key. Note
 that a desktop file requires a \fBName\fP key to be valid, so this
 option will always have an effect.
 .TP
-.I --set-generic-name=GENERIC-NAME
-Set the generic name (key \fBGenericName\fP) to GENERIC-NAME. If a
+.I --set-generic-name=\%GENERIC-NAME
+Set the generic name (key \fB\%GenericName\fP) to \%GENERIC-NAME. If a
 generic name was already set, it will be overridden. Localizations of
 the old generic name will be removed.
 .TP
 .I --copy-generic-name-to-name
-Copy the value of the \fBGenericName\fP key to the \fBName\fP key, if
-the \fBGenericName\fP key is present.
+Copy the value of the \fB\%GenericName\fP key to the \fBName\fP key, if
+the \fB\%GenericName\fP key is present.
 .TP
 .I --set-comment=COMMENT
 Set the comment (key \fBComment\fP) to COMMENT. If a comment was already
@@ -93,50 +93,50 @@ Set the icon (key \fBIcon\fP) to ICON. If an icon was already set, it
 will be overridden. Localizations of the old icon will be removed.
 .TP
 .I --add-category=CATEGORY
-Add \fICATEGORY\fP to the list of categories (key \fBCategories\fP). If
+Add \fICATEGORY\fP to the list of categories (key \fB\%Categories\fP). If
 \fICATEGORY\fP was already present in the list, this operation is a
 no-op. A non-registered category should be prefixed with \fBX-\fP.
 .TP
 .I --remove-category=CATEGORY
 Remove \fICATEGORY\fP from the list of categories (key
-\fBCategories\fP). If \fICATEGORY\fP was not present in the list, this
+\fB\%Categories\fP). If \fICATEGORY\fP was not present in the list, this
 operation is a no-op.
 .TP
 .I --add-mime-type=MIME-TYPE
-Add \fIMIME-TYPE\fP to the list of MIME types (key \fBMimeType\fP). If
+Add \fIMIME-TYPE\fP to the list of MIME types (key \fB\%MimeType\fP). If
 \fIMIME-TYPE\fP was already present in the list, this operation is a
 no-op.
 .TP
 .I --remove-mime-type=MIME-TYPE
-Remove \fIMIME-TYPE\fP from the list of MIME types (key \fBMimeType\fP).
+Remove \fIMIME-TYPE\fP from the list of MIME types (key \fB\%MimeType\fP).
 If \fIMIME-TYPE\fP was not present in the list, this operation is a
 no-op.
 .TP
 .I --add-only-show-in=ENVIRONMENT
 Add \fIENVIRONMENT\fP to the list of desktop environments where the
-desktop files should be displayed (key \fBOnlyShowIn\fP). If
+desktop files should be displayed (key \fB\%OnlyShowIn\fP). If
 \fIENVIRONMENT\fP was already present in the list, this operation is a
 no-op. A non-registered desktop environment should be prefixed with
-\fBX-\fP. Note that an empty \fBOnlyShowIn\fP key in a desktop file
+\fBX-\fP. Note that an empty \fB\%OnlyShowIn\fP key in a desktop file
 means that the desktop file will be displayed in all environments.
 .TP
 .I --remove-only-show-in=ENVIRONMENT
 Remove \fIENVIRONMENT\fP from the list of desktop environments where the
-desktop files should be displayed (key \fBOnlyShowIn\fP). If
+desktop files should be displayed (key \fB\%OnlyShowIn\fP). If
 \fIENVIRONMENT\fP was not present in the list, this operation is a
 no-op.
 .TP
 .I --add-not-show-in=ENVIRONMENT
 Add \fIENVIRONMENT\fP to the list of desktop environments where the
-desktop files should not be displayed (key \fBNotShowIn\fP). If
+desktop files should not be displayed (key \fB\%NotShowIn\fP). If
 \fIENVIRONMENT\fP was already present in the list, this operation is a
 no-op. A non-registered desktop environment should be prefixed with
-\fBX-\fP. Note that an empty \fBNotShowIn\fP key in a desktop file
+\fBX-\fP. Note that an empty \fB\%NotShowIn\fP key in a desktop file
 means that the desktop file will be displayed in all environments.
 .TP
 .I --remove-not-show-in=ENVIRONMENT
 Remove \fIENVIRONMENT\fP from the list of desktop environments where the
-desktop files should not be displayed (key \fBNotShowIn\fP). If
+desktop files should not be displayed (key \fB\%NotShowIn\fP). If
 \fIENVIRONMENT\fP was not present in the list, this operation is a
 no-op.
 .TP
@@ -146,22 +146,22 @@ Remove the \fIKEY\fP key from the desktop files, if present.
 Some environment variables change the behavior of
 \fIdesktop-file-install\fP:
 .PP
-.B DESKTOP_FILE_VENDOR
+.B \%DESKTOP_FILE_VENDOR
 .IP
 This variable can be used as an alternative to the \fI--vendor\fP
 option. If the \fI--vendor\fP option is used, this environment variable
 will be ignored.
 .PP
-.B DESKTOP_FILE_INSTALL_DIR
+.B \%DESKTOP_FILE_INSTALL_DIR
 .IP
 This variable can be used as an alternative to the \fI--dir\fP
 option. If the \fI--dir\fP option is used, this environment variable
 will be ignored.
 .PP
-.B RPM_BUILD_ROOT
+.B \%RPM_BUILD_ROOT
 .IP
 This variable is set when building RPM packages. If the \fI--dir\fP
-option and the \fBDESKTOP_FILE_INSTALL_DIR\fP environment variable are
+option and the \fB\%DESKTOP_FILE_INSTALL_DIR\fP environment variable are
 not used, it will automatically be prepended to the default install
 directory to install the desktop files appropriately when building
 packages.

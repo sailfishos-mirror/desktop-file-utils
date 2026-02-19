@@ -171,6 +171,10 @@ validate_localestring_list_key (kf_validator *kf,
                                 const char   *key,
                                 const char   *locale,
                                 const char   *value);
+static gboolean
+handle_keywords_key (kf_validator *kf,
+                     const char   *locale_key,
+                     const char   *value);
 
 static gboolean
 handle_type_key (kf_validator *kf,
@@ -322,7 +326,7 @@ static DesktopKeyDefinition registered_desktop_keys[] = {
   { DESKTOP_STRING_TYPE,            "StartupWMClass",    FALSE, FALSE, FALSE, handle_key_for_application },
   { DESKTOP_STRING_TYPE,            "URL",               FALSE, FALSE, FALSE, handle_key_for_link },
   /* since 1.1 (used to be a key reserved for KDE since 0.9.4) */
-  { DESKTOP_LOCALESTRING_LIST_TYPE, "Keywords",          FALSE, FALSE, FALSE, NULL },
+  { DESKTOP_LOCALESTRING_LIST_TYPE, "Keywords",          FALSE, FALSE, FALSE, handle_keywords_key },
   /* since 1.1 (used to be in the spec before 1.0, but was not really
    * specified) */
   { DESKTOP_STRING_LIST_TYPE,       "Actions",           FALSE, FALSE, FALSE, handle_actions_key },
@@ -1793,6 +1797,84 @@ handle_categories_key (kf_validator *kf,
                     "might only show up in a \"catch-all\" section of the "
                     "application menu\n",
                     value, locale_key, kf->current_group);
+
+  return retval;
+}
+
+/* + Keywords to describe the entry, for example "web;browser;internet".
+ *   Checked.
+ * + Keywords should not be redundant with Name or GenericName.
+ *   Checked.
+ */
+static gboolean
+handle_keywords_key (kf_validator *kf,
+                     const char   *locale_key,
+                     const char   *value)
+{
+  char        **keywords;
+  char        *locale_compare_key;
+  kf_keyvalue *keyvalue_name;
+  kf_keyvalue *keyvalue_genericname;
+  int          i;
+  gboolean     retval;
+
+  if (!validate_localestring_list_key (kf, "Keywords",
+                                       locale_key + strlen ("Keywords"),
+                                       value))
+    return FALSE;
+
+  retval = TRUE;
+
+  locale_compare_key = g_strdup_printf ("Name%s",
+                                        locale_key + strlen ("Keywords"));
+  keyvalue_name = g_hash_table_lookup (kf->current_keys, locale_compare_key);
+  g_free (locale_compare_key);
+
+  locale_compare_key = g_strdup_printf ("GenericName%s",
+                                        locale_key + strlen ("Keywords"));
+  keyvalue_genericname = g_hash_table_lookup (kf->current_keys,
+                                              locale_compare_key);
+  g_free (locale_compare_key);
+
+  keywords = g_strsplit (value, ";", 0);
+
+  for (i = 0; keywords[i]; i++) {
+    /* since the value ends with a semicolon, we'll have an empty string
+     * at the end */
+    if (*keywords[i] == '\0') {
+      if (keywords[i + 1] != NULL) {
+        print_fatal (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "contains an empty keyword\n",
+                         value, locale_key, kf->current_group);
+        retval = FALSE;
+        break;
+      }
+
+      continue;
+    }
+
+    if (keyvalue_name &&
+        g_ascii_strcasecmp (keywords[i], keyvalue_name->value) == 0) {
+      print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "contains keyword \"%s\" which is the same as the "
+                         "value of key \"%s\"\n",
+                         value, locale_key, kf->current_group,
+                         keywords[i], keyvalue_name->key);
+      retval = FALSE;
+    }
+
+    if (keyvalue_genericname &&
+        g_ascii_strcasecmp (keywords[i], keyvalue_genericname->value) == 0) {
+      print_warning (kf, "value \"%s\" for key \"%s\" in group \"%s\" "
+                         "contains keyword \"%s\" which is the same as the "
+                         "value of key \"%s\"\n",
+                         value, locale_key, kf->current_group,
+                         keywords[i], keyvalue_genericname->key);
+      retval = FALSE;
+    }
+  }
+
+  g_strfreev (keywords);
 
   return retval;
 }

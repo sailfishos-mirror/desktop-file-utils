@@ -516,6 +516,26 @@ static const GOptionEntry edit_options[] = {
     N_("MIME-TYPE")
   },
   {
+#define OPTION_ADD_KEYWORDS "add-keywords"
+    OPTION_ADD_KEYWORDS,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Add KEYWORD to the list of keywords"),
+    N_("KEYWORD")
+  },
+  {
+#define OPTION_REMOVE_KEYWORDS "remove-keywords"
+    OPTION_REMOVE_KEYWORDS,
+    '\0',
+    '\0',
+    G_OPTION_ARG_CALLBACK,
+    parse_edit_options_callback,
+    N_("Remove KEYWORD from the list of keywords"),
+    N_("KEYWORD")
+  },
+  {
 #define OPTION_ADD_ONLY_SHOW_IN "add-only-show-in"
     OPTION_ADD_ONLY_SHOW_IN,
     '\0',
@@ -751,6 +771,16 @@ parse_edit_options_callback (const gchar  *option_name,
   else if (strcmp (OPTION_REMOVE_MIME_TYPE, option_name) == 0)
     {
       PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "MimeType");
+    }
+
+  else if (strcmp (OPTION_ADD_KEYWORDS, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (DFU_ADD_TO_LIST, "Keywords");
+    }
+
+  else if (strcmp (OPTION_REMOVE_KEYWORDS, option_name) == 0)
+    {
+      PARSE_OPTION_LIST (DFU_REMOVE_FROM_LIST, "Keywords");
     }
 
   else if (strcmp (OPTION_ADD_ONLY_SHOW_IN, option_name) == 0)

@@ -1803,6 +1803,9 @@ handle_categories_key (kf_validator *kf,
 
 /* + Keywords to describe the entry, for example "web;browser;internet".
  *   Checked.
+ *   FIXME: decide if it's okay to have an empty list of keywords.
+ * + Keywords should be non-empty and not blank.
+ *   Checked.
  * + Keywords should not be redundant with Name or GenericName.
  *   Checked.
  */
@@ -1818,10 +1821,6 @@ handle_keywords_key (kf_validator *kf,
   int          i;
   gboolean     retval;
 
-  if (!validate_localestring_list_key (kf, "Keywords",
-                                       locale_key + strlen ("Keywords"),
-                                       value))
-    return FALSE;
 
   retval = TRUE;
 
